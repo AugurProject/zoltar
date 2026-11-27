@@ -175,28 +175,52 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		receiverId = _create(receiver, batch, rep, commitment, receiverMaxPrice, remaining);
 	}
 
-	/// @notice Materialize an exact share of an active auction cohort without
-	/// granting a new liquidation clock. Custody and past cohort fees are handled
-	/// by the controller; this operation moves only principal and commitment.
-	function splitRepairAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
-		_touch(id);
-		Position storage source = positions[id];
-		Node storage leaf = nodes[source.node];
-		require(source.batch == 0 && !leaf.retired && leaf.commitment != 0, 'Auction position is not active');
-		require(rep != 0 && rep <= leaf.rep && commitment != 0 && commitment <= leaf.commitment, 'Invalid auction commitment split');
-		require(Math.mulDiv(leaf.rep, commitment, leaf.commitment) == rep && mulmod(leaf.rep, commitment, leaf.commitment) == 0, 'Auction split must be proportional');
+	/// @notice Move an exact share of an active auction cohort to its winner:
+	/// a new position for `owner` when `receiverId` is zero, otherwise a merge into
+	/// that live position. Custody and past cohort fees are handled by the
+	/// controller; this operation moves only principal and commitment. A split
+	/// carries the cohort's liquidation clock. A merge keeps the older of the two
+	/// healthy observations, so it can neither reset nor shorten either part's clock,
+	/// and a penalty the receiver already paid in its current liquidation still
+	/// counts. Added commitment never joins a pending retirement request: a queued
+	/// receiver keeps its requested reduction.
+	function moveRepairAuctionShare(uint96 id, address owner, uint96 receiverId, uint256 rep, uint256 commitment, uint256 receiverMaxPrice) external onlyCapitalLedger operational returns (uint96) {
+		require(id != receiverId, 'Same commitment position');
+		uint256 penaltyPaid = receiverId == 0 ? 0 : liquidationPenaltyPaid(receiverId);
 		// Touch first: the latest healthy observation may exist only on an
 		// ancestor. Mutation epochs are independent and must also survive.
-		uint64 observedEpoch = leaf.healthEpoch;
-		uint64 mutationEpoch = positions[id].healthyMutationEpoch;
-		uint256 price = leaf.price;
+		_touch(id);
+		Position storage source = positions[id];
+		Node storage from = nodes[source.node];
+		require(source.batch == 0 && !from.retired && from.commitment != 0, 'Auction position is not active');
+		require(rep != 0 && rep <= from.rep && commitment != 0 && commitment <= from.commitment, 'Invalid auction commitment split');
+		require(Math.mulDiv(from.rep, commitment, from.commitment) == rep && mulmod(from.rep, commitment, from.commitment) == 0, 'Auction split must be proportional');
+		(uint64 observed, uint64 mutation) = (from.healthEpoch, source.healthyMutationEpoch);
 		_detach(0, source.node);
-		leaf.rep -= rep;
-		leaf.commitment -= commitment;
+		from.rep -= rep;
+		from.commitment -= commitment;
 		_reinsert(source);
-		receiverId = _create(receiver, 0, rep, commitment, price, 0);
-		nodes[positions[receiverId].node].healthEpoch = observedEpoch;
-		positions[receiverId].healthyMutationEpoch = mutationEpoch;
+		if (receiverId == 0) receiverId = _create(owner, 0, rep, commitment, from.price, 0);
+		else {
+			_touch(receiverId);
+			Position storage receiver = positions[receiverId];
+			Node storage to = nodes[receiver.node];
+			require(!to.retired && to.commitment != 0, 'Position is not live');
+			observed = uint64(Math.min(Math.max(observed, mutation), Math.max(to.healthEpoch, receiver.healthyMutationEpoch)));
+			mutation = observed;
+			_detach(receiver.batch, receiver.node);
+			to.rep += rep;
+			to.commitment += commitment;
+			to.price = receiverMaxPrice;
+			if (receiver.batch != 0) receiver.remainingCommitment += commitment;
+			_reinsert(receiver);
+		}
+		nodes[positions[receiverId].node].healthEpoch = observed;
+		positions[receiverId].healthyMutationEpoch = mutation;
+		uint64 observation = _distressObservation(receiverId);
+		if (penaltyPaid != 0 && observation != 0)
+			liquidationPenalties[receiverId] = LiquidationPenalty(observationTimes[observation], penaltyPaid);
+		return receiverId;
 	}
 
 	/// @dev Supports an existing receiver slot without refreshing retirement
@@ -269,15 +293,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
 		_observeHealthy(roots[nextBatch], price, epoch);
-	}
-
-	function healthEpoch(uint96 id) public view returns (uint64 epoch) {
-		uint256 cursor = positions[id].node;
-		while (cursor != 0) {
-			Node storage node = nodes[cursor];
-			if (epoch < node.healthEpoch) epoch = node.healthEpoch;
-			cursor = node.parent;
-		}
 	}
 
 	/// @notice Distress begins at the first adverse oracle observation after the
@@ -411,7 +426,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
 		require(requested > 0 && requested <= source.commitment, 'Invalid takeover commitment');
-		require(id != cohort, 'Materialize an individual repair auction vault');
+		require(id != cohort, 'Materialize an individual repair auction bidder');
 		cured = cure(id, repairPrice, multiplier, minimumCommitment, demand, 0, false);
 		source = accountOf(id);
 		// Minimum-size commitments can be replaced: REP not paid as a takeover reward returns to

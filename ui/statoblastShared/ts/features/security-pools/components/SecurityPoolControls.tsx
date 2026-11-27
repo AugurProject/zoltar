@@ -44,6 +44,7 @@ export function SecurityPoolButton({
 	pendingLabel,
 	reason,
 	sharedReasonId,
+	hint,
 	onClick,
 }: {
 	model: Pick<SecurityPoolActions, 'scope' | 'busy'>
@@ -53,6 +54,8 @@ export function SecurityPoolButton({
 	reason?: string | undefined
 	/** Element that already states this button's disabled reason, so the button references it instead of repeating it. */
 	sharedReasonId?: string | undefined
+	/** Shown under an enabled button in the slot its disabled reason uses. */
+	hint?: string | undefined
 	onClick: () => Promise<void>
 }) {
 	const disabledReason = model.busy !== undefined && model.busy !== action ? copy.busy : reason
@@ -65,6 +68,7 @@ export function SecurityPoolButton({
 			availability={{ disabled: disabledReason !== undefined, reason: disabledReason }}
 			disabledReasonElementId={sharedReasonId}
 			showDisabledReason={sharedReasonId === undefined}
+			inlineHint={hint}
 			onClick={() => void onClick()}
 		/>
 	)

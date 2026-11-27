@@ -2,37 +2,22 @@ import { expect, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { loadSecurityPoolAccount } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
-import { authenticateSecurityPoolAuctionVault, loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
-import {
-	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
-	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
-} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { auctionVaultRuntimeCode, predictAuctionVaultAddress } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
+import { statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact, statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { capitalClient, modules } from './capitalClient.js'
 import { capital, capitalSnapshot, index, owner, securityPool, token, unit } from './capitalFixture.js'
 
 const auction = getAddress('0x0000000000000000000000000000000000000091')
 const engine = getAddress('0x0000000000000000000000000000000000000092')
-const implementation = getAddress('0x0000000000000000000000000000000000000094')
-const bindings = { implementation, owner, capital, auction, bidId: 3n }
-const vault = predictAuctionVaultAddress(bindings)
 function fixture() {
 	const source = capitalClient(capitalSnapshot({ universeId: 42n }))
 	source.codes.set(auction, `0x${auctionArtifact.evm.deployedBytecode.object}`)
 	source.codes.set(engine, `0x${engineArtifact.evm.deployedBytecode.object}`)
-	source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
-	source.codes.set(vault, auctionVaultRuntimeCode(bindings))
 	const values: Record<string, unknown> = {
 		repairAuctions: auction,
 		engine,
-		vaultImplementation: implementation,
+		unclaimedRepairAuctionBids: 1n,
 		capital,
-		owner,
-		initialCapital: capital,
-		repairAuction: auction,
-		bidId: 3n,
-		bidIdForVault: 3n,
 		controller: auction,
 		universeId: 42n,
 		priceFeed: zeroAddress,
@@ -52,9 +37,9 @@ function fixture() {
 		depositedAttoEth: unit,
 		bidderBidCount: 0n,
 		refundCreditAttoEth: 0n,
-		bids: [owner, vault, 12_000n, 1n, 3n * unit, false, false],
-		previewBid: { bidder: owner, vault, targetHealthBps: 12_000n, filledLots: 1n, usedAttoEth: unit, principalAttoRep: 10n * unit, refundAttoEth: 0n },
-		repairAuctionPosition: { vault, positionId: 0n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n },
+		bids: [owner, false, false, 1n, 3n * unit],
+		previewBid: { bidder: owner, filledLots: 1n, usedAttoEth: unit, principalAttoRep: 10n * unit, refundAttoEth: 0n },
+		repairAuctionPositions: [{ bidder: owner, positionId: 0n, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n }],
 		clearing: [10n * unit, 1n, unit, 10n * unit, 0n, 0n, 0n, 1n, false],
 	}
 	const scoped = new Map<string, unknown>()
@@ -71,34 +56,36 @@ function fixture() {
 	return { source, values, reads, client, set: (address: Address, name: string, value: unknown) => scoped.set(`${address}:${name}`, value) }
 }
 
-test('selected vault authentication uses its initial branch without scanning bids or assuming the wallet is its capital owner', async () => {
+test('branch auction loading authenticates the adapter, engine and custody modules before offering bids', async () => {
 	const source = fixture()
-	const result = await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)
-	expect(result).toEqual({ vault, bidder: owner, auction, initialCapital: capital, initialUniverse: 42n, bidId: 3n, filledLots: 1n, materialized: false })
+	expect((await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).auction).toMatchObject({ address: auction, engine, finalized: true, unclaimedBidCount: 1n, bids: [] })
+	expect(source.reads.some(read => read.functionName === 'vaultImplementation' || read.functionName === 'bidIdForVault')).toBe(false)
+	source.values['bidderBidCount'] = 1n
+	source.values['bidderBidId'] = 3n
+	const loaded = await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)
+	expect(loaded.auction?.bids.map(bid => [bid.id, bid.bidder, bid.fill?.filledLots, bid.claimed, bid.position?.materialized])).toEqual([[3n, owner, 1n, false, false]])
+	expect(loaded.claimableBidIds).toEqual([3n])
 	expect(new Set(source.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
-	expect(source.reads.some(read => read.functionName === 'bidderBidCount' || read.functionName === 'bidderBidId')).toBe(false)
-	source.values['repairAuctionPosition'] = { vault, positionId: 1n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
-	expect((await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).materialized).toBe(true)
+	source.source.codes.set(engine, '0x6000')
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction engine runtime')
 })
 
-test('unopened or losing vaults need no nonexistent cohort position to recover accidentally sent assets', async () => {
+test('branch auction loading rejects bids of another bidder', async () => {
 	const source = fixture()
-	source.values['finalized'] = false
-	expect(await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).toMatchObject({ filledLots: 0n, materialized: false })
-	expect(source.reads.some(read => read.functionName === 'repairAuctionPosition')).toBe(false)
-	source.values['finalized'] = true
-	source.values['previewBid'] = { bidder: owner, vault, filledLots: 0n }
-	expect(await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).toMatchObject({ filledLots: 0n, materialized: false })
-	expect(source.reads.some(read => read.functionName === 'repairAuctionPosition')).toBe(false)
+	source.values['bidderBidCount'] = 1n
+	source.values['bidderBidId'] = 3n
+	source.values['bids'] = [token, false, false, 1n, 3n * unit]
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('another account')
+	source.values['bids'] = [owner, false, false, 1n, 3n * unit]
+	source.values['repairAuctionPositions'] = [{ bidder: token, positionId: 0n, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n }]
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('identity')
 })
 
-test('vault binding rejects another owner, fork route, initial ledger, bid or compiled runtime', async () => {
+test('branch auction loading rejects another fork route, ledger, custody authority or compiled runtime', async () => {
 	for (const [address, getter, value] of [
-		[vault, 'owner', token],
-		[modules.fork, 'repairAuctions', token],
-		[securityPool, 'capitalLedger', token],
-		[auction, 'bidIdForVault', 4n],
-		[capital, 'securityPool', token],
+		[auction, 'capital', token],
+		[capital, 'forkAuthority', token],
+		[engine, 'controller', token],
 		[modules.repairAuctionDelegate, 'implementation', token],
 		[index, 'capitalLedger', token],
 		[modules.fees, 'capitalLedger', token],
@@ -107,66 +94,21 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 	] as const) {
 		const source = fixture()
 		source.set(address, getter, value)
-		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow()
+		await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow()
 	}
-	for (const address of [vault, auction, engine, capital, modules.capitalImplementation, implementation, modules.fork, modules.lifecycle, modules.repairAuctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
+	for (const address of [auction, engine, capital, modules.capitalImplementation, modules.fork, modules.lifecycle, modules.repairAuctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
-		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow('runtime')
+		await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('runtime')
 	}
-	// Counterfeit clones: another implementation, foreign bindings, or a clone at the wrong address.
-	for (const [code, reason] of [
-		[auctionVaultRuntimeCode({ ...bindings, implementation: token }), 'address does not match'],
-		[auctionVaultRuntimeCode({ ...bindings, bidId: 4n }), 'runtime'],
-		[auctionVaultRuntimeCode({ ...bindings, owner: token }), 'runtime'],
-	] as const) {
-		const source = fixture()
-		source.source.codes.set(vault, code)
-		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow(reason)
-	}
-	const misplaced = fixture()
-	const elsewhere = getAddress('0x0000000000000000000000000000000000000093')
-	misplaced.source.codes.set(elsewhere, auctionVaultRuntimeCode(bindings))
-	misplaced.set(auction, 'bidIdForVault', 3n)
-	await expect(authenticateSecurityPoolAuctionVault(misplaced.client, securityPool, elsewhere, 10n)).rejects.toThrow('address does not match')
-	const foreignImplementation = fixture()
-	foreignImplementation.set(auction, 'vaultImplementation', token)
-	await expect(authenticateSecurityPoolAuctionVault(foreignImplementation.client, securityPool, vault, 10n)).rejects.toThrow('another implementation')
 })
 
-test('branch auction loading authenticates the adapter, engine, implementation and each vault clone before offering bids', async () => {
+test('a bidder account is funded and approved by the bidder itself for the capital ledger', async () => {
 	const source = fixture()
-	expect((await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).auction).toMatchObject({ address: auction, engine, vaultImplementation: implementation, finalized: true, bids: [] })
-	source.values['bidderBidCount'] = 1n
-	source.values['bidderBidId'] = 3n
-	expect((await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).auction?.bids.map(bid => bid.vault)).toEqual([vault])
-	source.source.codes.set(vault, auctionVaultRuntimeCode({ ...bindings, implementation: token }))
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction vault runtime')
-	source.source.codes.set(vault, auctionVaultRuntimeCode(bindings))
-	source.source.codes.set(implementation, '0x6000')
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('implementation runtime')
-	source.source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
-	source.source.codes.set(engine, '0x6000')
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction engine runtime')
-})
-
-test('selected auction vault accounts retain vault liabilities while funding comes from the authenticated bidder', async () => {
-	const source = fixture()
-	const initial = capitalSnapshot()
-	source.source.setSnapshot(capitalSnapshot({ owner: vault, universeId: 42n, positions: [], ownerAccount: { ...initial.ownerAccount, positionId: 0n } }))
-	const snapshot = await loadSecurityPoolAccount(source.client, securityPool, vault, 42n)
-	expect(snapshot.owner).toBe(vault)
-	expect(snapshot.auctionVault).toMatchObject({ vault, bidder: owner, auction, initialCapital: capital, initialUniverse: 42n, bidId: 3n, materialized: false })
-	expect(snapshot.positions).toEqual([])
-	expect(snapshot.ownerPrincipalAttoRep).toBe(initial.ownerPrincipalAttoRep)
+	source.source.setSnapshot(capitalSnapshot({ universeId: 42n }))
+	const snapshot = await loadSecurityPoolAccount(source.client, securityPool, owner, 42n)
+	expect(snapshot.owner).toBe(owner)
+	expect(snapshot).not.toHaveProperty('auctionVault')
 	expect(source.source.reads.filter(read => read.name === 'balanceOf').at(-1)?.args).toEqual([owner])
-	expect(source.source.reads.filter(read => read.name === 'allowance').at(-1)?.args).toEqual([owner, vault])
-	source.set(vault, 'owner', token)
-	await expect(loadSecurityPoolAccount(source.client, securityPool, vault, 42n)).rejects.toThrow()
-	// A clone-shaped account of another implementation is an ordinary owner: readable, funded by itself, with no vault authority.
-	source.set(vault, 'owner', owner)
-	source.source.codes.set(vault, auctionVaultRuntimeCode({ ...bindings, implementation: token }))
-	const ordinary = await loadSecurityPoolAccount(source.client, securityPool, vault, 42n)
-	expect(ordinary.auctionVault).toBeUndefined()
-	expect(source.source.reads.filter(read => read.name === 'balanceOf').at(-1)?.args).toEqual([vault])
+	expect(source.source.reads.filter(read => read.name === 'allowance').at(-1)?.args).toEqual([owner, capital])
 })

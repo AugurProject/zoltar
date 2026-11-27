@@ -73,7 +73,11 @@ contract CapitalLedgerHarness {
 		SecurityPoolCapitalLedgerDeployer deployer = components.capitalDeployer();
 		SecurityPoolCapitalLedger implementation = deployer.createImplementation(Zoltar(address(zoltar)), 10_500, 1e15, components.streamsDeployer());
 		ledger = deployer.create(implementation, 1);
-		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), address(0), address(this));
+		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), _coordinator(), address(this));
+	}
+	/// @dev The ledger's fork authority; none unless a harness plays the fork coordinator.
+	function _coordinator() internal view virtual returns (address) {
+		return address(0);
 	}
 	function withdrawCapitalCash() external {
 		require(msg.sender == address(ledger), 'Only capital ledger');

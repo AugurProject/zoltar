@@ -1,7 +1,8 @@
 import { formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 export const title = 'Branch collateral repair auction'
-export const description = 'Bid collateral to repair branch claims and create your own funded vault. All winning lots receive REP at the same clearing price.'
-export const ownership = 'Purchased REP backs your winning vault’s collateral commitment. Your health target is checked at opening; later prices can reduce its health. Vault losses, surplus withdrawals and retirement follow the ordinary vault rules.'
+export const description = 'Bid collateral to repair branch claims. Winning lots join your own capital account on this branch when you claim their bid, and all of them receive REP at the same clearing price.'
+export const ownership =
+	'Purchased REP backs the collateral commitment of your winning lots. Claiming a winning bid adds its lots to your capital account at the protocol’s minimum health; save a higher health target there afterwards. If this wallet already has a live position on this branch, the lots merge into it and share its health target, losses and retirement. Bid from a fresh address to keep them separate.'
 export const fairness = 'Equal-price bids fill in submission order. Each winning lot buys REP at the clearing price; unsold REP remains with inherited claims. Weak demand can leave the branch in runoff.'
 export const connect = 'Connect a wallet to view and fund your auction bids.'
 export const selectBranch = 'Select a fork branch first.'
@@ -27,8 +28,6 @@ export const lotsInvalid = 'Enter a positive whole number of lots.'
 export const minimumRep = 'Minimum REP purchased per lot'
 export const priceHint = (grid: bigint | undefined) => `This sets your maximum price. ${grid === undefined ? 'Checking REP price step.' : `Use multiples of ${formatEther(grid)} REP.`}`
 export const repInvalid = 'Enter a positive REP amount with up to 18 decimal places.'
-export const health = 'Target health (%)'
-export const healthInvalid = 'Enter a health target of at least 100%, with up to two decimal places.'
 export const bidEth = 'collateral bid'
 export const minimumPrincipal = 'Minimum pledged REP if fully filled'
 export const minimumCollateral = 'Minimum REP per lot at 100% health'
@@ -39,16 +38,15 @@ export const bidding = 'Submitting funded bid…'
 export const yourBids = 'Your auction bids'
 export const noBids = 'No bids from this wallet'
 export const bidLabel = (id: bigint) => `Bid ${id}`
-export const vault = 'Isolated vault account'
 export const requestedLots = 'Lots requested'
 export const filledLots = 'Lots won'
-export const principal = 'Current vault REP principal'
+export const principal = 'REP principal from this bid'
 export const commitment = 'Current collateral commitment'
 export const earnedEth = 'Unclaimed collateral fees'
 export const earnedRep = 'Unclaimed REP fees'
 export const charged = 'collateral used to repair claims'
 export const refund = 'Unused bid collateral'
-export const funded = 'Funded vault'
+export const funded = 'Winning lots'
 export const noFill = 'No winning lots'
 export const awaitingClose = 'Waiting for auction closing'
 export const credit = 'Credit this bid’s refunds'
@@ -68,20 +66,26 @@ export const refundEth = 'Credited collateral refund'
 export const withdraw = 'Withdraw credited refunds'
 export const withdrawing = 'Withdrawing auction refunds…'
 export const noRefund = 'No credited auction refunds are available.'
-export const manage = 'Manage vault'
-export const activate = 'Activate vault controls'
-export const activating = 'Activating vault controls…'
-export const activated = 'This vault’s individual controls are already active.'
-export const activateFirst = 'Activate this vault’s individual controls first.'
-export const activateHint = 'The vault is funded from auction closing. Its first individual action separates its accounting; this does not add a new commitment or change ownership.'
-export const managePending = 'Only winning bids have funded vault controls.'
-export const manageUnavailable = 'Select this vault address as the security pool capital account to manage it.'
+export const unclaimedBids = 'Bids to claim'
+export const claimBid = 'Claim bid'
+export const claimingBid = 'Claiming bid…'
+export const claimAllBids = 'Claim all bids'
+export const claimingAllBids = 'Claiming bids…'
+export const claimHint = 'Bids that won nothing must also be claimed before you can choose a branch in a later fork. Anyone can claim any bid.'
+export const allBidsClaimed = 'All your bids are claimed.'
+export const claimAfterClose = 'Your bids can be claimed after the auction closes.'
+export const claimBidReview = (id: bigint, winning: boolean) => (winning ? `Claim bid ${id}: its winning lots join this wallet’s capital account on this branch, merging into any live position there.` : `Claim bid ${id}. It won nothing, so this only marks it claimed.`)
+export const claimAllReview = (batch: number, total: number) => {
+	let scope = batch === 1 ? 'your 1 unclaimed bid in one transaction' : `all ${batch} of your unclaimed bids in one transaction`
+	if (batch < total) scope = `${batch} of your ${total} unclaimed bids in this transaction; claim again for the rest`
+	return `Claim ${scope}. Winning lots join this wallet’s capital account on this branch, merging into any live position there.`
+}
 export const refresh = 'Refresh auction'
 export const refreshing = 'Refreshing auction…'
 export const busy = 'Wait for the current transaction.'
 export const pages = (start: bigint, count: number, total: bigint) => `${start + (count === 0 ? 0n : 1n)}–${start + BigInt(count)} of ${total} bids`
 export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint, decimals = 18, symbol = 'collateral') =>
-	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs the vault’s accepted collateral commitment immediately at closing. If better funded bids rule out this bid, its collateral can be refunded early; otherwise unused collateral refunds after closing.`
+	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs this commitment in your capital account at closing. If better funded bids rule out this bid, its collateral can be refunded early; otherwise unused collateral refunds after closing.`
 
 export const maximumAdmissible = 'Highest currently admissible limit'
 export const noAdmissibleLimit = 'No admissible new limit'

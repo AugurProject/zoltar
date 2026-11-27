@@ -12,7 +12,6 @@ import {
 	buildSecurityPoolCapitalServeRetirementRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	loadSecurityPoolCapitalSnapshot,
-	buildSecurityPoolAuctionVaultDepositRequest,
 	type SecurityPoolCapitalSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -167,7 +166,7 @@ export function useSecurityPoolAggregate(
 	const serveReason = (accountAddress === undefined ? 'Connect wallet.' : undefined) ?? stateReason ?? inactiveReason ?? retirementReadinessReason()
 	const requireSnapshot = (permissionless = false) => {
 		const current = model.snapshot
-		if (current === undefined || accountAddress === undefined || (!permissionless && accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase())) throw new Error('Connect the selected owner account.')
+		if (current === undefined || accountAddress === undefined || (!permissionless && accountAddress.toLowerCase() !== current.owner.toLowerCase())) throw new Error('Connect the selected owner account.')
 		return current
 	}
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: NonNullable<typeof snapshot>) => SecurityPoolTransaction, validate?: (latest: SecurityPoolCapitalSnapshot) => void | Promise<void>) =>
@@ -259,28 +258,27 @@ export function useSecurityPoolAggregate(
 		},
 		approve: (amount: bigint) =>
 			run('approveSecurityPoolRep', 'Approve REP deposit', fundingReason, selected => ({
-				account: selected.auctionVault?.bidder ?? selected.owner,
+				account: selected.owner,
 				to: selected.repToken,
 				value: 0n,
-				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP from your wallet. This does not deposit or pledge REP.`,
+				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.capitalLedger, amount] }),
+				reviewDescription: `Allow ${selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP from your wallet. This does not deposit or pledge REP.`,
 			})),
 		approveHealthDeposit: (amount: bigint) =>
 			run('approveSecurityPoolHealthRep', 'Approve REP for health target', healthFundingReason, selected => ({
-				account: selected.auctionVault?.bidder ?? selected.owner,
+				account: selected.owner,
 				to: selected.repToken,
 				value: 0n,
-				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP. Depositing and saving your target is a separate transaction.`,
+				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.capitalLedger, amount] }),
+				reviewDescription: `Allow ${selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP. Depositing and saving your target is a separate transaction.`,
 			})),
 		deposit: () =>
 			run('depositSecurityPoolRep', 'Deposit REP', depositReason, selected => {
 				if (depositAttoRep === undefined) throw new Error('Enter a deposit amount.')
-				const request =
-					selected.auctionVault === undefined
-						? buildSecurityPoolCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep })
-						: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: depositAttoRep, targetHealthFactorBps: selected.ownerAccount.targetHealthFactorBps || 10_000n })
-				return { ...request, reviewDescription: `Deposit exactly ${formatCurrencyBalance(depositAttoRep)} REP into your account. It immediately backs any existing commitment without increasing it. Authorizing capacity is a separate transaction.` }
+				return {
+					...buildSecurityPoolCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep }),
+					reviewDescription: `Deposit exactly ${formatCurrencyBalance(depositAttoRep)} REP into your account. It immediately backs any existing commitment without increasing it. Authorizing capacity is a separate transaction.`,
+				}
 			}),
 		withdraw: () =>
 			run(
@@ -324,9 +322,7 @@ export function useSecurityPoolAggregate(
 				selected => {
 					if (healthDepositAttoRep === undefined || healthBps === undefined) throw new Error('Enter a deposit and health target.')
 					return {
-						...(selected.auctionVault === undefined
-							? buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })
-							: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })),
+						...buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps }),
 						reviewDescription: `Deposit ${formatCurrencyBalance(healthDepositAttoRep)} REP and save a ${formatCurrencyBalance(healthBps, 2)}% target together. Your commitment does not increase. Raising a live target requires sufficient backing; if that check fails, both changes revert.`,
 					}
 				},
@@ -336,8 +332,8 @@ export function useSecurityPoolAggregate(
 					if (healthDepositAttoRep === undefined) throw new Error('Enter a REP deposit.')
 					const client = createConnectedReadClient()
 					const [balance, allowance] = await Promise.all([
-						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [snapshot?.auctionVault?.bidder ?? latest.owner] }),
-						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [snapshot?.auctionVault?.bidder ?? latest.owner, snapshot?.auctionVault?.vault ?? latest.capitalLedger] }),
+						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [latest.owner] }),
+						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [latest.owner, latest.capitalLedger] }),
 					])
 					if (balance < healthDepositAttoRep) throw new Error('Insufficient wallet REP.')
 					if (allowance < healthDepositAttoRep) throw new Error('Approve REP before depositing.')

@@ -46,7 +46,7 @@ function healthPercent(value: string) {
 	return Number.isFinite(basisPoints) ? `${(basisPoints / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%` : '—'
 }
 
-/** Summarizes the vault health thresholds the strategy form currently holds. */
+/** Summarizes the receiver health thresholds the strategy form currently holds. */
 export function updateHealthPolicyPreview(elements: DashboardElements) {
 	const strategyInput = (name: string) => {
 		const field = elements.strategyForm.elements.namedItem(name)

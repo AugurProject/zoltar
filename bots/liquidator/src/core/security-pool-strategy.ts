@@ -82,7 +82,7 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 	if (!observation.selected || !observation.approvedUniverse) return reject('Security pool and universe must both be selected')
 	if (!marketAllowed) return reject('Independent REP price evidence is unavailable or disagrees')
 	if (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return reject('Security pool capital is inactive')
-	if (position.owner === snapshot.owner || position.controllingOwner === snapshot.owner || position.commitment === 0n || position.maxHealthyPrice >= snapshot.liquidationPrice || position.liquidationStarted === 0n) return reject('Position is not an external takeover target')
+	if (position.owner === snapshot.owner || position.commitment === 0n || position.maxHealthyPrice >= snapshot.liquidationPrice || position.liquidationStarted === 0n) return reject('Position is not an external takeover target')
 	if (snapshot.ownerAccount.targetHealthFactorBps !== policy.targetHealthFactorBps) return reject('Receiver health target does not match the configured target')
 	const receiver = snapshot.positions.find(position => position.commitment > 0n)
 	const source = securityPoolCureOutcome(observation, position)
@@ -129,7 +129,7 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 	const fullFunding = requiredFor(possibleCommitment) > snapshot.ownerPrincipalAttoRep ? requiredFor(possibleCommitment) - snapshot.ownerPrincipalAttoRep : 0n
 	const approvalRep = [fullFunding, policy.maximumOwnFundingAttoRep, maximumOwnerPrincipal - snapshot.ownerPrincipalAttoRep, observation.walletRep - settings.strategy.walletAttoRepReserve].reduce((a, b) => (a < b ? a : b))
 	// Reserve a full-repair request through the signed validity horizon only
-	// when current vault capital and policy caps cover its growing takeover reward and debt.
+	// when current owner capital and policy caps cover its growing takeover reward and debt.
 	const horizon = DEFAULT_TRANSACTION_VALIDITY_BLOCKS * SIGNED_TRANSACTION_SLOT_SECONDS
 	const elapsed = position.liquidationElapsed ?? (snapshot.timestamp > position.liquidationStarted ? snapshot.timestamp - position.liquidationStarted : 0n)
 	const future = securityPoolTakeoverSource({ ...snapshot, timestamp: snapshot.timestamp + horizon }, { ...position, liquidationElapsed: elapsed + horizon })

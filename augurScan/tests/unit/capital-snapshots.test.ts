@@ -55,6 +55,7 @@ const ledgerOutputs: Outputs = {
 	ownerCollateral: [520n, 10n, 30n],
 	ownerConservativePrice: [215n * 10n ** 18n],
 	repairAuctionCohort: [zeroAddress, 0n, 0n, 0n, 0n],
+	unclaimedRepairAuctionBids: [0n],
 	annualFeeBps: [200n],
 	purchaseFeeBps: [30n],
 	feeStreams: [streams],
@@ -242,25 +243,84 @@ test('take-over eligibility persists after price expiry once an adverse observat
 	expect(await sample({ accountOf: () => [healthy] })).toMatchObject({ belowLiquidationPrice: false, takeoverPreconditionsMet: false })
 })
 
-test('a winning bid vault keeps its individual credited earnings and liquidation start across materialization', async () => {
-	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader(overrides))).readResult
+test('a bidder reports its unclaimed bids and the winning lots outside its account', async () => {
+	const calls: string[] = []
+	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader(overrides, calls))).readResult
+	// Bid 2 won 500 REP of lots and is unclaimed; bid 5 filled nothing and is unclaimed; bid 6 won lots and was claimed.
+	const lots = (bidId: unknown) => {
+		if (bidId === 2n) return { bidder: owner, positionId: 0n, principal: 500n, commitment: 10n, liquidationStarted: 1_700_000_000, claimed: false, materialized: false, earnedAttoEth: 5n, earnedAttoRep: 8n }
+		if (bidId === 6n) return { bidder: owner, positionId: 7n, principal: 300n, commitment: 6n, liquidationStarted: 0, claimed: true, materialized: true, earnedAttoEth: 0n, earnedAttoRep: 0n }
+		return { bidder: owner, positionId: 0n, principal: 0n, commitment: 0n, liquidationStarted: 0, claimed: false, materialized: false, earnedAttoEth: 0n, earnedAttoRep: 0n }
+	}
+	const bidIds = [2n, 5n, 6n]
 	const auction = {
 		repairAuctionCohort: [other, 9n, 4n, 125n, 5n],
-		bidIdForVault: (args: readonly unknown[]) => [args[0] === owner ? 2n : 0n],
-		ownerCollateral: [500n, 10n, 0n],
+		unclaimedRepairAuctionBids: (args: readonly unknown[]) => [args[0] === owner ? 2n : 0n],
+		bidderBidCount: (args: readonly unknown[]) => [args[0] === owner ? BigInt(bidIds.length) : 0n],
+		bidderBidId: (args: readonly unknown[]) => [bidIds[Number(args[1])]],
+		repairAuctionPositions: (args: readonly unknown[]) => [Array.isArray(args[0]) ? args[0].map(lots) : []],
 	}
-	const before = await sample({
+	// A fresh bidder: `ownerCollateral` is empty, so the unclaimed lots supply the principal, commitment, earnings and clock.
+	const fresh = await sample({
 		...auction,
+		ownerCollateral: [0n, 0n, 0n],
 		ownerAccount: [{ freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 12_000n, positionId: 0n }],
-		repairAuctionPosition: (args: readonly unknown[]) => {
-			expect(args).toEqual([2n])
-			return [{ vault: owner, positionId: 0n, principal: 500n, commitment: 10n, targetHealthFactorBps: 12_000n, liquidationStarted: 1_700_000_000, materialized: false, earnedAttoEth: 5n, earnedAttoRep: 8n }]
-		},
 	})
-	const after = await sample(auction)
-	const retained = { liquidationStartedAt: '1700000000', unclaimedFeesAttoEth: '5', unclaimedFeesAttoRep: '8' }
-	expect(before).toMatchObject({ ...retained, positionId: '0' })
-	expect(after).toMatchObject({ ...retained, positionId: '7' })
+	expect(fresh).toMatchObject({
+		positionId: '0',
+		principalAttoRep: '500',
+		commitmentAttoEth: '10',
+		pledgedAttoRep: '500',
+		withdrawableAttoRep: '0',
+		liquidationStartedAt: '1700000000',
+		unclaimedFeesAttoEth: '5',
+		unclaimedFeesAttoRep: '8',
+		repairAuctionUnclaimedBids: '2',
+		repairAuctionPendingBidIds: ['2'],
+		repairAuctionPendingPrincipalAttoRep: '500',
+		repairAuctionPendingCommitmentAttoEth: '10',
+		repairAuctionPendingEarnedAttoEth: '5',
+		repairAuctionPendingEarnedAttoRep: '8',
+	})
+	// The bids are read in one batched call.
+	expect(calls.filter(call => call === 'securityPoolCapitalLedger.repairAuctionPositions')).toEqual(['securityPoolCapitalLedger.repairAuctionPositions'])
+
+	// A bidder without a live position keeps fees from earlier positions; the unclaimed lots' earnings add to them.
+	const earlier = await sample({
+		...auction,
+		ownerCollateral: [0n, 0n, 0n],
+		ownerAccount: [{ freeAttoRep: 0n, feesAttoEth: 3n, feesAttoRep: 4n, targetHealthFactorBps: 0n, positionId: 0n }],
+	})
+	expect(earlier).toMatchObject({ positionId: '0', unclaimedFeesAttoEth: '8', unclaimedFeesAttoRep: '12' })
+
+	// A bidder with its own position: `ownerCollateral` covers only that position, and the unclaimed lots add to it once.
+	const merged = await sample(auction)
+	expect(merged).toMatchObject({ positionId: '7', principalAttoRep: '1020', commitmentAttoEth: '20', pledgedAttoRep: '1000', withdrawableAttoRep: '30', unclaimedFeesAttoEth: '10', unclaimedFeesAttoRep: '16', repairAuctionPendingBidIds: ['2'] })
+	// The position's own take-over condition is unchanged by lots that still sit in the cohort.
+	expect(merged).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: true })
+
+	// Only the losing bid is unclaimed: it still blocks the fork choice but carries no lots.
+	const losing = await sample({
+		...auction,
+		unclaimedRepairAuctionBids: [1n],
+		repairAuctionPositions: (args: readonly unknown[]) => [Array.isArray(args[0]) ? args[0].map(bidId => ({ ...lots(bidId), ...(bidId === 2n ? { claimed: true, materialized: true, positionId: 7n, earnedAttoEth: 0n, earnedAttoRep: 0n } : {}) })) : []],
+	})
+	expect(losing).toMatchObject({ positionId: '7', principalAttoRep: '520', pledgedAttoRep: '500', unclaimedFeesAttoEth: '5', repairAuctionUnclaimedBids: '1' })
+	expect(losing?.['repairAuctionPendingBidIds']).toBeUndefined()
+
+	// An auction that installed no cohort awarded no lots, so only the unclaimed count is reported.
+	calls.length = 0
+	const noCohort = await sample({ ...auction, repairAuctionCohort: [zeroAddress, 0n, 0n, 0n, 0n] })
+	expect(noCohort).toMatchObject({ principalAttoRep: '520', repairAuctionUnclaimedBids: '2' })
+	expect(calls.filter(call => call.startsWith('securityPoolRepairAuction.') || call.endsWith('.repairAuctionPositions'))).toEqual([])
+
+	// Once every bid is claimed, the bidder's bids are not read.
+	calls.length = 0
+	const settled = await sample({ ...auction, unclaimedRepairAuctionBids: [0n] })
+	expect(settled).toMatchObject({ positionId: '7', principalAttoRep: '520', pledgedAttoRep: '500', unclaimedFeesAttoEth: '5', unclaimedFeesAttoRep: '8' })
+	expect(settled?.['repairAuctionUnclaimedBids']).toBeUndefined()
+	expect(settled?.['repairAuctionPendingBidIds']).toBeUndefined()
+	expect(calls.filter(call => call.startsWith('securityPoolRepairAuction.'))).toEqual([])
 })
 
 test('an owner without a position or a price has principal but no health factor', async () => {
@@ -315,7 +375,7 @@ test('capital risk follows the ledger facts and adds only the scanner warning ba
 	expect(capitalPositionRisk({ ...base, frozen: true, belowLiquidationPrice: true })).toMatchObject({ protocolState: 'frozen', scannerSeverity: 'unavailable' })
 	expect(capitalPositionRisk({ ...base, importing: true })).toMatchObject({ protocolState: 'frozen', scannerSeverity: 'unavailable' })
 	expect(capitalPositionRisk({ ...base, universeForked: true, belowLiquidationPrice: true, takeoverPreconditionsMet: false })).toMatchObject({ protocolState: 'frozen', scannerSeverity: 'unavailable' })
-	// An unmaterialized auction vault has no index position, so only its health factor shows it is under the requirement.
+	// An owner whose winning auction lots have not joined its account has no index position, so only its health factor shows it is under the requirement.
 	expect(capitalPositionRisk({ commitmentAttoEth: '10', priceValid: true, healthFactorBps: '9000' })).toMatchObject({ protocolState: 'under-collateralized', scannerSeverity: 'critical' })
 	expect(capitalPositionRisk({ commitmentAttoEth: '10', priceValid: true, healthFactorBps: '10000' })).toMatchObject({ protocolState: 'healthy', scannerSeverity: 'warning' })
 	expect(capitalPositionRisk({ ...base, healthFactorBps: undefined })).toMatchObject({ protocolState: 'unavailable', scannerSeverity: 'unavailable' })

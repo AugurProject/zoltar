@@ -10,7 +10,7 @@ import { ISecurityPoolRepairAuctionCapital } from '../../statoblast/interfaces/I
 contract CapitalRepairAuctionAdapterMock is ISecurityPoolRepairAuctionCapital {
 	SecurityPoolCapitalLedger public immutable capital;
 	mapping(uint256 => BidPosition) private bids;
-	mapping(address => uint256) public bidIdForVault;
+	mapping(address => uint256[]) private bidderIds;
 	mapping(uint256 => bool) public removed;
 	uint256 public remainingLots;
 	uint256 public ethFees;
@@ -19,14 +19,21 @@ contract CapitalRepairAuctionAdapterMock is ISecurityPoolRepairAuctionCapital {
 	constructor(SecurityPoolCapitalLedger ledger) {
 		capital = ledger;
 	}
-	function setBid(uint256 id, address vault, uint256 health, uint256 lots) external {
-		require(bids[id].vault == address(0) && bidIdForVault[vault] == 0, 'Duplicate test bid');
-		bids[id] = BidPosition(vault, health, lots);
-		bidIdForVault[vault] = id;
+	function setBid(uint256 id, address bidder, uint256 lots) external {
+		require(bids[id].bidder == address(0) && bidder != address(0), 'Duplicate test bid');
+		bids[id] = BidPosition(bidder, lots);
+		bidderIds[bidder].push(id);
 		remainingLots += lots;
+		capital.registerRepairAuctionBidder(bidder);
 	}
 	function bidPosition(uint256 id) external view returns (BidPosition memory) {
 		return bids[id];
+	}
+	function bidderBidCount(address bidder) external view returns (uint256) {
+		return bidderIds[bidder].length;
+	}
+	function bidderBidId(address bidder, uint256 index) external view returns (uint256) {
+		return bidderIds[bidder][index];
 	}
 	function previewBidFees(uint256 id, uint256 ethAmount, uint256 repAmount) external view returns (uint256 ownedEth, uint256 ownedRep) {
 		if (removed[id] || bids[id].filledLots == 0) return (0, 0);
@@ -50,7 +57,18 @@ contract CapitalRepairAuctionAdapterMock is ISecurityPoolRepairAuctionCapital {
 }
 
 contract CapitalRepairAuctionHarness is CapitalLedgerHarness {
+	address public repairAuction;
 	constructor(CapitalLedgerTestComponents components) CapitalLedgerHarness(components) {}
+	function _coordinator() internal view override returns (address) {
+		return address(this);
+	}
+	/// @dev Plays the fork coordinator's registry so the adapter may record bidders.
+	function repairAuctions(uint248) external view returns (address) {
+		return repairAuction;
+	}
+	function setRepairAuction(address adapter) external {
+		repairAuction = adapter;
+	}
 	function installRepairAuction(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external {
 		ledger.installRepairAuctionCohort(adapter, lots, repPerLot, commitmentPerLot);
 	}

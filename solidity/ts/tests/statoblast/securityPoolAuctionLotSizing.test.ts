@@ -3,7 +3,6 @@ import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum
 import {
 	test_statoblast_CapitalRepairAuctionHarness_RepairAuctionLotSizingHarness as harnessArtifact,
 	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
-	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../../types/contractArtifact'
@@ -17,7 +16,6 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 	const node = useIsolatedAnvilNode()
 	let client: WriteClient
 	let root: Address
-	let implementation: Address
 	let index: Address
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
@@ -25,10 +23,8 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		const components = await deployCapitalTestComponents(client)
 		if (!components.contractAddress) throw new Error('Missing components')
 		const rootReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: harnessArtifact.abi, bytecode: `0x${harnessArtifact.evm.bytecode.object}`, args: [components.contractAddress] }) }) })
-		const vaultReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: `0x${vaultArtifact.evm.bytecode.object}` }) })
-		if (!rootReceipt.contractAddress || !vaultReceipt.contractAddress) throw new Error('Missing lot-sizing dependencies')
+		if (!rootReceipt.contractAddress) throw new Error('Missing lot-sizing dependencies')
 		root = rootReceipt.contractAddress
-		implementation = vaultReceipt.contractAddress
 		const ledger = await client.readContract({ abi: harnessArtifact.abi, address: root, functionName: 'ledger' })
 		index = await client.readContract({ abi: capitalArtifact.abi, address: ledger, functionName: 'commitmentIndex' })
 		await node.setBaselineSnapshot()
@@ -36,7 +32,7 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 	const open = async (shortfall: bigint, minimum = 1n) => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: root, functionName: 'setMinimum', args: [minimum] }))
 		const deadline = (await client.getBlock()).timestamp + 3n * 86_400n
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [client.account.address, root, 1n, deadline, 11_000_000n * 10n ** 18n, shortfall, implementation] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [client.account.address, root, 1n, deadline, 11_000_000n * 10n ** 18n, shortfall] }) }) })
 		if (!receipt.contractAddress) throw new Error('Missing auction')
 		const target = { abi: auctionArtifact.abi, address: receipt.contractAddress }
 		const transaction = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'open' }))

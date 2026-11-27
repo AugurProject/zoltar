@@ -16,14 +16,14 @@ contract SecurityPoolUniformPriceRepairAuction {
 		Exclusive,
 		Inclusive
 	}
+	/// @dev The bidder's own address receives any winning lots in the capital
+	/// ledger; the flags share the bidder's slot.
 	struct Bid {
 		address bidder;
-		address vault;
-		uint256 targetHealthBps;
-		uint256 lots;
-		uint256 minimumAttoRepPerLot;
 		bool settled;
 		bool feesRemoved;
+		uint256 lots;
+		uint256 minimumAttoRepPerLot;
 	}
 
 	struct Clearing {
@@ -40,8 +40,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 
 	struct Fill {
 		address bidder;
-		address vault;
-		uint256 targetHealthBps;
 		uint256 filledLots;
 		uint256 usedAttoEth;
 		uint256 principalAttoRep;
@@ -84,7 +82,7 @@ contract SecurityPoolUniformPriceRepairAuction {
 	uint96 private root;
 
 	event RepairAuctionStarted(uint256 opensAt, uint256 closesAt, uint256 lotAttoEth, uint256 targetLots, uint256 inventoryAttoRep, uint256 maximumAttoRepPerLot);
-	event BidSubmitted(uint256 indexed bidId, address indexed bidder, address indexed vault, uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthBps);
+	event BidSubmitted(uint256 indexed bidId, address indexed bidder, uint256 lots, uint256 minimumAttoRepPerLot);
 	event RepairAuctionFinalized(uint256 attoRepPerLot, uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 	event BidSettled(uint256 indexed bidId, address indexed bidder, uint256 filledLots, uint256 refundAttoEth);
 	event FeesRemoved(uint256 indexed bidId, uint256 attoEth, uint256 attoRep);
@@ -123,10 +121,10 @@ contract SecurityPoolUniformPriceRepairAuction {
 		emit RepairAuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
 	}
 
-	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {
+	function submitBid(address bidder, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {
 		require(initialized && !finalized, 'Auction is not accepting bids');
 		require(block.timestamp >= opensAt && block.timestamp < closesAt, 'Auction bidding window is closed');
-		require(bidder != address(0) && vault != address(0), 'Auction bidder and vault are required');
+		require(bidder != address(0), 'Auction bidder is required');
 		require(lots > 0 && lots <= type(uint128).max / lotAttoEth, 'Auction bid must fund exact whole ETH lots');
 		require(lots * lotAttoEth <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
 		require(minimumAttoRepPerLot > 0 && minimumAttoRepPerLot % repGrid == 0, 'Auction bid must use the REP price grid');
@@ -138,12 +136,12 @@ contract SecurityPoolUniformPriceRepairAuction {
 		require(collateralToken.balanceOf(address(this)) + withdrawnCollateral >= depositedAttoEth + lots * lotAttoEth, 'Auction bid collateral missing');
 		depositedAttoEth += lots * lotAttoEth;
 		bidId = ++bidCount;
-		bids[bidId] = Bid({bidder: bidder, vault: vault, targetHealthBps: targetHealthBps, lots: lots, minimumAttoRepPerLot: minimumAttoRepPerLot, settled: false, feesRemoved: false});
+		bids[bidId] = Bid({bidder: bidder, settled: false, feesRemoved: false, lots: lots, minimumAttoRepPerLot: minimumAttoRepPerLot});
 		nodes[bidId].height = 1;
 		nodes[bidId].subtreeLots = _amount128(lots);
 		root = _insert(root, uint96(bidId));
 		bidderIds[bidder].push(bidId);
-		emit BidSubmitted(bidId, bidder, vault, lots, minimumAttoRepPerLot, targetHealthBps);
+		emit BidSubmitted(bidId, bidder, lots, minimumAttoRepPerLot);
 	}
 
 	/// @notice Records an empty clearing when the controller closes without opening bidding.
@@ -211,8 +209,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 		require(bid.bidder != address(0), 'Auction bid does not exist');
 		uint256 before = _bidPrefix(bidId);
 		fill.bidder = bid.bidder;
-		fill.vault = bid.vault;
-		fill.targetHealthBps = bid.targetHealthBps;
 		fill.filledLots = _acceptedPrefix(before + bid.lots) - _acceptedPrefix(before);
 		fill.usedAttoEth = fill.filledLots * lotAttoEth;
 		fill.principalAttoRep = fill.filledLots * clearing.attoRepPerLot;
@@ -277,7 +273,7 @@ contract SecurityPoolUniformPriceRepairAuction {
 		else {
 			uint256 refund = earlyRefundAttoEth(bidId);
 			require(refund != 0, 'Bid may still win');
-			fill = Fill({bidder: bid.bidder, vault: bid.vault, targetHealthBps: bid.targetHealthBps, filledLots: 0, usedAttoEth: 0, principalAttoRep: 0, refundAttoEth: refund});
+			fill = Fill({bidder: bid.bidder, filledLots: 0, usedAttoEth: 0, principalAttoRep: 0, refundAttoEth: refund});
 		}
 		bid.settled = true;
 		refundCreditAttoEth[fill.bidder] += fill.refundAttoEth;

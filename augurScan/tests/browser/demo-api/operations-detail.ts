@@ -140,7 +140,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 	}
 	if (domain === 'auctions') {
 		const auctionCollateral = { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 }
-		const bid = evidence('BidSubmitted', { bidId: '1', bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', vault: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), targetHealthBps: '12000' })
+		const bid = evidence('BidSubmitted', { bidId: '1', bidder: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db', lots: '3', minimumAttoRepPerLot: (4n * 10n ** 18n).toString() })
 		return {
 			chainId,
 			asOf: operations.asOf,

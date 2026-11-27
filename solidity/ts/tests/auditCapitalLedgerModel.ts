@@ -48,6 +48,8 @@ type ModelOwner = {
 	target: bigint
 	positionId: bigint
 	exported: boolean
+	// Repair auction bids of this owner not yet claimed; they block a fork choice.
+	unclaimed: bigint
 	// Scaled by SCALE: every fee ever settled into the owner account.
 	settledEth: bigint
 	settledRep: bigint
@@ -76,7 +78,7 @@ export type ModelPosition = {
 	repFees: bigint
 	dust: bigint
 }
-type ModelBid = { owner: number; health: bigint; lots: bigint; positionId: bigint }
+type ModelBid = { owner: number; lots: bigint; positionId: bigint; claimed: boolean }
 export type Model = {
 	now: bigint
 	accepted: bigint
@@ -138,7 +140,7 @@ export const newModel = (now: bigint, releasedThrough: bigint, wallet: bigint, g
 	forkTime: 0n,
 	frozenBacking: 0n,
 	backingReleased: false,
-	owners: Array.from({ length: OWNER_COUNT }, () => ({ free: 0n, target: 0n, positionId: 0n, exported: false, settledEth: 0n, settledRep: 0n, dust: 0n, claimedEth: 0n, claimedRep: 0n, walletRep: wallet })),
+	owners: Array.from({ length: OWNER_COUNT }, () => ({ free: 0n, target: 0n, positionId: 0n, exported: false, unclaimed: 0n, settledEth: 0n, settledRep: 0n, dust: 0n, claimedEth: 0n, claimedRep: 0n, walletRep: wallet })),
 	positions: [],
 	currentBatch: 0n,
 	nextBatch: 1n,
@@ -257,22 +259,23 @@ export const checkpoint = (m: Model) => {
 }
 const settle = (m: Model, o: number) => {
 	const owner = ownerOf(m, o)
-	if (owner.positionId === 0n) return
-	requireModel(!m.importing, 'Commitment imports are open')
-	const p = positionOf(m, owner.positionId)
-	if (p.retired && !p.repClaimed) {
-		p.repClaimed = true
-		owner.free += p.rep
-		m.totalFree += p.rep
-		m.retCash -= p.rep
+	if (owner.positionId !== 0n) {
+		requireModel(!m.importing, 'Commitment imports are open')
+		const p = positionOf(m, owner.positionId)
+		if (p.retired && !p.repClaimed) {
+			p.repClaimed = true
+			owner.free += p.rep
+			m.totalFree += p.rep
+			m.retCash -= p.rep
+		}
+		owner.settledEth += p.ethFees
+		owner.settledRep += p.repFees
+		owner.dust += p.dust
+		p.ethFees = 0n
+		p.repFees = 0n
+		p.dust = 0n
+		if (!inTree(p)) owner.positionId = 0n
 	}
-	owner.settledEth += p.ethFees
-	owner.settledRep += p.repFees
-	owner.dust += p.dust
-	p.ethFees = 0n
-	p.repFees = 0n
-	p.dust = 0n
-	if (!inTree(p)) owner.positionId = 0n
 }
 const clear = (p: ModelPosition) => {
 	p.distress = undefined
@@ -349,7 +352,7 @@ const retireOne = (m: Model, id: bigint): Retirement => {
 	return result
 }
 export const serve = (m: Model, id: bigint) => {
-	requireModel(id === 0n || id !== m.cohortId, 'Materialize an individual repair auction vault')
+	requireModel(id === 0n || id !== m.cohortId, 'Materialize an individual repair auction bidder')
 	const pending = findPosition(m, id)
 	if (id === 0n || pending === undefined || !inTree(pending) || pending.batch === 0n || !priceValid(m) || m.frozen || m.forkTime !== 0n) return
 	const result = retireOne(m, id)
@@ -361,7 +364,7 @@ export const serve = (m: Model, id: bigint) => {
 }
 // Owners cure at the liquidation price; a takeover cures to the conservative price it repairs to (#1571).
 export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean, price = m.liq) => {
-	requireModel(id !== 0n && id !== m.cohortId, 'Materialize an individual repair auction vault')
+	requireModel(id !== 0n && id !== m.cohortId, 'Materialize an individual repair auction bidder')
 	const p = findPosition(m, id)
 	if (p === undefined || !inTree(p) || !(p.k > target)) return fail('Position is not live')
 	const supported = (((p.rep * BPS) / MULTIPLIER) * WAD) / price
@@ -410,20 +413,21 @@ const observe = (m: Model) => {
 		}
 	}
 }
-export const virtualBid = (m: Model, o: number) => Object.values(m.bids).find(bid => m.cohortId !== 0n && bid.owner === o && bid.positionId === 0n && bid.lots !== 0n)
+/** An unclaimed winning bid of `o`; its lots stay in the cohort, outside the owner's account. */
+export const virtualBid = (m: Model, o: number) => Object.values(m.bids).find(bid => m.cohortId !== 0n && !bid.claimed && bid.owner === o && bid.lots !== 0n)
 export const collateral = (m: Model, o: number) => {
 	const owner = ownerOf(m, o)
 	const p = findPosition(m, owner.positionId)
-	const bid = virtualBid(m, o)
+	// Unclaimed lots stay in the cohort and are not part of the owner's collateral.
 	const released = p?.retired && !p.repClaimed ? p.rep : 0n
 	let withdrawable = owner.free + released
-	const pledged = (p !== undefined && inTree(p) ? p.rep : 0n) + (bid === undefined ? 0n : bid.lots * m.repPerLot)
+	const pledged = p !== undefined && inTree(p) ? p.rep : 0n
 	const principal = withdrawable + pledged
-	const commitment = (p !== undefined && inTree(p) ? p.k : 0n) + (bid === undefined ? 0n : bid.lots * MINC)
+	const commitment = p !== undefined && inTree(p) ? p.k : 0n
 	if (commitment === 0n) return { principal, commitment, withdrawable: principal }
 	if (m.importing || m.frozen || owner.exported || m.forkTime !== 0n || !priceValid(m) || eligible(m, m.cons) < m.demand) return { principal, commitment, withdrawable }
 	const withdrawalCommitment = p !== undefined && inTree(p) && p.batch !== 0n && previewRetirement(m, p.id).status === 'Ready' ? commitment - p.k + p.remaining : commitment
-	const required = requiredRep(withdrawalCommitment, m.cons, bid === undefined ? targetOf(owner) : bid.health)
+	const required = requiredRep(withdrawalCommitment, m.cons, targetOf(owner))
 	if (pledged > required) withdrawable += pledged - required
 	return { principal, commitment, withdrawable }
 }
@@ -454,7 +458,7 @@ export type Operation =
 	| { c: 'materialize'; o: number; bid: bigint }
 	| { c: 'beginImport' }
 	| { c: 'installRepairAuction'; lots: bigint; repPerLot: bigint }
-	| { c: 'setBid'; bid: bigint; o: number; health: bigint; lots: bigint }
+	| { c: 'setBid'; bid: bigint; o: number; lots: bigint }
 	| { c: 'importChoice'; o: number; rep: bigint; k: bigint; batch: bigint; remaining: bigint; target: bigint }
 	| { c: 'finishImport'; demand: bigint }
 	| { c: 'fork'; back: bigint; freeze: boolean }
@@ -549,14 +553,20 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minimumTakeoverRew
 	m.totalFree += debit - takeoverReward
 	return { cured: false, full: remainingK === 0n, merged: existing !== undefined, takeoverReward, debit, sourceOwner: source.owner, sourceBatch, receiverPrincipal: existingRep + received, receiverCommitment: existingK + k }
 }
+/** Anyone claims one bid: its winning lots join the bidder's account; a bid that won nothing only stops counting. */
 const materialize = (m: Model, bidId: bigint) => {
-	requireModel(!m.importing && m.cohortId !== 0n && bidId !== 0n, 'Auction capital unavailable')
+	requireModel(!m.importing && bidId !== 0n, 'Auction capital unavailable')
 	const bid = m.bids[bidId.toString()]
-	if (bid === undefined) return fail('Auction vault missing')
-	if (bid.positionId !== 0n || bid.lots === 0n) return bid.positionId
-	requireModel(bid.lots <= m.cohortLots && bid.health >= BPS, 'Invalid auction position')
+	// The adapter reports no bidder for an unknown bid.
+	if (bid === undefined) return fail('Auction bid missing')
 	const owner = ownerOf(m, bid.owner)
-	requireModel(owner.positionId === 0n && owner.free === 0n && !owner.exported, 'Auction vault already has principal')
+	if (bid.claimed) return owner.positionId
+	bid.claimed = true
+	owner.unclaimed -= 1n
+	if (bid.lots === 0n) return owner.positionId
+	requireModel(m.cohortId !== 0n && bid.lots <= m.cohortLots, 'Invalid auction position')
+	settle(m, bid.owner)
+	requireModel(!owner.exported, 'Auction bidder already exported')
 	const source = positionOf(m, m.cohortId)
 	m.mockEth += source.ethFees
 	m.mockRep += source.repFees
@@ -575,13 +585,37 @@ const materialize = (m: Model, bidId: bigint) => {
 	requireModel(k <= source.k && (source.rep * k) / source.k === principal && (source.rep * k) % source.k === 0n, 'Auction split must be proportional')
 	source.rep -= principal
 	source.k -= k
-	const id = create(m, bid.owner, 0n, principal, k, source.price, 0n)
-	positionOf(m, id).distress = source.distress
-	positionOf(m, id).auctionStart = source.auctionStart
-	bid.positionId = id
 	m.cohortLots -= bid.lots
-	owner.positionId = id
-	owner.target = bid.health
+	const existing = findPosition(m, owner.positionId)
+	let id: bigint
+	if (existing === undefined) {
+		id = create(m, bid.owner, 0n, principal, k, source.price, 0n)
+		positionOf(m, id).distress = source.distress
+		positionOf(m, id).auctionStart = source.auctionStart
+		owner.positionId = id
+	} else {
+		requireModel(inTree(existing), 'Position is not live')
+		id = existing.id
+		// The merged position keeps the older liquidation start and any penalty already paid in it.
+		const startBefore = existing.auctionStart ?? started(m, id)
+		const paid = existing.penaltyStarted === startBefore ? (existing.penaltyPaid ?? 0n) : 0n
+		existing.rep += principal
+		existing.k += k
+		existing.price = maxHealthyPrice(existing.rep, existing.k)
+		if (existing.batch !== 0n) existing.remaining += k
+		const older = (a: bigint | undefined, b: bigint | undefined) => {
+			if (a === undefined) return b
+			if (b === undefined) return a
+			return min(a, b)
+		}
+		existing.distress = older(existing.distress, source.distress)
+		existing.auctionStart = older(existing.auctionStart, source.auctionStart)
+		if (paid !== 0n && existing.price < m.observedPrice && existing.auctionStart !== undefined) {
+			existing.penaltyStarted = existing.auctionStart
+			existing.penaltyPaid = paid
+		}
+	}
+	bid.positionId = id
 	owner.settledEth += ownedEth
 	owner.settledRep += ownedRep
 	// The adapter mock floors each bidder's share of the cohort's own tree-rounded fees.
@@ -797,7 +831,8 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		}
 		case 'setBid':
 			requireModel(m.bids[op.bid.toString()] === undefined && Object.values(m.bids).every(bid => bid.owner !== op.o), 'Duplicate test bid')
-			m.bids[op.bid.toString()] = { owner: op.o, health: op.health, lots: op.lots, positionId: 0n }
+			m.bids[op.bid.toString()] = { owner: op.o, lots: op.lots, positionId: 0n, claimed: false }
+			ownerOf(m, op.o).unclaimed += 1n
 			m.mockLots += op.lots
 			return undefined
 		case 'importChoice': {
@@ -829,6 +864,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		case 'export': {
 			const owner = ownerOf(m, op.o)
 			requireModel(m.frozen && !owner.exported, 'Fork choice unavailable')
+			requireModel(owner.unclaimed === 0n, 'Claim repair auction bids before choosing')
 			settle(m, op.o)
 			owner.exported = true
 			return undefined

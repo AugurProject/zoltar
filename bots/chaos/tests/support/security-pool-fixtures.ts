@@ -22,8 +22,10 @@ export function auctionFixture(): AuctionSnapshot {
 		maximumBidAttoRepPerLot: 900n.toString(),
 		maximumAdmissibleBidAttoRepPerLot: 900n.toString(),
 		pendingEthRefund: '0',
-		bids: [{ bidId: '1', vault: address(603), lots: '2', minimumAttoRepPerLot: 15n.toString(), targetHealthBps: '10000', settled: false }],
+		bids: [{ bidId: '1', lots: '2', minimumAttoRepPerLot: 15n.toString(), settled: false }],
 		refundableBidIds: ['1'],
+		capital: address(603),
+		claimableBidIds: [],
 	}
 }
 

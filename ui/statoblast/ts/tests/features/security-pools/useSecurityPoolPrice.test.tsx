@@ -260,9 +260,9 @@ test.each(['weth', 'rep'] as const)('the %s approval review names the exact sele
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'approve', args: [priceFeed, amount] })
 })
 
-test('reports use the connected sponsor while an independent auction vault is selected', async () => {
+test('reports use the connected sponsor while another capital account is selected', async () => {
 	const state = await setup()
-	await state.hook.setProps({ target: { ...state.target, owner: token }, bidder: state.fork.owner, actions: { ...state.actions, ownerReason: 'Activate the selected vault first.' } })
+	await state.hook.setProps({ target: { ...state.target, owner: token }, bidder: state.fork.owner, actions: { ...state.actions, ownerReason: 'Connect the selected owner account.' } })
 	await waitFor(() => expect(state.hook.state().loading).toBe(false))
 	await act(() => state.hook.state().setPrice('2'))
 	expect(state.hook.state().fundingReason).toBeUndefined()

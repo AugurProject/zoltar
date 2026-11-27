@@ -275,7 +275,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 					{ id: '12', label: 'Position 12', commitmentEth: '100', distressed: true, retirementStatus: 'Earlier requests reserve available capacity', stalledRetirement: true, takeoverStatus: 'Receiver and target retirement cohorts differ' },
 					{
 						id: 'auction:19',
-						label: 'Auction bid 19 · awaiting individual position',
+						label: 'Auction bid 19 · bidder position after claim',
 						commitmentEth: '25',
 						distressed: true,
 						retirementStatus: 'Not retiring',

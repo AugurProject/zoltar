@@ -266,6 +266,16 @@ abstract contract SecurityPoolCommitmentTree {
 	}
 
 	/// @dev Push ancestors root-first so a position sees every pending credit and health tag.
+	/// @notice The latest healthy observation recorded on the position's tree path.
+	function healthEpoch(uint96 id) public view returns (uint64 epoch) {
+		uint256 cursor = positions[id].node;
+		while (cursor != 0) {
+			Node storage node = nodes[cursor];
+			if (epoch < node.healthEpoch) epoch = node.healthEpoch;
+			cursor = node.parent;
+		}
+	}
+
 	function _touch(uint96 id) internal {
 		uint256 cursor = positions[id].node;
 		require(cursor != 0, 'Unknown commitment position');

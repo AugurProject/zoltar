@@ -4,16 +4,17 @@ import { record, nonemptyString } from '@zoltar/bot-shared/infrastructure/json-v
 type Scope = { id: string; securityPool: Address; universeId: bigint }
 export type SecurityPoolInstruction = Scope &
 	(
-		| { action: 'auction-bid'; lots: bigint; minimumAttoRepPerLot: bigint; targetHealthFactorBps: bigint; maximumValueAttoEth: bigint }
-		| { action: 'auction-activate' | 'auction-refund'; bidId: bigint }
-		| { action: 'vault-earnings'; vault: Address }
-		| { action: 'vault-health'; vault: Address; targetHealthFactorBps: bigint }
-		| { action: 'vault-retire'; vault: Address; commitmentAttoEth: bigint }
-		| { action: 'vault-withdraw'; vault: Address; amountAttoRep: bigint }
-		| { action: 'vault-deposit'; vault: Address; amountAttoRep: bigint; targetHealthFactorBps: bigint }
-		| { action: 'vault-fork-choice'; vault: Address; outcome: bigint }
+		| { action: 'auction-bid'; lots: bigint; minimumAttoRepPerLot: bigint; maximumValueAttoEth: bigint }
+		| { action: 'auction-claim'; bidIds: readonly bigint[] }
+		| { action: 'auction-refund'; bidId: bigint }
+		| { action: 'capital-earnings' }
+		| { action: 'capital-health'; targetHealthFactorBps: bigint }
+		| { action: 'capital-retire'; commitmentAttoEth: bigint }
+		| { action: 'capital-withdraw'; amountAttoRep: bigint }
+		| { action: 'capital-deposit'; amountAttoRep: bigint; targetHealthFactorBps: bigint }
 		| { action: 'fork-choice'; outcome: bigint }
 	)
+export type CapitalInstruction = Extract<SecurityPoolInstruction, { action: `capital-${string}` }>
 
 /** Instructions are explicit, one-shot operator decisions; no bot chooses a truth branch or bid price. */
 export function parseSecurityPoolInstructions(value: unknown): SecurityPoolInstruction[] {
@@ -43,27 +44,40 @@ export function parseSecurityPoolInstructions(value: unknown): SecurityPoolInstr
 			const minimumAttoRepPerLot = uint('minimumAttoRepPerLot')
 			const maximumValueAttoEth = uint('maximumValueAttoEth', 128)
 			if (lots === 0n || minimumAttoRepPerLot === 0n || maximumValueAttoEth === 0n) throw new Error('Auction bid limits must be positive')
-			return { ...base, action, lots, minimumAttoRepPerLot, maximumValueAttoEth, targetHealthFactorBps: health() }
+			return { ...base, action, lots, minimumAttoRepPerLot, maximumValueAttoEth }
 		}
-		if (action === 'auction-activate' || action === 'auction-refund') {
+		if (action === 'auction-claim') {
+			const raw = data['bidIds']
+			if (!Array.isArray(raw) || raw.length === 0 || raw.length > 64) throw new Error('Instruction bidIds must list 1–64 bid IDs')
+			const bidIds = raw.map(item => {
+				if (typeof item !== 'string' || !/^[1-9]\d*$/.test(item) || BigInt(item) >= 1n << 256n) throw new Error('Instruction bidIds must be positive uint256 decimal strings')
+				return BigInt(item)
+			})
+			if (new Set(bidIds).size !== bidIds.length) throw new Error('Instruction bidIds must not repeat a bid')
+			return { ...base, action, bidIds }
+		}
+		if (action === 'auction-refund') {
 			const bidId = uint('bidId')
 			if (bidId === 0n) throw new Error('Instruction bidId must be positive')
 			return { ...base, action, bidId }
 		}
-		const vault = getAddress(nonemptyString(data['vault'], 'Instruction vault'))
-		if (vault === zeroAddress) throw new Error('Instruction vault must be nonzero')
-		if (action === 'vault-earnings') return { ...base, action, vault }
-		if (action === 'vault-health') return { ...base, action, vault, targetHealthFactorBps: health() }
-		if (action === 'vault-retire') return { ...base, action, vault, commitmentAttoEth: uint('commitmentAttoEth') }
-		if (action === 'vault-withdraw') return { ...base, action, vault, amountAttoRep: uint('amountAttoRep') }
-		if (action === 'vault-deposit') return { ...base, action, vault, amountAttoRep: uint('amountAttoRep'), targetHealthFactorBps: health() }
-		if (action === 'vault-fork-choice') return { ...base, action, vault, outcome: uint('outcome') }
+		// Claimed winning auction lots join the operator's own capital account; these act on it directly.
+		if (action === 'capital-earnings') return { ...base, action }
+		if (action === 'capital-health') return { ...base, action, targetHealthFactorBps: health() }
+		if (action === 'capital-retire') return { ...base, action, commitmentAttoEth: uint('commitmentAttoEth') }
+		if (action === 'capital-withdraw') return { ...base, action, amountAttoRep: uint('amountAttoRep') }
+		if (action === 'capital-deposit') return { ...base, action, amountAttoRep: uint('amountAttoRep'), targetHealthFactorBps: health() }
 		throw new Error('Unsupported security pool instruction action')
 	})
 	if (new Set(result.map(item => item.id)).size !== result.length) throw new Error('Duplicate security pool instruction id')
 	return result
 }
 
+function serializeValue(value: unknown): unknown {
+	if (typeof value === 'bigint') return value.toString()
+	return Array.isArray(value) ? value.map(serializeValue) : value
+}
+
 export function serializeSecurityPoolInstructions(instructions: readonly SecurityPoolInstruction[]) {
-	return instructions.map(instruction => Object.fromEntries(Object.entries(instruction).map(([key, value]) => [key, typeof value === 'bigint' ? value.toString() : value])))
+	return instructions.map(instruction => Object.fromEntries(Object.entries(instruction).map(([key, value]) => [key, serializeValue(value)])))
 }

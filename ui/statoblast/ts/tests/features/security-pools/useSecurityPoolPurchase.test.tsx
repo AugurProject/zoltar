@@ -8,7 +8,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { useSecurityPoolPurchase } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolPurchase.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { auctionCapitalSnapshot, capitalSnapshot, owner, capital, token, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, capital, token, unit } from './capitalFixture.js'
 import { modules, capitalClient } from './capitalClient.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
@@ -50,14 +50,6 @@ async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n, recover
 	await waitFor(() => (recoveryToken === zeroAddress ? expect(hook.state().reason).toContain('Recovery REP funding is unavailable.') : expect(hook.state().quote).toBeDefined()))
 	return { hook, source, requests }
 }
-test('purchases made while managing an auction vault receive shares in the controlling wallet', async () => {
-	const { hook, requests } = await setup(auctionCapitalSnapshot())
-	await act(() => hook.state().buy())
-	const request = requests[0]
-	if (request === undefined) throw new Error('Missing purchase')
-	expect(request.account).toBe(owner)
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [0n, 999n, unit, owner, (9n * unit) / 10n, unit / 50n] })
-})
 test('purchase uses one aggregate transaction and preserves explicit limits across new blocks', async () => {
 	const { hook, requests } = await setup()
 	expect(hook.state().reason).toBeUndefined()

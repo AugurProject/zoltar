@@ -1,20 +1,19 @@
 import type { OperatorSettings } from '#config/settings'
-import type { SecurityPoolInstruction } from '#config/security-pool-instructions'
+import type { CapitalInstruction, SecurityPoolInstruction } from '#config/security-pool-instructions'
 import type { SecurityPoolExecutionContext } from './security-pool-execution-snapshot.ts'
 import { erc20Abi, zoltarAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolForkCoordinatorAbi as forkAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	buildSecurityPoolAuctionBidRequest,
 	quoteSecurityPoolAuctionBid,
-	buildSecurityPoolAuctionMaterializeRequest,
 	buildSecurityPoolAuctionRefundClaimRequest,
-	buildSecurityPoolAuctionVaultExecuteRequest,
-	buildSecurityPoolAuctionVaultDepositRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
+	buildSecurityPoolCapitalDepositAndSetHealthRequest,
 	buildSecurityPoolCapitalSetHealthRequest,
 	buildSecurityPoolCapitalSetCommitmentRequest,
 	buildSecurityPoolCapitalWithdrawPrincipalRequest,
 	loadSecurityPoolAuctionSnapshot,
+	securityPoolAuctionClaimBatch,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { SecurityPoolOpportunityExpired } from './security-pool-executor.ts'
 
@@ -22,64 +21,102 @@ type Request = { account: Address; to: Address; value: bigint; data: Hex }
 type Context = SecurityPoolExecutionContext & { settings: OperatorSettings }
 type PreparedInstruction = { request: Request; completes: boolean }
 type InstructionDisposition = { disposition: 'skip' | 'retry'; reason: string }
-type VaultInstruction = Extract<SecurityPoolInstruction, { vault: Address }>
-type AuctionInstruction = Exclude<SecurityPoolInstruction, VaultInstruction | { action: 'fork-choice' }>
+type AuctionInstruction = Exclude<SecurityPoolInstruction, CapitalInstruction | { action: 'fork-choice' | 'auction-claim' }>
+type PinnedClient = Parameters<typeof loadSecurityPoolAuctionSnapshot>[0]['client']
 
-async function forkChoiceRequest({ client, settings, observation, blockNumber }: Context, owner: Address, outcome: bigint): Promise<Request> {
+const pinned = ({ client, blockNumber }: Context): PinnedClient => ({ ...client, getBlock: () => client.getBlock({ blockNumber }) })
+
+/** Every bid of the operator in this universe's auction that is not yet claimed, split by whether it can be claimed now. */
+async function unclaimedOperatorBids(client: PinnedClient, securityPool: Address, universeId: bigint, owner: Address) {
+	const claimable: bigint[] = []
+	const waiting: bigint[] = []
+	for (let bidStart = 0n; ; bidStart += 64n) {
+		const auction = (await loadSecurityPoolAuctionSnapshot({ client, securityPool, universeId, bidder: owner, bidStart, bidCount: 64 })).auction
+		if (auction === undefined) break
+		for (const bid of auction.bids) {
+			if (bid.claimed) continue
+			if (bid.claimable) claimable.push(bid.id)
+			else waiting.push(bid.id)
+		}
+		if (bidStart + 64n >= auction.totalBidCount) break
+	}
+	return { claimable, waiting }
+}
+
+const claimRequest = (owner: Address, capitalLedger: Address, bidIds: readonly bigint[]): Request => ({ account: owner, to: capitalLedger, value: 0n, data: encodeFunctionData({ abi: capitalAbi, functionName: 'materializeRepairAuctionBids', args: [bidIds] }) })
+
+/**
+ * A bidder cannot export a fork choice while any of its repair auction bids in this universe is unclaimed, winning or
+ * not, so the operator's claimable bids are claimed first, at most one SDK claim batch per transaction so
+ * each claim fits in a block, and the choice follows once none remain.
+ */
+async function forkChoiceRequest(context: Context, owner: Address, outcome: bigint): Promise<PreparedInstruction | InstructionDisposition> {
+	const { client, settings, observation, blockNumber } = context
 	const { snapshot, selection } = observation
 	const child = await client.readContract({ address: settings.deployment.zoltar, abi: zoltarAbi, functionName: 'getChildUniverseId', args: [selection.universeId, outcome], blockNumber })
 	if (!settings.approvedUniverses.includes(child) || !settings.selectedSecurityPools.some(scope => scope.address === selection.address && scope.universeId === child)) throw new Error('Select and approve the chosen child universe before recording an irreversible fork choice')
+	const unclaimed = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'unclaimedRepairAuctionBids', args: [owner], blockNumber })
+	if (unclaimed > 0n) {
+		const bids = await unclaimedOperatorBids(pinned(context), selection.address, selection.universeId, owner)
+		if (bids.claimable.length > 0) return { completes: false, request: claimRequest(owner, snapshot.capitalLedger, securityPoolAuctionClaimBatch(bids.claimable).bidIds) }
+		return { disposition: 'retry', reason: 'Claim repair auction bids before choosing; the auction has not settled every unclaimed bid yet' }
+	}
 	const controller = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'forkAuthority', blockNumber })
-	return { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkAbi, functionName: 'choose', args: [selection.universeId, outcome] }) }
+	return { completes: true, request: { account: owner, to: controller, value: 0n, data: encodeFunctionData({ abi: forkAbi, functionName: 'choose', args: [selection.universeId, outcome] }) } }
 }
 
-async function vaultInstructionRequest(context: Context, instruction: VaultInstruction): Promise<PreparedInstruction> {
+/** Claim the listed bids of the operator; anyone may claim, but this signer claims only its own bids. */
+async function auctionClaimRequest(context: Context, instruction: Extract<SecurityPoolInstruction, { action: 'auction-claim' }>): Promise<PreparedInstruction | InstructionDisposition> {
+	const snapshot = context.observation.snapshot
+	const bids = await unclaimedOperatorBids(pinned(context), instruction.securityPool, instruction.universeId, snapshot.owner)
+	const pending = instruction.bidIds.filter(bidId => bids.claimable.includes(bidId) || bids.waiting.includes(bidId))
+	if (pending.length === 0) return { disposition: 'skip', reason: 'The listed auction bids are already claimed or are not this operator’s bids' }
+	if (pending.some(bidId => bids.waiting.includes(bidId))) return { disposition: 'retry', reason: 'Auction is still open for a listed bid' }
+	// Each transaction claims at most one batch; the instruction stays open until every listed bid is claimed.
+	const batch = securityPoolAuctionClaimBatch(pending)
+	return { completes: batch.completes, request: claimRequest(snapshot.owner, snapshot.capitalLedger, batch.bidIds) }
+}
+
+const isCapitalInstruction = (instruction: SecurityPoolInstruction): instruction is CapitalInstruction => instruction.action.startsWith('capital-')
+
+/** Direct operations on the operator's own capital account, which also holds its winning auction lots. */
+async function capitalInstructionRequest(context: Context, instruction: CapitalInstruction): Promise<PreparedInstruction> {
 	const { client, settings, observation, totalPrincipal, blockNumber } = context
 	const snapshot = observation.snapshot
 	const owner = snapshot.owner
-	const vault = observation.ownedVaults?.find(account => account.owner === instruction.vault)
-	if (vault === undefined) throw new Error('Vault is missing from authenticated managed exposure')
-	const base = { owner: instruction.vault, capitalLedger: snapshot.capitalLedger }
-	if (instruction.action === 'vault-deposit') {
-		if (
-			(observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + instruction.amountAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep ||
-			totalPrincipal === undefined ||
-			totalPrincipal + instruction.amountAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep ||
-			observation.walletRep < instruction.amountAttoRep + settings.strategy.walletAttoRepReserve
-		)
-			throw new SecurityPoolOpportunityExpired('Vault funding exceeds exposure or wallet reserve limits')
-		const allowance = await client.readContract({ address: snapshot.repToken, abi: erc20Abi, functionName: 'allowance', args: [owner, instruction.vault], blockNumber })
-		if (allowance < instruction.amountAttoRep) return { completes: false, request: { account: owner, to: snapshot.repToken, value: 0n, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [instruction.vault, instruction.amountAttoRep] }) } }
-		return { completes: true, request: buildSecurityPoolAuctionVaultDepositRequest({ bidder: owner, vault: instruction.vault, capitalLedger: snapshot.capitalLedger, amountAttoRep: instruction.amountAttoRep, targetHealthFactorBps: instruction.targetHealthFactorBps }) }
-	}
-	let operation
+	const base = { owner, capitalLedger: snapshot.capitalLedger }
 	switch (instruction.action) {
-		case 'vault-earnings':
-			operation = buildSecurityPoolCapitalClaimEarningsRequest(base)
-			break
-		case 'vault-health':
-			operation = buildSecurityPoolCapitalSetHealthRequest({ ...base, targetHealthFactorBps: instruction.targetHealthFactorBps })
-			break
-		case 'vault-fork-choice':
-			operation = await forkChoiceRequest(context, vault.owner, instruction.outcome)
-			break
-		case 'vault-retire':
-			if (instruction.commitmentAttoEth > vault.ownerCommitmentAttoEth) throw new Error('Vault retirement cannot increase commitment')
-			operation = buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: instruction.commitmentAttoEth })
-			break
-		case 'vault-withdraw':
-			if (instruction.amountAttoRep > vault.withdrawableAttoRep) throw new SecurityPoolOpportunityExpired('Vault principal is not yet withdrawable')
-			operation = buildSecurityPoolCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: instruction.amountAttoRep })
-			break
+		case 'capital-deposit': {
+			if (
+				(observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + instruction.amountAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep ||
+				totalPrincipal === undefined ||
+				totalPrincipal + instruction.amountAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep ||
+				observation.walletRep < instruction.amountAttoRep + settings.strategy.walletAttoRepReserve
+			)
+				throw new SecurityPoolOpportunityExpired('Capital funding exceeds exposure or wallet reserve limits')
+			const allowance = await client.readContract({ address: snapshot.repToken, abi: erc20Abi, functionName: 'allowance', args: [owner, snapshot.capitalLedger], blockNumber })
+			if (allowance < instruction.amountAttoRep) return { completes: false, request: { account: owner, to: snapshot.repToken, value: 0n, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [snapshot.capitalLedger, instruction.amountAttoRep] }) } }
+			return { completes: true, request: buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base, amountAttoRep: instruction.amountAttoRep, targetHealthFactorBps: instruction.targetHealthFactorBps }) }
+		}
+		case 'capital-earnings':
+			return { completes: true, request: buildSecurityPoolCapitalClaimEarningsRequest(base) }
+		case 'capital-health':
+			return { completes: true, request: buildSecurityPoolCapitalSetHealthRequest({ ...base, targetHealthFactorBps: instruction.targetHealthFactorBps }) }
+		case 'capital-retire':
+			if (instruction.commitmentAttoEth > snapshot.ownerCommitmentAttoEth) throw new Error('Capital retirement cannot increase commitment')
+			return { completes: true, request: buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: instruction.commitmentAttoEth }) }
+		case 'capital-withdraw':
+			if (instruction.amountAttoRep > snapshot.withdrawableAttoRep) throw new SecurityPoolOpportunityExpired('Capital principal is not yet withdrawable')
+			return { completes: true, request: buildSecurityPoolCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: instruction.amountAttoRep }) }
 		default:
-			throw new Error('Unsupported vault instruction')
+			throw new Error('Unsupported capital instruction')
 	}
-	return { completes: true, request: buildSecurityPoolAuctionVaultExecuteRequest({ bidder: owner, vault: vault.owner, request: operation, sweep: { repToken: snapshot.repToken, recipient: owner } }) }
 }
 
-async function auctionInstructionRequest({ client, settings, observation, totalPrincipal, blockNumber }: Context, instruction: AuctionInstruction): Promise<PreparedInstruction | InstructionDisposition> {
+async function auctionInstructionRequest(context: Context, instruction: AuctionInstruction): Promise<PreparedInstruction | InstructionDisposition> {
+	const { settings, observation, totalPrincipal } = context
 	const snapshot = observation.snapshot
-	const pinnedClient = { ...client, getBlock: () => client.getBlock({ blockNumber }) }
+	const pinnedClient = pinned(context)
 	let auctionSnapshot = await loadSecurityPoolAuctionSnapshot({ client: pinnedClient, securityPool: instruction.securityPool, universeId: instruction.universeId, bidder: snapshot.owner, bidCount: 64 })
 	if (instruction.action === 'auction-bid') {
 		const auction = auctionSnapshot.auction
@@ -103,20 +140,13 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 		if (auction === undefined || auction.bidStart + 64n >= auction.totalBidCount) throw new Error('Instruction bid does not belong to this operator')
 		auctionSnapshot = await loadSecurityPoolAuctionSnapshot({ client: pinnedClient, securityPool: instruction.securityPool, universeId: instruction.universeId, bidder: snapshot.owner, bidStart: auction.bidStart + 64n, bidCount: 64 })
 	}
-	if (instruction.action === 'auction-activate') {
-		const auction = auctionSnapshot.auction
-		const bid = auction?.bids.find(candidate => candidate.id === instruction.bidId)
-		if (auction === undefined || bid === undefined) throw new Error('Authenticated auction bid is missing')
-		if (!auction.finalized) return { disposition: 'retry', reason: 'Auction is still open' }
-		if (bid.fill === undefined || bid.fill.filledLots === 0n) return { disposition: 'skip', reason: 'Finalized auction bid has no winning fill' }
-		if (bid.materialized) return { disposition: 'skip', reason: 'Winning auction vault is already active' }
-	}
-	const request = instruction.action === 'auction-activate' ? buildSecurityPoolAuctionMaterializeRequest(auctionSnapshot, instruction.bidId) : buildSecurityPoolAuctionRefundClaimRequest(auctionSnapshot, instruction.bidId, snapshot.owner)
+	const request = buildSecurityPoolAuctionRefundClaimRequest(auctionSnapshot, instruction.bidId, snapshot.owner)
 	return { request, completes: true }
 }
 
 export async function buildSecurityPoolInstructionRequest(context: Context, instruction: SecurityPoolInstruction): Promise<PreparedInstruction | InstructionDisposition> {
-	if (instruction.action === 'fork-choice') return { request: await forkChoiceRequest(context, context.observation.snapshot.owner, instruction.outcome), completes: true }
-	if ('vault' in instruction) return vaultInstructionRequest(context, instruction)
+	if (instruction.action === 'fork-choice') return forkChoiceRequest(context, context.observation.snapshot.owner, instruction.outcome)
+	if (instruction.action === 'auction-claim') return auctionClaimRequest(context, instruction)
+	if (isCapitalInstruction(instruction)) return capitalInstructionRequest(context, instruction)
 	return auctionInstructionRequest(context, instruction)
 }

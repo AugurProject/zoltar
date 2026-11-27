@@ -2,7 +2,7 @@ import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -15,8 +15,6 @@ import type { useSecurityPool } from './useSecurityPool.js'
 import * as copy from '../../../copy/securityPool.js'
 import { defaultSecurityPoolCreationDraft, parseFixedSecurityPoolQuestions, parseSecurityPoolCreationEconomics, securityPoolDeploymentReviewDescription, type CuratedAdmissionMode, type SecurityPoolCreationDraft } from '../lib/creation.js'
 import { loadSecurityPoolAdmission, securityPoolAdmissionCreationRequest, requireSecurityPoolQuestionAdmission, requireSecurityPoolQuestionHorizon, requireSecurityPoolQuestionEligibility } from '../../../protocol/securityPoolAdmission.js'
-import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
 
 export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters) {
 	const collateralSymbol = useSignal<CollateralSymbol>('WETH')
@@ -46,7 +44,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		(model.loading || (busy.value !== undefined && snapshot === undefined) ? copy.loading : undefined) ??
 		(snapshot === undefined && model.presentationSnapshot !== undefined ? copy.readUnavailable : undefined) ??
 		(snapshot === undefined ? copy.enterSecurityPool : undefined) ??
-		(parameters.accountAddress?.toLowerCase() !== (snapshot?.auctionVault?.bidder ?? snapshot?.owner)?.toLowerCase() ? copy.ownerRequired : undefined)
+		(parameters.accountAddress?.toLowerCase() !== snapshot?.owner.toLowerCase() ? copy.ownerRequired : undefined)
 	useEffect(() => {
 		error.value = undefined
 		feedback.value = undefined
@@ -88,25 +86,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					scope,
 				}),
 				async (account, context) => {
-					let request = await build()
-					const selectedVault = snapshot?.auctionVault
-					if (selectedVault !== undefined && getAddress(request.account) === selectedVault.vault) {
-						if (snapshot === undefined || request.to === undefined || getAddress(account) !== selectedVault.bidder) throw new Error(copy.ownerRequired)
-						const original = request
-						request = {
-							...original,
-							...buildSecurityPoolAuctionVaultExecuteRequest({ bidder: selectedVault.bidder, vault: selectedVault.vault, request: { account: original.account, to: request.to, value: original.value ?? 0n, data: original.data }, sweep: { repToken: snapshot.repToken, recipient: selectedVault.bidder } }),
-							reviewDescription: `${original.reviewDescription ?? label} This operation uses your independent auction vault ${selectedVault.vault}. Returned collateral, ETH and REP are sent to your wallet ${selectedVault.bidder}.`,
-							validateBeforeSubmit: async () => {
-								const client = createConnectedReadClient()
-								const block = await client.getBlock()
-								if (block.number === undefined) throw new Error('A confirmed block is required to authenticate this vault.')
-								const fresh = await authenticateSecurityPoolAuctionVault(client, snapshot.securityPool, selectedVault.vault, block.number)
-								if (fresh.bidder !== selectedVault.bidder || fresh.auction !== selectedVault.auction || fresh.bidId !== selectedVault.bidId) throw new Error('Auction vault authority changed. Review again.')
-								await original.validateBeforeSubmit?.()
-							},
-						}
-					}
+					const request = await build()
 					context.assertActive()
 					const client = createWalletWriteClient(account, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
 					return await sendSecurityPoolTransaction(client, request, label, validate)

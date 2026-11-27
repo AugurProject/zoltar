@@ -189,10 +189,8 @@ export interface MigrationRepSplitProgressSnapshot {
 
 export interface AuctionBidSnapshot {
 	bidId: string
-	vault: Address
 	lots: CanonicalUintString
 	minimumAttoRepPerLot: CanonicalUintString
-	targetHealthBps: CanonicalUintString
 	settled: boolean
 }
 
@@ -224,6 +222,10 @@ export interface AuctionSnapshot {
 	pendingEthRefundGeneration?: Hash
 	bids: AuctionBidSnapshot[]
 	refundableBidIds: string[]
+	/** The capital ledger that records this auction's bids as claimed. */
+	capital: Address
+	/** The wallet's bids the ledger has not marked claimed and can claim at the anchor block. */
+	claimableBidIds: string[]
 }
 
 export interface OracleGameSnapshot {

@@ -33,7 +33,7 @@ const abi = parseAbi([
 ])
 
 function fixture(overrides: Record<string, unknown> = {}) {
-	const calls: { functionName: string; blockNumber: bigint; args: readonly unknown[] | undefined }[] = []
+	const calls: { functionName: string; address: Address; blockNumber: bigint; args: readonly unknown[] | undefined }[] = []
 	const values: Record<string, unknown> = {
 		originUniverseId: 7n,
 		capitalLedger,
@@ -75,13 +75,14 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		liquidationPenaltyPaid: 0n,
 		liquidationElapsed: 0n,
 		previewRetirement: [5n, 9n, 50n, 10n, 0n, 13n, 0n],
+		unclaimedRepairAuctionBids: 0n,
 		...overrides,
 	}
 	const client: SecurityPoolReadClient = {
 		getChainId: async () => 1,
 		getBlock: async () => ({ number: 42n, hash, timestamp: 1_000n }),
 		readContract: async parameters => {
-			calls.push({ functionName: parameters.functionName, blockNumber: parameters.blockNumber, args: parameters.args })
+			calls.push({ functionName: parameters.functionName, address: parameters.address, blockNumber: parameters.blockNumber, args: parameters.args })
 			if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 			return values[parameters.functionName]
 		},
@@ -182,7 +183,7 @@ describe('personal security pool capital SDK', () => {
 		const snapshot = await loadSecurityPoolCapitalSnapshot({ client, securityPool, owner })
 		expect(snapshot.positions[0]).toMatchObject({ batch: 9n, commitment: 20n, remainingCommitment: 7n, retirementPreview: { status: 'ready', effectiveCurrentBatch: 9n, healthyCommitment: 50n, spareCommitment: 10n, queuedAheadCommitment: 0n, commitmentReduction: 13n, releasedRep: 0n } })
 		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(1)
-		expect(calls.filter(call => call.functionName === 'previewRetirement')).toEqual([{ functionName: 'previewRetirement', blockNumber: 42n, args: [1n, 3n, 40n] }])
+		expect(calls.filter(call => call.functionName === 'previewRetirement')).toEqual([{ functionName: 'previewRetirement', address: index, blockNumber: 42n, args: [1n, 3n, 40n] }])
 	})
 	test('retirement preview rejects an unknown status and does not inspect active or lazily closed history', async () => {
 		const retiring = { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 7n }
@@ -223,23 +224,26 @@ test('takeover builders encode the receiver minimum takeover reward', () => {
 	expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumTakeoverReward: 1n, maximumOwnRep: 0n }).data }).args).toEqual([1n, 1n, 1n, 0n])
 })
 
-test('#1683 previews unmaterialized auction earnings after the same checkpoint', async () => {
+test('#1683 claimable earnings pay only the account; unclaimed auction lots keep their earnings per bid', async () => {
 	const { loadSecurityPoolClaimableEarnings } = await import('./securityPoolCapital.js')
-	const snapshot = { blockNumber: 42n, capitalLedger, commitmentIndex: index, owner, ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 10000n, positionId: 0n }, auctionBidId: 7n }
-	const result = await loadSecurityPoolClaimableEarnings(snapshot, async (calls, block) => {
+	const snapshot = { blockNumber: 42n, capitalLedger, commitmentIndex: index, owner, ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 10000n, positionId: 0n } }
+	const plain = await loadSecurityPoolClaimableEarnings(snapshot, async (calls, block) => {
 		expect(block).toBe(42n)
-		expect(calls.map(call => call.functionName)).toEqual(['checkpoint', 'repairAuctionPosition'])
-		return [undefined, [owner, 0n, 100n, 10n, 10000n, 0n, false, 11n, 13n]]
+		expect(calls.map(call => call.functionName)).toEqual(['checkpoint', 'ownerAccount'])
+		return [undefined, [0n, 5n, 6n, 10000n, 0n]]
 	})
-	expect(result).toEqual({ attoEth: 11n, attoRep: 13n })
+	expect(plain).toEqual({ attoEth: 5n, attoRep: 6n })
+	const withPosition = await loadSecurityPoolClaimableEarnings({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, positionId: 3n } }, async calls => {
+		expect(calls.map(call => call.functionName)).toEqual(['checkpoint', 'ownerAccount', 'accountOf'])
+		return [undefined, [0n, 1n, 2n, 10000n, 3n], { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 10n, repFees: 20n, remainingCommitment: 0n }]
+	})
+	expect(withPosition).toEqual({ attoEth: 11n, attoRep: 22n })
 })
 
-test('#1683 detects bound auction vault bids and rejects another owner’s preview', async () => {
-	const { auctionVaultRuntimeCode } = await import('./securityPoolRepairAuctionVaultClones.js')
-	const { loadSecurityPoolClaimableEarnings } = await import('./securityPoolCapital.js')
-	const f = fixture({ ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 10000n, positionId: 0n } })
-	f.client.getCode = async () => auctionVaultRuntimeCode({ implementation: index, owner: securityPool, capital: capitalLedger, auction: repToken, bidId: 7n })
-	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: f.client, securityPool, owner })
-	expect(snapshot.auctionBidId).toBe(7n)
-	await expect(loadSecurityPoolClaimableEarnings(snapshot, async () => [undefined, [securityPool, 0n, 100n, 10n, 10000n, 0n, false, 11n, 13n]])).rejects.toThrow('owner mismatch')
+test('#1683 reports the unclaimed repair auction bid count of the owner from the ledger', async () => {
+	const pending = fixture({ unclaimedRepairAuctionBids: 3n })
+	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: pending.client, securityPool, owner })
+	expect(snapshot.unclaimedRepairAuctionBids).toBe(3n)
+	expect(pending.calls.find(call => call.functionName === 'unclaimedRepairAuctionBids')).toMatchObject({ address: capitalLedger, args: [owner], blockNumber: 42n })
+	expect((await loadSecurityPoolCapitalSnapshot({ client: fixture().client, securityPool, owner })).unclaimedRepairAuctionBids).toBe(0n)
 })

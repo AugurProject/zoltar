@@ -1,21 +1,22 @@
 import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, securityPoolRepairAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolRepairAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { MAX_REPAIR_AUCTION_CLAIM_BATCH } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { auctionFixture } from '../support/security-pool-fixtures.ts'
-import { auctionDefinition, startCollateralRepairAuction, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
+import { auctionDefinition, claimAuctionBids, startCollateralRepairAuction, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
 import { address, hash, snapshotFixture, planningOptionsFixture } from './fixture.ts'
 
 test('security pool auction bids exact collateral lots and chosen REP price on the grid', () => {
 	const snapshot = snapshotFixture()
 	const auction = auctionFixture()
 	snapshot.auctions = [auction]
-	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString(), healthFactorBps: '10000' } })
+	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString() } })
 	const operation = auctionDefinition('bid')
 	const step = operation.buildPlan(snapshot, options)?.steps[0]
 	if (step === undefined) throw new Error('Missing auction bid')
 	expect(step.to).toBe(auction.address)
 	expect(step.value).toBe('0')
-	expect(decodeFunctionData({ abi: securityPoolRepairAuctionAbi, data: step.data }).args).toEqual([2n, 15n, 10000n])
+	expect(decodeFunctionData({ abi: securityPoolRepairAuctionAbi, data: step.data }).args).toEqual([2n, 15n])
 	expect(operation.buildPlan(snapshot, { ...options, maxEthSpendAttoEth: 1999n.toString() })).toBeUndefined()
 	expect(operation.buildPlan(snapshot, { ...options, operationInputs: { minimumAttoRepPerLot: 14n.toString() } })).toBeUndefined()
 	expect(operation.buildPlan(snapshot, { ...options, allowHighRisk: false })).toBeUndefined()
@@ -57,13 +58,53 @@ test('branch finalization targets the fork controller and refund withdrawals pre
 	expect(refund?.steps[0]?.to).toBe(auction.address)
 })
 
-test('auction health rounding starts with unrounded collateral before applying the REP grid', () => {
+test('auction bids start from unrounded floor collateral before applying the REP grid', () => {
 	const snapshot = snapshotFixture()
 	const auction = auctionFixture()
 	auction.maximumBidAttoRepPerLot = '21'
 	snapshot.auctions = [auction]
-	const options = planningOptionsFixture({ operationInputs: { healthFactorBps: '20000', minimumAttoRepPerLot: 21n.toString() } })
-	expect(auctionDefinition('bid').evaluate(snapshot, options).eligible).toBe(true)
+	const bid = auctionDefinition('bid')
+	expect(bid.evaluate(snapshot, planningOptionsFixture({ operationInputs: { minimumAttoRepPerLot: 12n.toString() } })).eligible).toBe(true)
+	expect(bid.evaluate(snapshot, planningOptionsFixture({ operationInputs: { minimumAttoRepPerLot: 9n.toString() } })).eligible).toBe(false)
+	expect(bid.buildPlan(snapshot, planningOptionsFixture({}))?.metadata['minimumAttoRepPerLot']).toBe('12')
+})
+
+test('auction bids have no per-bidder bid limit', () => {
+	const snapshot = snapshotFixture()
+	const auction = auctionFixture()
+	auction.bids = Array.from({ length: 20 }, (_, index) => ({ bidId: (index + 1).toString(), lots: '1', minimumAttoRepPerLot: 15n.toString(), settled: false }))
+	snapshot.auctions = [auction]
+	expect(auctionDefinition('bid').evaluate(snapshot, planningOptionsFixture({})).eligible).toBe(true)
+})
+
+test('claims every claimable bid of the wallet in one capital ledger transaction', () => {
+	const snapshot = snapshotFixture()
+	const auction = auctionFixture()
+	snapshot.auctions = [auction]
+	const options = planningOptionsFixture()
+	expect(claimAuctionBids.evaluate(snapshot, options).eligible).toBe(false)
+	expect(claimAuctionBids.buildLifecyclePlans?.(snapshot, options)).toEqual([])
+	auction.claimableBidIds = ['1', '4']
+	const plan = claimAuctionBids.buildPlan(snapshot, options)
+	const step = plan?.steps[0]
+	if (step === undefined) throw new Error('Missing bid claim')
+	expect(plan?.steps).toHaveLength(1)
+	expect(step.to).toBe(auction.capital)
+	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: step.data })).toMatchObject({ functionName: 'materializeRepairAuctionBids', args: [[1n, 4n]] })
+	expect(plan?.metadata).toMatchObject({ auction: auction.address, capital: auction.capital, bidIds: '1,4' })
+	expect(claimAuctionBids.enumerateLifecyclePresence?.(snapshot, options)).toEqual([{ auction: auction.address, capital: auction.capital, bidIds: '1,4' }])
+	expect(claimAuctionBids.buildPlan(snapshot, planningOptionsFixture({ operationInputs: { auction: address(1) } }))).toBeUndefined()
+})
+
+test('a wallet with more claimable bids than one batch claims them one block-sized batch at a time', () => {
+	const snapshot = snapshotFixture()
+	const auction = auctionFixture()
+	snapshot.auctions = [auction]
+	auction.claimableBidIds = Array.from({ length: MAX_REPAIR_AUCTION_CLAIM_BATCH + 5 }, (_, index) => String(index + 1))
+	const step = claimAuctionBids.buildPlan(snapshot, planningOptionsFixture())?.steps[0]
+	if (step === undefined) throw new Error('Missing bid claim')
+	const batch = auction.claimableBidIds.slice(0, MAX_REPAIR_AUCTION_CLAIM_BATCH).map(BigInt)
+	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: step.data })).toMatchObject({ functionName: 'materializeRepairAuctionBids', args: [batch] })
 })
 
 test('auction bids approve collateral separately, enforce token balances, and clean up changed terms', () => {
@@ -71,7 +112,7 @@ test('auction bids approve collateral separately, enforce token balances, and cl
 	const auction = auctionFixture()
 	snapshot.auctions = [auction]
 	auction.collateralAllowance = '0'
-	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString(), healthFactorBps: '10000' } })
+	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString() } })
 	const operation = auctionDefinition('bid')
 	const plan = operation.buildPlan(snapshot, options)
 	if (plan === undefined || operation.buildContinuationPlan === undefined) throw new Error('Missing bid plan')
@@ -109,7 +150,7 @@ test('#1371 excluded bid prices do not produce an unattended approval or bid pla
 	auction.maximumAdmissibleBidAttoRepPerLot = '14'
 	auction.collateralAllowance = '0'
 	snapshot.auctions = [auction]
-	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString(), healthFactorBps: '10000' } })
+	const options = planningOptionsFixture({ maxEthSpendAttoEth: 2000n.toString(), operationInputs: { lots: '2', minimumAttoRepPerLot: 15n.toString() } })
 	expect(auctionDefinition('bid').buildPlan(snapshot, options)).toBeUndefined()
 })
 

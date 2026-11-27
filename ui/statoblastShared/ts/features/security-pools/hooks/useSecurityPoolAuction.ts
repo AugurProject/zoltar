@@ -2,7 +2,7 @@ import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolAuctionBidRequest,
 	buildSecurityPoolAuctionOpenRequest,
@@ -11,6 +11,9 @@ import {
 	buildSecurityPoolAuctionRefundWithdrawRequest,
 	quoteSecurityPoolAuctionRefundClaim,
 	buildSecurityPoolAuctionMaterializeRequest,
+	buildSecurityPoolAuctionClaimAllRequest,
+	MAX_REPAIR_AUCTION_CLAIM_BATCH,
+	securityPoolAuctionClaimReason,
 	securityPoolAuctionOpeningReason,
 	quoteSecurityPoolAuctionBid,
 	type SecurityPoolAuctionBid,
@@ -26,12 +29,11 @@ import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/dr
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 
-export type SecurityPoolAuctionParameters = { fork: SecurityPoolForkSnapshot | undefined; bidder: Address | undefined; actions: SecurityPoolSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }
-export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: SecurityPoolAuctionParameters) {
+export type SecurityPoolAuctionParameters = { fork: SecurityPoolForkSnapshot | undefined; bidder: Address | undefined; actions: SecurityPoolSharedForkParameters['actions'] }
+export function useSecurityPoolAuction({ fork, bidder, actions }: SecurityPoolAuctionParameters) {
 	const backend = getActiveBackend()
 	const lotsInput = useSignal('')
 	const repInput = useSignal('')
-	const healthInput = useSignal('120')
 	const pageStart = useSignal(0n)
 	const version = useSignal(0)
 	const loaded = useSignal<{ identity: string; key: string; snapshot?: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>> | undefined; error?: string } | undefined>(undefined)
@@ -44,7 +46,6 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 		previous.current = { backend, bidder, identity }
 		lotsInput.value = ''
 		repInput.value = ''
-		healthInput.value = '120'
 		pageStart.value = 0n
 	}, [backend, bidder, identity])
 	const key = `${identity}:${fork?.blockHash}:${pageStart.value}:${version.value}`
@@ -74,13 +75,12 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 	const biddingReason = auctionReason ?? (!auction?.opened ? copy.openFirst : undefined) ?? (auction?.finalized || (snapshot !== undefined && auction !== undefined && snapshot.timestamp >= auction.closesAt) || snapshot?.forkTime !== 0n ? copy.closed : undefined)
 	const lots = securityPoolUnsignedId(lotsInput.value)
 	const minimumAttoRepPerLot = securityPoolAmountOrUndefined(repInput.value)
-	const targetHealthFactorBps = /^\d+(\.\d{0,2})?$/.test(healthInput.value.trim()) ? parseUnits(healthInput.value.trim(), 2) : undefined
-	const inputReason = (lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ?? (minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined) ?? (targetHealthFactorBps === undefined || targetHealthFactorBps < 10_000n ? copy.healthInvalid : undefined)
+	const inputReason = (lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ?? (minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined)
 	let quote: ReturnType<typeof quoteSecurityPoolAuctionBid> | undefined
 	let quoteError: string | undefined
-	if (biddingReason === undefined && inputReason === undefined && snapshot !== undefined && lots !== undefined && minimumAttoRepPerLot !== undefined && targetHealthFactorBps !== undefined) {
+	if (biddingReason === undefined && inputReason === undefined && snapshot !== undefined && lots !== undefined && minimumAttoRepPerLot !== undefined) {
 		try {
-			quote = quoteSecurityPoolAuctionBid(snapshot, { lots, minimumAttoRepPerLot, targetHealthFactorBps })
+			quote = quoteSecurityPoolAuctionBid(snapshot, { lots, minimumAttoRepPerLot })
 		} catch (error) {
 			quoteError = getErrorMessage(error, copy.quoteError)
 		}
@@ -122,7 +122,18 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 		if (snapshot === undefined || claimReason(bid) !== undefined) return copy.claim
 		return claimQuote(snapshot, bid).settles ? copy.claim : copy.withdraw
 	}
-	const activateReason = (bid: SecurityPoolAuctionBid) => auctionReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (bid.materialized ? copy.activated : undefined)
+	// Each bid is claimed on its own; the claim-all action covers every page in one transaction.
+	const bidClaimReason = (bid: SecurityPoolAuctionBid) => auctionReason ?? (snapshot === undefined ? copy.loading : securityPoolAuctionClaimReason(snapshot, bid.id))
+	const claimableBidIds = snapshot?.claimableBidIds ?? []
+	let claimAllReason = auctionReason ?? (auction?.unclaimedBidCount === 0n ? copy.allBidsClaimed : undefined) ?? (claimableBidIds.length === 0 ? copy.claimAfterClose : undefined)
+	if (claimAllReason === undefined && snapshot !== undefined) {
+		try {
+			buildSecurityPoolAuctionClaimAllRequest(snapshot, claimableBidIds)
+		} catch (error) {
+			// The claim builder's sentence is the complete reason; the bid-funding prefix does not apply to claims.
+			claimAllReason = error instanceof Error ? error.message : copy.quoteError
+		}
+	}
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>) => SecurityPoolTransaction, verify: (latest: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>) => void = () => undefined, onConfirmed?: () => void) =>
 		actions.runSecurityPoolAction(
 			action,
@@ -186,15 +197,11 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 		error: current?.error,
 		lotsInput: lotsInput.value,
 		repInput: repInput.value,
-		healthInput: healthInput.value,
 		setLots: (value: string) => {
 			lotsInput.value = value
 		},
 		setRep: (value: string) => {
 			repInput.value = value
-		},
-		setHealth: (value: string) => {
-			healthInput.value = value
 		},
 		openReason,
 		fundingReason,
@@ -202,7 +209,9 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 		withdrawalReason,
 		refundReason,
 		claimReason,
-		activateReason,
+		bidClaimReason,
+		claimAllReason,
+		claimableBidIds,
 		refresh: () => {
 			version.value += 1
 		},
@@ -253,17 +262,25 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 					buildSecurityPoolAuctionRefundClaimRequest(latest, bid.id, latest.bidder)
 				},
 			),
-		activate: (bid: SecurityPoolAuctionBid) =>
+		claimBid: (bid: SecurityPoolAuctionBid) =>
 			run(
-				`activateSecurityPoolAuction${bid.id}`,
-				copy.activate,
-				activateReason(bid),
-				selected => buildSecurityPoolAuctionMaterializeRequest(selected, bid.id),
+				`claimSecurityPoolAuctionBid${bid.id}`,
+				copy.claimBid,
+				bidClaimReason(bid),
+				selected => ({ ...buildSecurityPoolAuctionMaterializeRequest(selected, [bid.id]), reviewDescription: copy.claimBidReview(bid.id, (bid.fill?.filledLots ?? 0n) > 0n) }),
 				latest => {
-					buildSecurityPoolAuctionMaterializeRequest(latest, bid.id)
+					buildSecurityPoolAuctionMaterializeRequest(latest, [bid.id])
 				},
-				() => {
-					if (snapshot !== undefined) openVault?.(bid.vault, snapshot.universeId)
+			),
+		claimAllBids: () =>
+			run(
+				'claimSecurityPoolAuctionBids',
+				copy.claimAllBids,
+				claimAllReason,
+				selected => ({ ...buildSecurityPoolAuctionClaimAllRequest(selected, selected.claimableBidIds), reviewDescription: copy.claimAllReview(Math.min(selected.claimableBidIds.length, MAX_REPAIR_AUCTION_CLAIM_BATCH), selected.claimableBidIds.length) }),
+				latest => {
+					// Bids someone else claimed meanwhile are skipped on chain, so the reviewed list stays safe to send.
+					buildSecurityPoolAuctionClaimAllRequest(latest, latest.claimableBidIds)
 				},
 			),
 		withdraw: () =>

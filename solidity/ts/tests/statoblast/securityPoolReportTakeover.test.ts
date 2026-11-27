@@ -160,7 +160,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		const id = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'pendingReportId' })
 		await context.mock.advanceTime(481n)
 		await openOracleSettle(context.other, id)
-		expect((await context.owner.readContract({ ...ledger, functionName: 'repairAuctionPosition', args: [winner.id] })).materialized).toBe(!failure)
+		expect((await context.owner.readContract({ ...ledger, functionName: 'repairAuctionPositions', args: [[winner.id]] }))[0]?.materialized).toBe(!failure)
 		expect((await context.owner.readContract({ ...ledger, functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(failure ? 0n : 3n * unit)
 	})
 	test('a starved takeover callback remains recoverable with sponsor priority', async () => {

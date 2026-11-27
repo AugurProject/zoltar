@@ -17,6 +17,13 @@ import { addRepToMigrationBalance, getRepTokenAddress, splitMigrationRep } from 
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, type useSecurityPoolFixture } from './securityPoolFixture'
 
+/** The ledger's view of one repair auction bid, read through its batched view. */
+export async function repairAuctionPositionOf(client: WriteClient, capital: Address, bidId: bigint) {
+	const [position] = await client.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'repairAuctionPositions', args: [[bidId]] })
+	if (position === undefined) throw new Error('Repair auction position missing')
+	return position
+}
+
 export async function prepareSecurityPoolCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolFixture>, mintAttoEth = 10n * unit) {
 	const owner = fixture.owner()
 	const other = fixture.other()
@@ -55,12 +62,11 @@ export async function prepareSecurityPoolCollateralRepairAuction(fixture: Return
 		return id
 	}
 	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
-	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {
+	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit) => {
 		const id = (await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })) + 1n
 		await approveToken(bidder, weth, auction)
-		const hash = await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health] }))
-		const [, vault] = await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bids', args: [id] })
-		return { id, vault, hash }
+		const hash = await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price] }))
+		return { id, bidder: bidder.account.address, hash }
 	}
 	const closingQuote = async (price = unit) => {
 		await mock.setTime(deadline - 1_000n)

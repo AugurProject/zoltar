@@ -214,7 +214,7 @@ describe('canonical scan policy', () => {
 	test('projects indexed identities and wallet funding inventory', () => {
 		const base = snapshot()
 		const index: ChaosProtocolIndex = {
-			auctionBids: { [auction.toLowerCase()]: [{ bidId: '2', vault: wallet, lots: '4', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: false }] },
+			auctionBids: { [auction.toLowerCase()]: [{ bidId: '2', lots: '4', minimumAttoRepPerLot: 1n.toString(), settled: false }] },
 			auctionRefunds: {},
 			chainId: 11155111,
 			cursor: { blockHash: zeroHash, blockNumber: '10' },

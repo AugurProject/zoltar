@@ -61,7 +61,6 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/statoblast/SecurityPoolReporterLedger.sol', contract: 'SecurityPoolReporterLedger', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolSettlementBook.sol', contract: 'SecurityPoolSettlementBook', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol', contract: 'SecurityPoolUniformPriceRepairAuction', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolRepairAuctionVault.sol', contract: 'SecurityPoolRepairAuctionVault', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolResolutionPremiumBook.sol', contract: 'SecurityPoolResolutionPremiumBook', exposure: 'dynamic-endpoint' },
 ] as const
 

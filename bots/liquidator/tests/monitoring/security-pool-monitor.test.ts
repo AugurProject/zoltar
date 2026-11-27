@@ -6,7 +6,6 @@ import { expect, test } from 'bun:test'
 import { managedSecurityPoolScopes, securityPoolPositionPage, requireCompleteSecurityPoolExposure } from '../../src/monitoring/security-pool-monitor.ts'
 import { parseSecurityPoolScopes } from '../../src/state/security-pool-scopes.ts'
 import { securityPoolAddress } from '../support/security-pool-observation.ts'
-import { auctionVaultRuntimeCode } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 
 const selection = { address: securityPoolAddress, universeId: 0n }
@@ -26,7 +25,7 @@ test('deselected scopes remain in exposure accounting and persisted cursors surv
 	expect(managedSecurityPoolScopes(scopes, [])).toEqual(scopes)
 	const scope = { ...selection, nextPositionId: 33n, sweepEnd: 150n, retirementObservations: [{ id: 3n, batch: 1n, commitment: 100n, since: 1000n }] }
 	const serialized: unknown = JSON.parse(JSON.stringify([scope], (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
-	expect(parseSecurityPoolScopes(serialized)).toEqual([{ ...scope, managedVaults: [] }])
+	expect(parseSecurityPoolScopes(serialized)).toEqual([scope])
 	expect(() => parseSecurityPoolScopes([{ ...selection, universeId: '0', nextPositionId: '0', sweepEnd: '0' }])).toThrow('cursor')
 })
 
@@ -136,7 +135,7 @@ test('winner cursors skip history, survive removal, wrap and reset after a short
 	expect(await next(0n)).toEqual({ ids: [2n, 4000n], auctionAfterBidId: 4000n })
 	const saved = { ...selection, nextPositionId: 1n, sweepEnd: 0n, auctionAfterBidId: 4000n, retirementObservations: [] }
 	const serialized: unknown = JSON.parse(JSON.stringify([saved], (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
-	expect(parseSecurityPoolScopes(serialized)).toEqual([{ ...saved, managedVaults: [] }])
+	expect(parseSecurityPoolScopes(serialized)).toEqual([saved])
 	expect(() => parseSecurityPoolScopes([{ ...selection, universeId: '0', nextPositionId: '1', sweepEnd: '0', auctionAfterBidId: '-1' }])).toThrow('auction cursor')
 	fixture.values['nextUnmaterializedBid'] = 4000n
 	await expect(next(0n)).rejects.toThrow('Invalid auction winner cursor')
@@ -148,12 +147,8 @@ function auctionFixture() {
 	const fixture = securityPoolClient()
 	const auction = fixture.module('SecurityPoolRepairAuction')
 	const engine = fixture.module('SecurityPoolUniformPriceRepairAuction')
-	const implementation = fixture.module('SecurityPoolRepairAuctionVault')
-	const vault = getAddress('0x0000000000000000000000000000000000000199')
-	const cloneCode = (bindings: Partial<Parameters<typeof auctionVaultRuntimeCode>[0]> = {}) => auctionVaultRuntimeCode({ implementation, owner: targetAddress, capital: fixture.observation.snapshot.capitalLedger, auction, bidId: 1n, ...bindings })
-	fixture.codes.set(vault, cloneCode())
+	const bidder = targetAddress
 	Object.assign(fixture.values, {
-		vaultImplementation: implementation,
 		repairAuctionCohort: [auction, 1n, 2n, 9n, 10n],
 		capital: fixture.observation.snapshot.capitalLedger,
 		engine,
@@ -162,56 +157,49 @@ function auctionFixture() {
 		controller: auction,
 		bidCount: 2n,
 		nextUnmaterializedBid: 1n,
-		maximumHealthyPrice: 7n,
-		repairAuctionPosition: { vault, positionId: 0n, materialized: false, principal: 18n, commitment: 20n, targetHealthFactorBps: 12_000n, liquidationStarted: 100n, earnedAttoEth: 0n, earnedAttoRep: 0n },
-		previewBid: { bidder: targetAddress, vault, targetHealthBps: 12_000n, filledLots: 2n, usedAttoEth: 20n, principalAttoRep: 8n, refundAttoEth: 0n },
-		owner: targetAddress,
-		initialCapital: fixture.observation.snapshot.capitalLedger,
-		repairAuction: auction,
-		bidId: 1n,
-		bidIdForVault: 1n,
+		repairAuctionPositions: [{ bidder, positionId: 0n, claimed: false, materialized: false, principal: 18n, commitment: 20n, liquidationStarted: 100n, earnedAttoEth: 0n, earnedAttoRep: 0n }],
+		previewBid: { bidder, filledLots: 2n, usedAttoEth: 20n, principalAttoRep: 8n, refundAttoEth: 0n },
+		// The bidder already holds position 5; the simulated claim reports the combined position.
+		materializeRepairAuctionBids: [5n],
+		'projected:accountOf': { owner: bidder, batch: 0n, rep: 117n, commitment: 120n, maxHealthyPrice: 7n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n },
 	})
 	fixture.settings.securityPoolPolicy.maximumPositionsPerScan = 1
-	return { ...fixture, auction, engine, implementation, vault, cloneCode }
+	return { ...fixture, auction, engine, bidder }
 }
 
-test('discovers a funded unmaterialized bid and never invents a live index position', async () => {
+test('targets a winning bid as its bidder position after the simulated claim of that bid', async () => {
 	const fixture = auctionFixture()
 	const result = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions).toHaveLength(1)
-	expect(result.positions[0]).toMatchObject({ id: 1n, auctionTarget: { auction: fixture.auction, bidId: 1n, vault: fixture.vault }, owner: fixture.vault, rep: 18n, commitment: 20n, maxHealthyPrice: 7n, liquidationStarted: 100n })
+	expect(result.positions[0]).toMatchObject({ id: 1n, auctionTarget: { auction: fixture.auction, bidId: 1n, bidder: fixture.bidder }, owner: fixture.bidder, rep: 117n, commitment: 120n, maxHealthyPrice: 7n, liquidationStarted: 100n })
 	expect(result.nextScope.auctionAfterBidId).toBe(1n)
+	// Both simulations claim only the targeted bid.
+	expect(fixture.reads.filter(read => read.functionName === 'materializeRepairAuctionBids').map(read => read.args)).toEqual([[[1n]], [[1n]]])
 	expect(fixture.reads.every(read => read.blockNumber === 123n)).toBe(true)
-	fixture.values['repairAuctionPosition'] = { materialized: true }
-	const materialized = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
-	expect(materialized.positions).toHaveLength(0)
+	fixture.values['repairAuctionPositions'] = [{ bidder: fixture.bidder, positionId: 0n, claimed: true, materialized: false, principal: 18n, commitment: 20n, liquidationStarted: 100n, earnedAttoEth: 0n, earnedAttoRep: 0n }]
+	const claimed = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
+	expect(claimed.positions).toHaveLength(0)
 })
 
-test('rejects counterfeit auction links, runtime and bid vault before exposing a target', async () => {
+test('rejects counterfeit auction links, runtime and bidder identity before exposing a target', async () => {
 	for (const mutation of [
 		(fixture: ReturnType<typeof auctionFixture>) => {
 			fixture.values['controller'] = securityPoolAddress
 		},
 		(fixture: ReturnType<typeof auctionFixture>) => {
-			fixture.values['initialCapital'] = securityPoolAddress
+			fixture.values['previewBid'] = { bidder: securityPoolAddress, filledLots: 2n, usedAttoEth: 20n, principalAttoRep: 8n, refundAttoEth: 0n }
 		},
 		(fixture: ReturnType<typeof auctionFixture>) => {
-			fixture.values['bidIdForVault'] = 2n
+			fixture.values['materializeRepairAuctionBids'] = [0n]
 		},
 		(fixture: ReturnType<typeof auctionFixture>) => {
-			fixture.codes.set(fixture.vault, '0x6000')
-		},
-		(fixture: ReturnType<typeof auctionFixture>) => {
-			fixture.codes.set(fixture.vault, fixture.cloneCode({ implementation: fixture.engine }))
-		},
-		(fixture: ReturnType<typeof auctionFixture>) => {
-			fixture.codes.set(fixture.vault, fixture.cloneCode({ bidId: 2n }))
-		},
-		(fixture: ReturnType<typeof auctionFixture>) => {
-			fixture.codes.set(fixture.implementation, '0x6000')
+			fixture.values['projected:accountOf'] = { owner: securityPoolAddress, batch: 0n, rep: 1n, commitment: 1n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }
 		},
 		(fixture: ReturnType<typeof auctionFixture>) => {
 			fixture.codes.set(fixture.engine, '0x6000')
+		},
+		(fixture: ReturnType<typeof auctionFixture>) => {
+			fixture.codes.set(fixture.auction, '0x6000')
 		},
 	]) {
 		const fixture = auctionFixture()
@@ -220,41 +208,35 @@ test('rejects counterfeit auction links, runtime and bid vault before exposing a
 	}
 })
 
-test('preserves a materialized auction vault controlling owner for keeper self-dealing exclusions', async () => {
+test('lists each winning bid of one bidder as its own target because a takeover claims only that bid', async () => {
 	const fixture = auctionFixture()
-	fixture.values['repairAuctionCohort'] = ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n]
-	fixture.values['owner'] = fixture.observation.snapshot.owner
-	fixture.codes.set(fixture.vault, fixture.cloneCode({ owner: fixture.observation.snapshot.owner }))
-	fixture.values['accountOf'] = { owner: fixture.vault, batch: 0n, rep: 99n, commitment: 100n, maxHealthyPrice: 1n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }
+	fixture.settings.securityPoolPolicy.maximumPositionsPerScan = 4
+	const winners = new Map<unknown, bigint>([
+		[0n, 1n],
+		[1n, 2n],
+	])
+	fixture.values['nextUnmaterializedBid'] = ([after]: readonly unknown[]) => winners.get(after) ?? 0n
 	const result = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
-	expect(result.positions[0]).toMatchObject({ owner: fixture.vault, controllingOwner: fixture.observation.snapshot.owner })
-	// A canonical clone whose getter disagrees with its code can only come from an inconsistent node.
-	fixture.values['owner'] = targetAddress
-	await expect(loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)).rejects.toThrow('does not match its code')
-	fixture.values['owner'] = fixture.observation.snapshot.owner
-	// Anyone can open a position from a clone-shaped contract with another implementation: it is an ordinary owner and never stalls the scan.
-	fixture.codes.set(fixture.implementation, '0x6000')
-	const ownerReads = fixture.reads.filter(read => read.functionName === 'owner').length
-	const foreign = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
-	expect(foreign.positions[0]).toMatchObject({ owner: fixture.vault, controllingOwner: fixture.vault })
-	expect(fixture.reads.filter(read => read.functionName === 'owner')).toHaveLength(ownerReads)
+	expect(result.positions.map(position => position.auctionTarget?.bidId)).toEqual([1n, 2n])
+	expect(result.positions.map(position => position.owner)).toEqual([fixture.bidder, fixture.bidder])
+	expect(result.nextScope.auctionAfterBidId).toBe(0n)
 })
 
 test('auction discovery jumps directly to a winner beyond losing history', async () => {
 	const fixture = auctionFixture()
-	Object.assign(fixture.values, { bidCount: 5000n, nextUnmaterializedBid: 4000n, bidId: 4000n, bidIdForVault: 4000n })
-	fixture.codes.set(fixture.vault, fixture.cloneCode({ bidId: 4000n }))
+	Object.assign(fixture.values, { bidCount: 5000n, nextUnmaterializedBid: 4000n })
 	const result = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)
 	expect(result.positions[0]?.id).toBe(4000n)
-	expect(fixture.reads.filter(read => read.functionName === 'repairAuctionPosition')).toHaveLength(1)
+	expect(fixture.reads.filter(read => read.functionName === 'repairAuctionPositions')).toHaveLength(1)
 })
 
 test('targeted revalidation preserves discovery cursor without fetching another page', async () => {
 	const fixture = auctionFixture()
 	const scope = { ...fixture.observation.nextScope, auctionAfterBidId: 2n }
-	const result = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, scope, 123n, [{ auction: fixture.auction, bidId: 1n, vault: fixture.vault }])
+	const result = await loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, scope, 123n, [{ auction: fixture.auction, bidId: 1n, bidder: fixture.bidder }])
 	expect(result.nextScope.auctionAfterBidId).toBe(2n)
 	expect(fixture.reads.filter(read => read.functionName === 'nextUnmaterializedBid')).toHaveLength(0)
+	await expect(loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, scope, 123n, [{ auction: fixture.auction, bidId: 1n, bidder: securityPoolAddress }])).rejects.toThrow('Auction target bidder changed')
 })
 
 test('refuses automatic gas-profit estimates for non-WETH collateral', async () => {

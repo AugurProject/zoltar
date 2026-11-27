@@ -136,7 +136,6 @@ const expectedCanonicalManifest = [
 	'SecurityPoolReporterLedger:contracts/statoblast/SecurityPoolReporterLedger.sol:dynamic-endpoint',
 	'SecurityPoolSettlementBook:contracts/statoblast/SecurityPoolSettlementBook.sol:dynamic-endpoint',
 	'SecurityPoolUniformPriceRepairAuction:contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol:dynamic-endpoint',
-	'SecurityPoolRepairAuctionVault:contracts/statoblast/SecurityPoolRepairAuctionVault.sol:dynamic-endpoint',
 	'SecurityPoolResolutionPremiumBook:contracts/statoblast/SecurityPoolResolutionPremiumBook.sol:dynamic-endpoint',
 ] as const
 

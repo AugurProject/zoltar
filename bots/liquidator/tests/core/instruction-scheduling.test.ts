@@ -77,10 +77,10 @@ test('queued instructions stop at the first submission and rethrow unexpected fa
 })
 
 test('journals each security pool instruction by its effect on funds', () => {
-	expect(securityPoolInstructionKind('vault-health')).toBe('configuration')
-	expect(securityPoolInstructionKind('vault-earnings')).toBe('fees')
-	expect(securityPoolInstructionKind('vault-withdraw')).toBe('withdrawal')
-	expect(securityPoolInstructionKind('vault-deposit')).toBe('deposit')
+	expect(securityPoolInstructionKind('capital-health')).toBe('configuration')
+	expect(securityPoolInstructionKind('capital-earnings')).toBe('fees')
+	expect(securityPoolInstructionKind('capital-withdraw')).toBe('withdrawal')
+	expect(securityPoolInstructionKind('capital-deposit')).toBe('deposit')
 	expect(securityPoolInstructionKind('auction-bid')).toBe('deposit')
-	expect(securityPoolInstructionKind('vault-fork-choice')).toBe('migration')
+	expect(securityPoolInstructionKind('fork-choice')).toBe('migration')
 })

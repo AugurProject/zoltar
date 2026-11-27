@@ -234,6 +234,53 @@ export const capitalPositionSnapshot = async (ledger: Address, positionId: bigin
 	return { ledger: ledger.toLowerCase(), positionId: positionId.toString(), owner: owner.toLowerCase() }
 }
 
+type UnclaimedRepairAuctionLots = {
+	readonly bidIds: readonly string[]
+	readonly principal: bigint
+	readonly commitment: bigint
+	readonly earnedAttoEth: bigint
+	readonly earnedAttoRep: bigint
+	readonly liquidationStarted: bigint
+}
+
+/**
+ * The owner's winning repair-auction lots that no claim has moved into its account yet, or undefined when there are none.
+ * Lots exist only once the auction installed its cohort, so the bidder's bids are listed through the cohort's auction
+ * and read in one batched `repairAuctionPositions` call. Claimed bids and bids that won nothing carry no lots.
+ */
+const unclaimedRepairAuctionLots = async (ledger: Address, adapter: Address, owner: Address, read: StateRead): Promise<UnclaimedRepairAuctionLots | undefined> => {
+	const call = caller(read)
+	const count = quantity(await call(adapter, 'securityPoolRepairAuction', 'bidderBidCount', [owner]), 'bidderBidCount')
+	if (count === 0n) return undefined
+	const indexes = Array.from({ length: Number(count) }, (_, index) => BigInt(index))
+	const bidIds = await Promise.all(indexes.map(async index => quantity(await call(adapter, 'securityPoolRepairAuction', 'bidderBidId', [owner, index]), 'bidderBidId')))
+	const positions = await call(ledger, 'securityPoolCapitalLedger', 'repairAuctionPositions', [bidIds])
+	if (!Array.isArray(positions) || positions.length !== bidIds.length) throw new Error('repairAuctionPositions returned an invalid list')
+	let principal = 0n
+	let commitment = 0n
+	let earnedAttoEth = 0n
+	let earnedAttoRep = 0n
+	let liquidationStarted = 0n
+	const unclaimedIds: string[] = []
+	for (const [slot, bidId] of bidIds.entries()) {
+		const bid = struct(positions[slot], 'repairAuctionPositions')
+		if (address(bid['bidder'], 'repairAuctionPositions.bidder') !== owner) throw new Error('Auction bid bidder does not match capital owner')
+		const lots = quantity(bid['principal'], 'repairAuctionPositions.principal')
+		// A claimed bid's lots and earnings are already in the owner's account; a bid that won nothing has none.
+		if (flag(bid['claimed'], 'repairAuctionPositions.claimed') || flag(bid['materialized'], 'repairAuctionPositions.materialized') || lots === 0n) continue
+		unclaimedIds.push(bidId.toString())
+		principal += lots
+		commitment += quantity(bid['commitment'], 'repairAuctionPositions.commitment')
+		earnedAttoEth += quantity(bid['earnedAttoEth'], 'repairAuctionPositions.earnedAttoEth')
+		earnedAttoRep += quantity(bid['earnedAttoRep'], 'repairAuctionPositions.earnedAttoRep')
+		// Every unclaimed lot sits in the one cohort position, so the bids share its liquidation start.
+		const started = quantity(bid['liquidationStarted'], 'repairAuctionPositions.liquidationStarted')
+		if (started !== 0n && (liquidationStarted === 0n || started < liquidationStarted)) liquidationStarted = started
+	}
+	if (unclaimedIds.length === 0) return undefined
+	return { bidIds: unclaimedIds, principal, commitment, earnedAttoEth, earnedAttoRep, liquidationStarted }
+}
+
 /** One owner's capital in one universe's ledger: principal, commitment, health and unclaimed earnings. */
 export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
 	const call = caller(read)
@@ -255,21 +302,28 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 	let unclaimedEth = quantity(account['feesAttoEth'], 'ownerAccount.feesAttoEth')
 	let unclaimedRep = quantity(account['feesAttoRep'], 'ownerAccount.feesAttoRep')
 	let position: Record<string, unknown> = {}
+	// A bidder's winning lots stay in the auction cohort until someone claims the bid. `ownerCollateral` covers only the
+	// account's own position, so the unclaimed lots' REP, commitment and earnings are read per bid and added here once.
+	const unclaimedBids = adapter === owner ? 0n : quantity(await call(ledger, kind, 'unclaimedRepairAuctionBids', [owner]), 'unclaimedRepairAuctionBids')
+	const pending = unclaimedBids === 0n || adapter === zeroAddress ? undefined : await unclaimedRepairAuctionLots(ledger, adapter, owner, read)
+	principal += pending?.principal ?? 0n
+	commitment += pending?.commitment ?? 0n
 	if (positionId !== 0n) {
 		const [rawPosition, started] = await Promise.all([call(state.index, 'securityPoolCommitmentIndex', 'accountOf', [positionId]), call(ledger, kind, 'liquidationStarted', [positionId])])
 		const indexed = struct(rawPosition, 'accountOf')
 		const maxHealthyPrice = quantity(indexed['maxHealthyPrice'], 'accountOf.maxHealthyPrice')
 		const liquidationStartedAt = quantity(started, 'liquidationStarted')
-		pledged = quantity(indexed['rep'], 'accountOf.rep')
+		pledged = quantity(indexed['rep'], 'accountOf.rep') + (pending?.principal ?? 0n)
 		if (cohortId !== 0n) {
-			// Unmaterialized winning bids: the cohort's REP and commitment are not yet split among the winning vaults.
+			// Unclaimed winning bids: the cohort's REP and commitment are not yet split among the winning bidders.
 			principal = pledged
 			commitment = quantity(indexed['commitment'], 'accountOf.commitment')
 		}
 		// The index holds earnings the ledger has not yet moved to the owner's account.
-		unclaimedEth += quantity(indexed['ethFees'], 'accountOf.ethFees')
-		unclaimedRep += quantity(indexed['repFees'], 'accountOf.repFees')
-		const belowLiquidationPrice = commitment !== 0n && state.liquidationPrice !== 0n && maxHealthyPrice < state.liquidationPrice
+		unclaimedEth += quantity(indexed['ethFees'], 'accountOf.ethFees') + (pending?.earnedAttoEth ?? 0n)
+		unclaimedRep += quantity(indexed['repFees'], 'accountOf.repFees') + (pending?.earnedAttoRep ?? 0n)
+		// The take-over condition belongs to this index position alone, not to the bidder's unclaimed cohort lots.
+		const belowLiquidationPrice = quantity(indexed['commitment'], 'accountOf.commitment') !== 0n && state.liquidationPrice !== 0n && maxHealthyPrice < state.liquidationPrice
 		position = {
 			maxHealthyPrice: maxHealthyPrice.toString(),
 			releasedAttoRep: quantity(indexed['releasedRep'], 'accountOf.releasedRep').toString(),
@@ -282,17 +336,25 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 			// Cure eligibility also uses the public minimum commitment. A cohort is taken over per bid, never as a whole.
 			takeoverPreconditionsMet: cohortId === 0n && belowLiquidationPrice && liquidationStartedAt !== 0n && !state.frozen && !state.importing && !state.universeForked,
 		}
-	} else if (adapter !== zeroAddress && commitment !== 0n) {
-		// Before materialization the cohort holds the bid's commitment and shares out indexed fees per vault.
-		const bidId = quantity(await call(adapter, 'securityPoolRepairAuction', 'bidIdForVault', [owner]), 'bidIdForVault')
-		if (bidId !== 0n) {
-			const bid = struct(await call(ledger, kind, 'repairAuctionPosition', [bidId]), 'repairAuctionPosition')
-			if (address(bid['vault'], 'repairAuctionPosition.vault') !== owner) throw new Error('Auction bid vault does not match capital owner')
-			unclaimedEth = quantity(bid['earnedAttoEth'], 'repairAuctionPosition.earnedAttoEth')
-			unclaimedRep = quantity(bid['earnedAttoRep'], 'repairAuctionPosition.earnedAttoRep')
-			position['liquidationStartedAt'] = quantity(bid['liquidationStarted'], 'repairAuctionPosition.liquidationStarted').toString()
-		}
+	} else if (pending !== undefined) {
+		// Before a claim the cohort holds the bids' commitment and shares out indexed fees per bid;
+		// the bidder's own account may already hold fees from earlier positions.
+		pledged += pending.principal
+		unclaimedEth += pending.earnedAttoEth
+		unclaimedRep += pending.earnedAttoRep
+		position['liquidationStartedAt'] = pending.liquidationStarted.toString()
 	}
+	// Every unclaimed bid, including one that won nothing, blocks the owner's fork-choice export until it is claimed.
+	if (unclaimedBids !== 0n) position['repairAuctionUnclaimedBids'] = unclaimedBids.toString()
+	if (pending !== undefined)
+		position = {
+			...position,
+			repairAuctionPendingBidIds: pending.bidIds,
+			repairAuctionPendingPrincipalAttoRep: pending.principal.toString(),
+			repairAuctionPendingCommitmentAttoEth: pending.commitment.toString(),
+			repairAuctionPendingEarnedAttoEth: pending.earnedAttoEth.toString(),
+			repairAuctionPendingEarnedAttoRep: pending.earnedAttoRep.toString(),
+		}
 	// The pure index formula at the protocol health floor; it rejects a zero price, so it is read only once a price exists.
 	const required = commitment === 0n || state.liquidationPrice === 0n ? undefined : quantity(await call(state.index, 'securityPoolCommitmentIndex', 'requiredRep', [commitment, state.liquidationPrice, state.multiplier, BPS]), 'requiredRep')
 	return {

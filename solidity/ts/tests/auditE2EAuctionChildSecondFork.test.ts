@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
@@ -14,11 +13,11 @@ import { DAY } from '../testSupport/simulator/utils/constants'
 import { wrapWeth } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import { BRANCH_GAS, createE2E, NO, OUTCOMES, WEEK, YES } from './auditE2EHarness'
-import { prepareSecurityPoolCollateralRepairAuction } from './statoblast/securityPoolCollateralRepairAuctionFixture'
+import { prepareSecurityPoolCollateralRepairAuction, repairAuctionPositionOf } from './statoblast/securityPoolCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Scenario 4: a branch that not every provider chose is repaired by the collateral repair
-// auction, its winners materialize their vaults lazily, and then that child universe forks.
+// auction, its winners' lots join their own accounts lazily, and then that child universe forks.
 describe('auditE2E: an auction-repaired child keeps winner rights and conserves assets across a second fork', () => {
 	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
@@ -69,7 +68,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(await owner.readContract({ ...engine, functionName: 'earlyRefundAttoEth', args: [losing.id] })).toBe(2n * unit)
 		await writeContractAndWait(loser, () => loser.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [losing.id, loser.account.address] }))
 		expect(await e2e.cash(loser.account.address)).toBe(cashBeforeBids['loser'] ?? 0n)
-		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [1n, 100n * unit, 12_000n] })).rejects.toThrow('Better bids already exclude this bid')
+		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [1n, 100n * unit] })).rejects.toThrow('Better bids already exclude this bid')
 
 		// The closing report is three times the opening price: the REP floor per lot now exceeds every bid.
 		await context.closingQuote(3n * unit)
@@ -113,8 +112,8 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect((await e2e.bookTotals(C))[0]).toBe(20n * unit)
 
 		// ---- lazy materialization: a keeper materializes b3; b4 and b5 stay in the shared cohort ----
-		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBid', args: [best.id] }))
-		const position = (bidId: bigint) => owner.readContract({ ...capitalC, functionName: 'repairAuctionPosition', args: [bidId] })
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[best.id]] }))
+		const position = (bidId: bigint) => repairAuctionPositionOf(owner, capitalC.address, bidId)
 		expect((await position(best.id)).materialized).toBe(true)
 		expect((await position(tieA.id)).materialized).toBe(false)
 		expect((await position(tieB.id)).materialized).toBe(false)
@@ -149,15 +148,16 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 
 		// ---- choices: owner and the unmaterialized b4 follow Yes, the materialized b3 follows No, b5 never acts ----
 		await e2e.choose(owner, C, YES)
-		const viaVault = (bidder: WriteClient, vault: Address, outcome: number) =>
-			writeContractAndWait(bidder, () => bidder.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'execute', args: [coordinator.address, 0n, encodeFunctionData({ abi: coordinatorArtifact.abi, functionName: 'choose', args: [C, BigInt(outcome)] })], gas: BRANCH_GAS }))
-		// The bidder's wallet holds nothing; only its vault owns the position.
-		await expect(b4.simulateContract({ ...coordinator, functionName: 'choose', args: [C, BigInt(YES)] })).rejects.toThrow('No pledged fork principal')
-		await viaVault(b4, tieA.vault, YES)
+		const chooseAs = (bidder: WriteClient, outcome: number) => writeContractAndWait(bidder, () => bidder.writeContract({ ...coordinator, functionName: 'choose', args: [C, BigInt(outcome)], gas: BRANCH_GAS }))
+		// An unclaimed bid blocks its bidder's choice until anyone claims it; the claim then lets the lots follow the choice.
+		expect((await position(tieA.id)).materialized).toBe(false)
+		await expect(chooseAs(b4, YES)).rejects.toThrow('Claim repair auction bids before choosing')
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[tieA.id]] }))
 		expect((await position(tieA.id)).materialized).toBe(true)
+		await chooseAs(b4, YES)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'prepareBranch', args: [C, BigInt(NO)], gas: BRANCH_GAS }))
-		await viaVault(b3, best.vault, NO)
-		await expect(viaVault(b3, best.vault, YES)).rejects.toThrow()
+		await chooseAs(b3, NO)
+		await expect(chooseAs(b3, YES)).rejects.toThrow()
 		const G1 = getChildUniverseId(C, YES)
 		const G2 = getChildUniverseId(C, NO)
 		const branch = async (universe: bigint) => {
@@ -169,7 +169,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// After the choice window the idle winner can no longer choose.
 		await e2e.startBranch(C, YES)
 		await e2e.startBranch(C, NO)
-		await expect(viaVault(b5, tieB.vault, YES)).rejects.toThrow('Fork choice window closed')
+		await expect(chooseAs(b5, YES)).rejects.toThrow('Fork choice window closed')
 		await e2e.finalizeBranch(C, YES)
 		await e2e.finalizeBranch(C, NO)
 		const capitalG1 = await e2e.capital(G1)
@@ -178,13 +178,13 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		const auctionG2 = await owner.readContract({ ...coordinator, functionName: 'repairAuctions', args: [G2] })
 		const g1 = await branch(G1)
 		const g2 = await branch(G2)
-		// Every vault's principal arrived in the branch it chose, under the vault's own address.
+		// Every winner's principal arrived in the branch it chose, under the bidder's own address.
 		const collateralOf = async (capital: Address, holder: Address) => owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [holder] })
-		expect((await collateralOf(capitalG1, tieA.vault)).slice(0, 2)).toEqual([3n * repPerLot, 3n * unit])
-		expect((await collateralOf(capitalG2, best.vault)).slice(0, 2)).toEqual([4n * repPerLot, 4n * unit])
+		expect((await collateralOf(capitalG1, b4.account.address)).slice(0, 2)).toEqual([3n * repPerLot, 3n * unit])
+		expect((await collateralOf(capitalG2, b3.account.address)).slice(0, 2)).toEqual([4n * repPerLot, 4n * unit])
 		expect((await collateralOf(capitalG1, owner.account.address)).slice(0, 2)).toEqual([2_000n * unit, 200n * unit])
-		expect((await collateralOf(capitalG1, tieB.vault))[0]).toBe(0n)
-		expect((await collateralOf(capitalG2, tieB.vault))[0]).toBe(0n)
+		expect((await collateralOf(capitalG1, b5.account.address))[0]).toBe(0n)
+		expect((await collateralOf(capitalG2, b5.account.address))[0]).toBe(0n)
 
 		// ---- REP conservation per grandchild: chosen principal + recovery/auction inventory = snapshot backing + old recovery ----
 		const repTable: Record<string, unknown>[] = []
@@ -256,12 +256,11 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 
 		// ---- the winner who never acted: its lots stayed in the snapshot and now back the branches' claims ----
 		expect((await position(tieB.id)).materialized).toBe(false)
-		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBid', args: [tieB.id] }))
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[tieB.id]] }))
 		expect((await position(tieB.id)).materialized).toBe(true)
-		const idle = await collateralOf(context.capital, tieB.vault)
+		const idle = await collateralOf(context.capital, b5.account.address)
 		expect(idle.slice(0, 2)).toEqual([3n * repPerLot, 3n * unit])
-		const withdraw = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [1n, tieB.vault] })
-		await expect(b5.simulateContract({ abi: vaultArtifact.abi, address: tieB.vault, functionName: 'execute', args: [context.capital, 0n, withdraw] })).rejects.toThrow()
+		await expect(b5.simulateContract({ ...capitalC, functionName: 'withdrawPrincipal', args: [1n, b5.account.address] })).rejects.toThrow()
 		expect(await e2e.rep(C, context.capital)).toBe(0n)
 	})
 
@@ -290,8 +289,8 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(sold).toBe(3n * repPerLot)
 		expect(await e2e.rep(C, context.capital)).toBe(1_000n * unit + sold)
 		expect(await e2e.rep(C, settlement)).toBe(1_000n * unit - sold)
-		// b3 materializes before the fork, b4 only afterwards.
-		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBid', args: [first.id] }))
+		// b3's bid is claimed before the fork, b4's only afterwards, on the frozen ledger.
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[first.id]] }))
 		await e2e.migrateWalletRep(forker, U0, 700_000n * unit, [YES])
 		await base.mockWindow.setTime(fork0 + 10n * WEEK)
 		await e2e.forkOn(forker, C, await e2e.unrelatedQuestion('auditE2E auction child: undersubscribed second fork'))
@@ -299,23 +298,17 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		const [backing] = await owner.readContract({ ...coordinator, functionName: 'forks', args: [C] })
 		expect(backing).toBe(1_000n * unit + 3n * repPerLot)
 		await e2e.choose(owner, C, YES)
-		const execute = (bidder: WriteClient, vault: Address, target: Address, data: `0x${string}`) => writeContractAndWait(bidder, () => bidder.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'executeAndSweep', args: [target, 0n, data, context.token, bidder.account.address], gas: BRANCH_GAS }))
-		const choice = encodeFunctionData({ abi: coordinatorArtifact.abi, functionName: 'choose', args: [C, BigInt(YES)] })
-		await execute(b4, second.vault, coordinator.address, choice)
-		await execute(b3, first.vault, coordinator.address, choice)
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[second.id]] }))
+		for (const bidder of [b4, b3]) await writeContractAndWait(bidder, () => bidder.writeContract({ ...coordinator, functionName: 'choose', args: [C, BigInt(YES)], gas: BRANCH_GAS }))
 		const G1 = await e2e.activateBranch(C, YES)
 		const capitalG1 = await e2e.capital(G1)
 		// Every purchased lot moved to the chosen branch; unsold REP remains reserved for claims.
 		expect(await e2e.rep(G1, capitalG1)).toBe(backing)
 		expect(await e2e.rep(C, context.capital)).toBe(0n)
-		const claim = (vault: Address) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [vault] })
 		const earned: bigint[] = []
-		for (const [bidder, bid] of [
-			[b3, first],
-			[b4, second],
-		] as const) {
+		for (const bidder of [b3, b4]) {
 			const before = await e2e.rep(C, bidder.account.address)
-			await execute(bidder, bid.vault, context.capital, claim(bid.vault))
+			await writeContractAndWait(bidder, () => bidder.writeContract({ ...capitalC, functionName: 'claimEarnings', args: [bidder.account.address], gas: BRANCH_GAS }))
 			earned.push((await e2e.rep(C, bidder.account.address)) - before)
 		}
 		// Retained inventory creates no winner earning, and no winner REP is stranded.

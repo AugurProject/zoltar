@@ -9,12 +9,13 @@ export function renderSecurityPools(securityPools: readonly SecurityPoolView[] |
 		<>
 			<p class='muted'>
 				Select security pool addresses and universes on the Security pools page. Approve each universe separately in Settings. Enable funded takeovers and set exposure limits under Security pool policy in Settings. Previously managed security pools remain visible for exposure accounting. Total principal limits include
-				direct ledger capital, owned auction vaults and reserved exposure for pending bids.
+				ledger capital, this wallet's winning auction lots from unclaimed bids, and reserved exposure for bids that may still win.
 			</p>
 			<details class='security-pool-guidance'>
 				<summary>Monitoring limits</summary>
 				<p class='muted'>
-					Each scan reads one bounded page of positions and one bounded page of unmaterialized auction winners. Winning bids already back claims before their individual positions are recorded. Unchanged retirement warnings require repeated observations; the monitor retains the latest 256 retiring positions per scope.
+					Each scan reads one bounded page of positions and one bounded page of unclaimed auction winners. Winning bids already back claims before they are claimed into the bidder's account; a takeover claims that one bid and acts on the bidder's resulting position. Unchanged retirement warnings require repeated
+					observations; the monitor retains the latest 256 retiring positions per scope.
 				</p>
 			</details>
 			{stale && <p class='notice warning'>Connection lost. These security pool observations are stale.</p>}

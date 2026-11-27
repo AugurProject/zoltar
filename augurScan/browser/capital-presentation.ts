@@ -33,7 +33,20 @@ export const capitalPositionSummary = (state: Readonly<Record<string, unknown>>)
 }
 
 /** Read fields the detail page already shows as metric cards, in its identity, or through the protocol state. */
-export const capitalSummarizedFields: ReadonlySet<string> = new Set(['principalAttoRep', 'commitmentAttoEth', 'healthFactorBps', 'withdrawableAttoRep', 'unclaimedFeesAttoEth', 'unclaimedFeesAttoRep', 'ledger', 'owner', 'belowLiquidationPrice', 'takeoverPreconditionsMet'])
+export const capitalSummarizedFields: ReadonlySet<string> = new Set([
+	'principalAttoRep',
+	'commitmentAttoEth',
+	'healthFactorBps',
+	'withdrawableAttoRep',
+	'unclaimedFeesAttoEth',
+	'unclaimedFeesAttoRep',
+	'ledger',
+	'owner',
+	'belowLiquidationPrice',
+	'takeoverPreconditionsMet',
+	'repairAuctionUnclaimedBids',
+	'repairAuctionPendingPrincipalAttoRep',
+])
 
 /** The title and summary of an owned position's card, shared by the address profile and the rich list. */
 export const capitalPositionCard = (position: { readonly universeId: string | null; readonly readStatus: string } & Readonly<Record<string, unknown>>): { readonly title: string; readonly summary: string } => ({
@@ -49,7 +62,16 @@ export const capitalSummaryMetrics = (state: Readonly<Record<string, unknown>>):
 		['Health factor', capitalHealthText(state['healthFactorBps'])],
 		['Withdrawable', amount(state['withdrawableAttoRep'], 18, 'REP')],
 		['Credited fees awaiting claim', `${amount(state['unclaimedFeesAttoEth'], collateral.decimals, collateral.symbol)} · ${amount(state['unclaimedFeesAttoRep'], 18, 'REP')}`],
+		...unclaimedAuctionBidsMetric(state),
 	]
+}
+
+// Unclaimed repair-auction bids block the owner's fork choice; winning ones also hold lots outside the account.
+const unclaimedAuctionBidsMetric = (state: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [string, string]> => {
+	const bids = integer(state['repairAuctionUnclaimedBids'])
+	if (bids === undefined || bids === '0') return []
+	const lots = state['repairAuctionPendingPrincipalAttoRep'] === undefined ? 'no winning lots' : `${amount(state['repairAuctionPendingPrincipalAttoRep'], 18, 'REP')} in winning lots`
+	return [['Unclaimed auction bids', `${exactNumber(bids)} · ${lots}`]]
 }
 
 /** One universe ledger's aggregate: pledged principal, commitment and the share of it that is healthy. */
@@ -71,7 +93,7 @@ const capitalEventTitles: Readonly<Record<string, string>> = {
 	PrincipalWithdrawn: 'Principal withdrawal',
 	CommitmentAuthorized: 'Commitment authorized',
 	EarningsClaimed: 'Earnings claim',
-	RepairAuctionBidMaterialized: 'Auction bid materialized',
+	RepairAuctionBidMaterialized: 'Auction bid claimed',
 }
 
 /** An owner's own ledger event with REP in REP and commitment in the ledger's collateral; undefined for any other event. */
@@ -86,7 +108,7 @@ export const capitalEventPresentation = (item: Readonly<Record<string, unknown>>
 		PrincipalWithdrawn: () => `${amount(data['amountAttoRep'], 18, 'REP')} to ${account(data['recipient']) ?? 'unknown recipient'}`,
 		CommitmentAuthorized: () => `position ${integer(data['positionId']) ?? '—'} · ${amount(data['rep'], 18, 'REP')} backing ${commitment(data['commitment'])} · target health ${capitalHealthText(data['targetHealthFactorBps'])}`,
 		EarningsClaimed: () => `${commitment(data['ethAmount'])} · ${amount(data['repAmount'], 18, 'REP')}`,
-		RepairAuctionBidMaterialized: () => `bid ${integer(data['bidId']) ?? '—'} became position ${integer(data['positionId']) ?? '—'} · ${amount(data['principal'], 18, 'REP')} principal · ${commitment(data['commitment'])} commitment`,
+		RepairAuctionBidMaterialized: () => `bid ${integer(data['bidId']) ?? '—'} claimed into position ${integer(data['positionId']) ?? '—'} · ${amount(data['principal'], 18, 'REP')} principal · ${commitment(data['commitment'])} commitment`,
 	}
 	return { title, summary: summaries[String(item['event_name'])]?.() ?? title }
 }

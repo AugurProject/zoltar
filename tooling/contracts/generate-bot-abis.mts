@@ -34,7 +34,6 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'multicall3Abi', sources: [statoblast('Multicall3')] },
 	{ name: 'securityPoolRepairAuctionAbi', sources: [statoblast('SecurityPoolRepairAuction')] },
 	{ name: 'securityPoolUniformPriceRepairAuctionAbi', sources: [statoblast('SecurityPoolUniformPriceRepairAuction')] },
-	{ name: 'securityPoolRepairAuctionVaultAbi', sources: [statoblast('SecurityPoolRepairAuctionVault')] },
 	{ name: 'securityPoolCapitalLedgerAbi', sources: [statoblast('SecurityPoolCapitalLedger')] },
 	{ name: 'securityPoolAbi', sources: [statoblast('SecurityPool')] },
 	{ name: 'securityPoolCommitmentIndexAbi', sources: [statoblast('SecurityPoolCommitmentIndex')] },
@@ -66,7 +65,6 @@ const SECURITY_POOL_RUNTIME_CONTRACTS = [
 	'SecurityPoolCapitalRepairAuctionDelegate',
 	'SecurityPoolRepairAuction',
 	'SecurityPoolUniformPriceRepairAuction',
-	'SecurityPoolRepairAuctionVault',
 	'Multicall3',
 	'SecurityPoolResolutionPremiumBook',
 ] as const

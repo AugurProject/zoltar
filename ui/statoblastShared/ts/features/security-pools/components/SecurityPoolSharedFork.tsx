@@ -71,6 +71,14 @@ export function SecurityPoolSharedFork(parameters: SecurityPoolSharedForkParamet
 			</MetricGrid>
 			<UserMessage tone='warning' detail={copy.choiceHint} />
 			<UserMessage detail={state?.choice.recorded ? copy.chosen(state.choice.outcomeIndex) : copy.unchosen} />
+			{model.unclaimedBids === 0n || state?.choice.recorded ? undefined : (
+				<>
+					<UserMessage tone='warning' detail={copy.unclaimedBids(model.unclaimedBids)} />
+					<div className='actions'>
+						<SecurityPoolButton model={parameters.actions} action='claimSecurityPoolForkAuctionBids' label={copy.claimBids} pendingLabel={copy.claimingBids} reason={model.claimBidsReason} onClick={model.claimBids} />
+					</div>
+				</>
+			)}
 			<div className='actions'>
 				<SecurityPoolButton model={parameters.actions} action='prepareSecurityPoolFork' label={copy.prepareBranch} pendingLabel={copy.preparingBranch} reason={model.prepareBranchReason} onClick={model.prepareBranch} />
 				<SecurityPoolButton model={parameters.actions} action='chooseSecurityPoolFork' label={copy.choice} pendingLabel={copy.choosing} reason={model.chooseReason} onClick={model.choose} />
@@ -79,7 +87,7 @@ export function SecurityPoolSharedFork(parameters: SecurityPoolSharedForkParamet
 				<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
 			</div>
 			<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(state)} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} />
-			<SecurityPoolRepairAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} />
+			<SecurityPoolRepairAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} />
 			<WorkflowSubsection title={copy.basketTitle}>
 				<UserMessage detail={copy.basketHint} />
 				<MetricGrid>

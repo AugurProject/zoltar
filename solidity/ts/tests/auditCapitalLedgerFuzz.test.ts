@@ -278,7 +278,7 @@ const generateTime = (m: Model, random: Random): Operation => {
 const bootstrap = (m: Model, random: Random, owners: number, position: number): Operation => {
 	if (position < owners) {
 		const owner = ownerOf(m, position)
-		// A winning bidder usually materializes its vault before anything else, as the real vault does.
+		// A winning bidder's lots often join its account through a keeper before anything else.
 		const bid = Object.entries(m.bids).find(([, entry]) => entry.owner === position && entry.positionId === 0n)
 		if (bid !== undefined && m.cohortId !== 0n && random.chance(0.75)) return { c: 'materialize', o: random.int(owners), bid: BigInt(bid[0]) }
 		const p = findPosition(m, owner.positionId)
@@ -418,7 +418,7 @@ const createScenario = (random: Random, steps: number, now: bigint): Scenario =>
 			const kind = random.int(4)
 			if (kind === 0 && withAuction && taken < lots) {
 				const filled = min(lots - taken, BigInt(1 + random.int(6)))
-				setup.push({ c: 'setBid', bid, o, health: random.pick([10_000n, 12_500n, 20_000n]), lots: filled })
+				setup.push({ c: 'setBid', bid, o, lots: filled })
 				taken += filled
 				bid++
 			} else if (kind < 3) {
@@ -466,7 +466,7 @@ const KNOWN_REVERTS = [
 	'Retirement below economic minimum',
 	'Position is not retiring',
 	'Position is not live',
-	'Materialize an individual repair auction vault',
+	'Materialize an individual repair auction bidder',
 	'Healthy commitment insufficient',
 	'Sync cannot add demand',
 	'Invalid capital price',
@@ -485,8 +485,9 @@ const KNOWN_REVERTS = [
 	'Takeover owner commitment exceeds limit',
 	'Empty fee stream',
 	'Auction capital unavailable',
-	'Auction vault missing',
-	'Auction vault already has principal',
+	'Auction bidder already exported',
+	'Auction bid missing',
+	'Claim repair auction bids before choosing',
 	'Fork choice unavailable',
 	'Fork backing release unavailable',
 	'Commitment imports are open',
@@ -566,6 +567,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 		weth = await adminClient().readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'collateralToken' })
 		zoltar = await adminClient().readContract({ abi: harnessArtifact.abi, address: harness, functionName: 'zoltar' })
 		adapter = await deployContract(encodeDeployData({ abi: adapterArtifact.abi, bytecode: `0x${adapterArtifact.evm.bytecode.object}`, args: [ledger] }))
+		await transact({ from: adminClient().account.address, to: harness, data: encodeFunctionData({ abi: harnessArtifact.abi, functionName: 'setRepairAuction', args: [adapter] }) })
 		multicall = await deployContract(`0x${multicallArtifact.evm.bytecode.object}`)
 		await ethereum.impersonateAccount(harness)
 		for (const owner of owners) {
@@ -643,13 +645,13 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			case 'checkpoint':
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'checkpoint' }))]
 			case 'materialize':
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'materializeRepairAuctionBid', args: [op.bid] }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'materializeRepairAuctionBids', args: [[op.bid]] }))]
 			case 'beginImport':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'beginImport' }))]
 			case 'installRepairAuction':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'mint', args: [ledger, op.lots * op.repPerLot] })), asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'installRepairAuction', args: [adapter, op.lots, op.repPerLot, MINC] }))]
 			case 'setBid':
-				return [{ from: adminAddress, to: adapter, data: encodeFunctionData({ abi: adapterArtifact.abi, functionName: 'setBid', args: [op.bid, ownerAddress(op.o), op.health, op.lots] }) }]
+				return [{ from: adminAddress, to: adapter, data: encodeFunctionData({ abi: adapterArtifact.abi, functionName: 'setBid', args: [op.bid, ownerAddress(op.o), op.lots] }) }]
 			case 'importChoice':
 				return [
 					asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'mint', args: [ledger, op.rep] })),
@@ -973,10 +975,9 @@ const compare = (m: Model, a: Snapshot, owners: number, addressOf: (o: number) =
 		const actualCollateral = a.collaterals[o]
 		if (stored === undefined || actualCollateral === undefined) throw new Error('Owner read missing')
 		const tag = `OWNER[${o}]`
-		const bid = virtualBid(m, o)
 		check(`${tag}.free`, stored.freeAttoRep, owner.free)
 		check(`${tag}.positionId`, stored.positionId, owner.positionId)
-		check(`${tag}.target`, stored.targetHealthFactorBps, bid === undefined ? owner.target : bid.health)
+		check(`${tag}.target`, stored.targetHealthFactorBps, owner.target)
 		const expected = collateral(m, o)
 		check(`${tag}.principal`, actualCollateral[0], expected.principal)
 		check(`${tag}.commitment`, actualCollateral[1], expected.commitment)
@@ -1020,7 +1021,7 @@ const compare = (m: Model, a: Snapshot, owners: number, addressOf: (o: number) =
 const principalOf = (a: Snapshot, o: number) => a.collaterals[o]?.[0] ?? 0n
 
 /** Independent transition properties over the chain state before and after one successful step. */
-const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: number, result: TakeoverResult | undefined, unmaterialized: (o: number) => boolean, queueOrder: ReadonlyMap<bigint, bigint>) => {
+const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: number, result: TakeoverResult | undefined, unmaterialized: (o: number) => boolean, queueOrder: ReadonlyMap<bigint, bigint>, claimed: { owner: number; principal: bigint } | undefined) => {
 	const issues: string[] = []
 	if (op.c === 'beginImport' || op.c === 'installRepairAuction' || op.c === 'setBid' || op.c === 'importChoice' || op.c === 'finishImport') return issues
 	// (b) a non-price operation never deepens an existing shortfall of healthy commitment.
@@ -1071,13 +1072,15 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 			if (op.o === o) expected = paid.takeoverReward
 			if (paid.sourceOwner === o) expected = -paid.takeoverReward
 		}
+		// A claim moves the bid's lots from the cohort into its bidder's account.
+		if (claimed?.owner === o) expected += claimed.principal
 		// (a)(d) repair never transfers principal ownership; deposits and withdrawals
 		// change principal exactly once.
 		if (delta !== expected) issues.push(`PRINCIPAL[${o}]: ${op.c} moved principal by ${delta}, expected ${expected}`)
 		// (b) an owner's own action that removes backing or adds exposure leaves it at or above its target.
 		const stored = after.stored[o]
 		const storedBefore = before.stored[o]
-		// An unmaterialized auction vault reports its bid's target while its own account still has none.
+		// A claim merges winning lots at the protocol floor whatever the owner's target; that is not a voluntary risk increase.
 		if (stored === undefined || storedBefore === undefined || !('o' in op) || op.o !== o || unmaterialized(o)) continue
 		if (op.c !== 'withdraw' && op.c !== 'commit' && op.c !== 'target' && op.c !== 'depositTarget' && op.c !== 'takeover' && op.c !== 'takeoverBid') continue
 		const account = stored.positionId === 0n ? undefined : after.accounts[Number(stored.positionId) - 1]
@@ -1091,7 +1094,7 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 		// A position admitted at its target is always counted as healthy capacity and never in distress.
 		if (riskier && account.maxHealthyPrice < after.conservative) issues.push(`HEALTH.eligible[${o}]: ${op.c} left threshold ${account.maxHealthyPrice} below the conservative price ${after.conservative}`)
 	}
-	if (paid !== undefined && sum !== 0n) issues.push(`TAKEOVER.conservation: principal changed by ${sum}`)
+	if (paid !== undefined && sum !== (claimed?.principal ?? 0n)) issues.push(`TAKEOVER.conservation: principal changed by ${sum}`)
 	if (paid !== undefined && 'id' in op) {
 		const source = before.accounts[Number(op.id) - 1]
 		// (d) the takeover reward never exceeds the source position's own principal.
@@ -1107,9 +1110,8 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 		}
 	}
 	// (a)(b) the withdrawable view is exact: more than it reports never leaves the ledger.
-	// An unmaterialized auction vault is excluded: its view already includes the bid that the
-	// production vault always materializes before it acts, which this harness's plain accounts do not.
-	if (op.c === 'withdraw' && !unmaterialized(op.o)) {
+	// Unclaimed lots are outside both the view and the account, so the view is exact for bidders too.
+	if (op.c === 'withdraw') {
 		const view = before.collaterals[op.o]?.[2] ?? 0n
 		if (op.amount > view) issues.push(`WITHDRAW.exceeds[${op.o}]: paid ${op.amount} above the reported withdrawable ${view}`)
 	}
@@ -1200,6 +1202,8 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 				}
 			}
 			const queueOrder = new Map(op.c === 'serve' ? live(m).map(position => [position.id, position.order] as const) : [])
+			const claimBid = op.c === 'materialize' || op.c === 'takeoverBid' ? m.bids[op.bid.toString()] : undefined
+			const claimed = claimBid !== undefined && !claimBid.claimed && claimBid.lots !== 0n && m.cohortId !== 0n ? { owner: claimBid.owner, principal: claimBid.lots * m.repPerLot } : undefined
 			const next = structuredClone(m)
 			let expected: string | undefined
 			let result: TakeoverResult | undefined
@@ -1259,7 +1263,7 @@ describe('audit fuzz: capital ledger against a naive reference model', () => {
 			}
 			if (issues.length === 0) {
 				issues.push(...compare(m, after, owners, driver.ownerAddress, driver.addresses().adapter))
-				if (succeeded && op.c !== 'time') issues.push(...properties(snapshot, after, op, owners, result, o => virtualBid(m, o) !== undefined, queueOrder))
+				if (succeeded && op.c !== 'time') issues.push(...properties(snapshot, after, op, owners, result, o => virtualBid(m, o) !== undefined, queueOrder, claimed))
 			}
 			snapshot = after
 			if (issues.length !== 0) {

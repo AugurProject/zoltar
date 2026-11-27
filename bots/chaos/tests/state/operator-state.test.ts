@@ -30,7 +30,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 	const childUniverseId = (BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [0n, 1n]))) & ((1n << 248n) - 1n)).toString()
 	return {
 		auctionBids: {
-			[emitter.toLowerCase()]: [{ bidId: '2', vault: emitter, lots: '25', minimumAttoRepPerLot: 7n.toString(), targetHealthBps: '15000', settled: false }],
+			[emitter.toLowerCase()]: [{ bidId: '2', lots: '25', minimumAttoRepPerLot: 7n.toString(), settled: false }],
 		},
 		auctionRefunds: {},
 		chainId: 1,
@@ -784,7 +784,7 @@ describe('chaos-bot durable state', () => {
 		const restored = await loadDurableState(path, 1)
 		expect(restored.protocolIndex).toEqual(state.protocolIndex)
 		expect(restored.protocolIndex?.reports[0]?.stateHash).toBe(`0x${'55'.repeat(32)}`)
-		expect(restored.protocolIndex?.auctionBids[emitter.toLowerCase()]?.[0]).toEqual({ bidId: '2', vault: emitter, lots: '25', minimumAttoRepPerLot: 7n.toString(), targetHealthBps: '15000', settled: false })
+		expect(restored.protocolIndex?.auctionBids[emitter.toLowerCase()]?.[0]).toEqual({ bidId: '2', lots: '25', minimumAttoRepPerLot: 7n.toString(), settled: false })
 		expect(restored.protocolIndex?.escalationDeposits[0]).toMatchObject({ depositIndex: '3', parentDepositIndex: '8', claimed: false })
 		expect(restored.protocolIndex?.migrationRepSplits[0]?.childMigrationRepAmountAttoRep).toBe('25')
 	})

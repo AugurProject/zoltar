@@ -141,3 +141,19 @@ test.each([0n, 3n * unit])('available backing uses the canonical purchase capaci
 		?.replaceAll(/\s/g, '')
 	expect(value).toBe(`${available / unit}WETH`)
 })
+
+test('unclaimed repair auction bids are shown from the ledger count, since account views exclude unclaimed lots', async () => {
+	const empty = await renderIntoDocument(<Harness snapshot={{ ...capitalSnapshot(), positions: [], ownerCommitmentAttoEth: 0n }} />)
+	expect(empty.container.textContent ?? '').toContain(copy.noPositions)
+	expect(empty.container.textContent ?? '').not.toContain(copy.unclaimedAuctionBidsHint)
+	await empty.cleanup()
+	const pending = await renderIntoDocument(<Harness snapshot={{ ...capitalSnapshot(), positions: [], ownerCommitmentAttoEth: 0n, unclaimedRepairAuctionBids: 2n }} />)
+	expect(pending.container.textContent ?? '').toContain(copy.unclaimedAuctionBids(2n))
+	expect(pending.container.textContent ?? '').toContain(copy.unclaimedAuctionBidsHint)
+	expect(pending.container.textContent ?? '').not.toContain(copy.noPositionsHint)
+	await pending.cleanup()
+	// An account with its own position still learns about bids waiting to be claimed.
+	const live = await renderIntoDocument(<Harness snapshot={capitalSnapshot({ unclaimedRepairAuctionBids: 1n })} />)
+	lifecycle.trackRendered(live)
+	expect(live.container.textContent ?? '').toContain(copy.unclaimedAuctionBidsDetail(1n))
+})

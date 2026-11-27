@@ -83,7 +83,6 @@ export function SecurityPoolAggregatePanel({ model, actions, priceReport }: { mo
 				{priceReport === undefined ? undefined : <PriceReportDisclosure requestable={priceRequestable}>{priceReport}</PriceReportDisclosure>}
 			</SectionBlock>
 			<SectionBlock title={copy.title} description={copy.description}>
-				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}
 				<MetricGrid>
 					<MetricField label={copy.withdrawableRep} loading={model.loading}>
 						<CurrencyValue value={snapshot?.withdrawableAttoRep} suffix={common.rep} />
@@ -169,7 +168,8 @@ export function SecurityPoolAggregatePanel({ model, actions, priceReport }: { mo
 				<SecurityPoolButton model={actions} action='authorizeSecurityPoolCommitment' label={copy.authorize} pendingLabel={copy.authorizing} reason={model.authorizeReason} onClick={model.authorize} />
 			</SectionBlock>
 			<SectionBlock title={copy.positions} description={copy.positionsHint}>
-				{snapshot !== undefined && model.livePositions.length === 0 ? <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} /> : undefined}
+				{snapshot !== undefined && model.livePositions.length === 0 ? <NoPositions unclaimedBids={snapshot.unclaimedRepairAuctionBids} /> : undefined}
+				{snapshot !== undefined && model.livePositions.length > 0 && snapshot.unclaimedRepairAuctionBids > 0n ? <UserMessage tone='warning' detail={copy.unclaimedAuctionBidsDetail(snapshot.unclaimedRepairAuctionBids)} /> : undefined}
 				{model.livePositions.map(position => {
 					const reasons = model.positionReasons(position.id, position.batch === 0n ? undefined : position.remainingCommitment)
 					const required = snapshot === undefined ? 0n : requiredSecurityPoolCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 10_000n } }, snapshot.ownerCommitmentAttoEth)
@@ -243,4 +243,10 @@ export function SecurityPoolAggregatePanel({ model, actions, priceReport }: { mo
 			</SectionBlock>
 		</>
 	)
+}
+
+/** Account views exclude unclaimed repair auction lots, so an empty account may still have bids to claim. */
+function NoPositions({ unclaimedBids }: { unclaimedBids: bigint }) {
+	if (unclaimedBids === 0n) return <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} />
+	return <EmptyState title={copy.unclaimedAuctionBids(unclaimedBids)} detail={copy.unclaimedAuctionBidsHint} />
 }

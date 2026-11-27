@@ -118,9 +118,9 @@ postgresTest(
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'RepairAuctionStarted',
 							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1000","targetLots":"10","inventoryAttoRep":"900","maximumAttoRepPerLot":"90"}'::jsonb, true),
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 3, 1, ${auctionAddress}, 'BidSubmitted',
-							'{"bidId":"1","bidder":"0x1000000000000000000000000000000000000001","vault":"0x1000000000000000000000000000000000000001","lots":"4","minimumAttoRepPerLot":"60","targetHealthBps":"12000"}'::jsonb, true),
+							'{"bidId":"1","bidder":"0x1000000000000000000000000000000000000001","lots":"4","minimumAttoRepPerLot":"60"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 2, 2, ${auctionAddress}, 'BidSubmitted',
-							'{"bidId":"2","bidder":"0x2000000000000000000000000000000000000002","vault":"0x2000000000000000000000000000000000000002","lots":"3","minimumAttoRepPerLot":"30","targetHealthBps":"12000"}'::jsonb, true),
+							'{"bidId":"2","bidder":"0x2000000000000000000000000000000000000002","lots":"3","minimumAttoRepPerLot":"30"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 3, 2, ${auctionAddress}, 'RepairAuctionFinalized',
 							'{"attoRepPerLot":"60","filledLots":"7","raisedAttoEth":"7000","soldAttoRep":"420"}'::jsonb, true)
 				`

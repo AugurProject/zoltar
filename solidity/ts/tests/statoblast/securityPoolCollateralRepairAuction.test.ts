@@ -1,27 +1,17 @@
 import { collateralBalance } from './burnEvidence'
 import { describe, expect, test } from 'bun:test'
 import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import {
-	auctionVaultRuntimeCode,
-	buildSecurityPoolAuctionBidRequest,
-	buildSecurityPoolAuctionOpenRequest,
-	buildSecurityPoolAuctionVaultDepositRequest,
-	buildSecurityPoolAuctionVaultExecuteRequest,
-	loadSecurityPoolAuctionSnapshot,
-	predictAuctionVaultAddress,
-	quoteSecurityPoolAuctionBid,
-} from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { buildSecurityPoolAuctionBidRequest, buildSecurityPoolAuctionOpenRequest, loadSecurityPoolAuctionSnapshot, MAX_REPAIR_AUCTION_CLAIM_BATCH, quoteSecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
-	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
+	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
@@ -29,15 +19,14 @@ import { addRepToMigrationBalance, forkUniverse, getZoltarForkThreshold, splitMi
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: automatic collateral-repair-auction vaults', () => {
+describe('Statoblast: collateral repair auction winners own their lots', () => {
 	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const prepare = () => prepareSecurityPoolCollateralRepairAuction(fixture)
 	test('#1339 #1551 equal lots cover a shortfall that is not a multiple of the minimum', async () => {
 		const context = await prepare()
-		const implementation = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultImplementation' })
 		const shortfall = (35n * unit) / 10n
 		const receipt = await context.owner.waitForTransactionReceipt({
-			hash: await context.owner.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [context.owner.account.address, fixture.securityPool, context.child, context.deadline, 1_000n * unit, shortfall, implementation] }) }),
+			hash: await context.owner.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [context.owner.account.address, fixture.securityPool, context.child, context.deadline, 1_000n * unit, shortfall] }) }),
 		})
 		if (!receipt.contractAddress) throw new Error('Auction deployment missing')
 		const target = { abi: auctionArtifact.abi, address: receipt.contractAddress }
@@ -72,17 +61,17 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await context.open()
 		const target = { abi: auctionArtifact.abi, address: context.auction }
 		const lots = await context.owner.readContract({ ...target, functionName: 'targetLots' })
-		await context.bid(context.owner, mode === 'target' ? lots : 1n, 6n * unit, 10_000n)
+		await context.bid(context.owner, mode === 'target' ? lots : 1n, 6n * unit)
 		const snapshot = await loadSecurityPoolAuctionSnapshot({ client: context.other, securityPool: fixture.securityPool, bidder: context.other.account.address, universeId: context.child })
 		if (snapshot.auction === undefined) throw new Error('Auction snapshot missing')
 		const { repGrid, maximumAdmissibleBidAttoRepPerLot: maximum, inventoryAttoRep } = snapshot.auction
 		const inventoryLimit = inventoryAttoRep / 2n
 		expect(maximum).toBe(mode === 'target' ? 6n * unit - repGrid : inventoryLimit - (inventoryLimit % repGrid))
-		const terms = { lots: 1n, minimumAttoRepPerLot: maximum + repGrid, targetHealthFactorBps: 10_000n }
+		const terms = { lots: 1n, minimumAttoRepPerLot: maximum + repGrid }
 		expect(() => quoteSecurityPoolAuctionBid(snapshot, terms)).toThrow('Better funded bids')
-		await expect(context.bid(context.other, 1n, maximum + repGrid, 10_000n)).rejects.toThrow('Better bids already exclude this bid')
+		await expect(context.bid(context.other, 1n, maximum + repGrid)).rejects.toThrow('Better bids already exclude this bid')
 		expect(quoteSecurityPoolAuctionBid(snapshot, { ...terms, minimumAttoRepPerLot: maximum }).bidAttoEth).toBe(snapshot.auction.lotAttoEth)
-		await context.bid(context.other, 1n, maximum, 10_000n)
+		await context.bid(context.other, 1n, maximum)
 	})
 
 	test('all winners immediately back claims at one price before any bid is materialized', async () => {
@@ -98,22 +87,20 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await approveToken(context.owner, collateral, context.auction)
 		const opened = await readAuction()
 		if (opened.auction === undefined) throw new Error('Auction snapshot missing')
-		const terms = { lots: 2n, minimumAttoRepPerLot: 5n * unit - ((5n * unit) % grid), targetHealthFactorBps: 12_000n }
+		const terms = { lots: 2n, minimumAttoRepPerLot: 5n * unit - ((5n * unit) % grid) }
 		const bidQuote = quoteSecurityPoolAuctionBid(opened, terms)
 		expect(bidQuote.bidAttoEth).toBe(2n * unit)
 		await writeContractAndWait(context.owner, () => context.owner.sendTransaction(buildSecurityPoolAuctionBidRequest(opened, terms)))
 		const firstSnapshot = (await readAuction()).auction?.bids[0]
 		if (firstSnapshot === undefined) throw new Error('Submitted bid missing')
-		const first = { id: firstSnapshot.id, vault: firstSnapshot.vault }
-		// Each vault is a clone at the address the auction and the SDK both predict from its bindings.
-		const implementation = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultImplementation' })
-		const bindings = { implementation, owner: context.owner.account.address, capital: context.capital, auction: context.auction, bidId: first.id }
-		expect(opened.auction.vaultImplementation).toBe(implementation)
-		expect(predictAuctionVaultAddress(bindings)).toBe(first.vault)
-		expect(await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'vaultFor', args: [context.owner.account.address, first.id] })).toBe(first.vault)
-		expect(await context.owner.getCode({ address: first.vault })).toBe(auctionVaultRuntimeCode(bindings))
-		expect(await context.owner.getCode({ address: implementation })).toBe(`0x${vaultArtifact.evm.deployedBytecode.object}`)
+		const first = { id: firstSnapshot.id, bidder: firstSnapshot.bidder }
+		expect(first.bidder).toBe(context.owner.account.address)
+		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'unclaimedRepairAuctionBids', args: [first.bidder] })).toBe(1n)
 		const second = await context.bid(context.other, 4n)
+		// The bidder chose this branch, so its imported position already exists.
+		const base = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] })
+		const accountBefore = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.bidder] })
+		expect(accountBefore.positionId).not.toBe(0n)
 		await context.closingQuote()
 		await context.finalize()
 		const firstFill = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [first.id] })
@@ -124,16 +111,20 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		const totalsBefore = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'totals' })
 		expect(totalsBefore[1]).toBe(205n * unit)
 		expect(await context.balance(context.capital)).toBe(1_000n * unit + 30n * unit)
-		const virtual = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.vault] })
-		expect(virtual[0]).toBe(firstFill.principalAttoRep)
-		expect(virtual[1]).toBe(2n * unit)
-		const accountBefore = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.vault] })
-		expect(accountBefore.positionId).toBe(0n)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBid', args: [first.id] }))
+		// Unclaimed lots stay in the shared cohort: the account shows only its own position until the bid is claimed.
+		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] })).slice(0, 2)).toEqual(base.slice(0, 2))
+		const [unclaimedFirst] = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPositions', args: [[first.id]] })
+		expect(unclaimedFirst).toMatchObject({ bidder: first.bidder, principal: firstFill.principalAttoRep, commitment: 2n * unit, claimed: false, materialized: false })
+		// Anyone may claim.
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBids', args: [[first.id]] }))
+		const virtual = [base[0] + firstFill.principalAttoRep, base[1] + 2n * unit]
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'totals' })).toEqual(totalsBefore)
-		const account = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.vault] })
-		expect(account.positionId).not.toBe(0n)
-		expect(account.targetHealthFactorBps).toBe(12_000n)
+		const account = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.bidder] })
+		// The lots merged into the bidder's existing position, which keeps the owner's own health target.
+		expect(account.positionId).toBe(accountBefore.positionId)
+		expect(account.targetHealthFactorBps).toBe(accountBefore.targetHealthFactorBps)
+		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] })).slice(0, 2)).toEqual(virtual.slice(0, 2))
+		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'unclaimedRepairAuctionBids', args: [first.bidder] })).toBe(0n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [second.id] }))
 		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(unit)
 		const before = await context.balance(context.other.account.address)
@@ -152,76 +143,103 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await expect(context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'quoteMintRecoveryRep', args: [context.child, fixture.base.questionId, unit] })).rejects.toThrow('Settlement mint closed')
 		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'quoteMintRecoveryRep', args: [context.child, fixture.secondQuestionId, unit] })).toBe(0n)
 		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.base.questionId, 10n * unit] })).toBe(970n * unit)
-		await approveToken(context.owner, context.token, first.vault)
-		const deposit = buildSecurityPoolAuctionVaultDepositRequest({ bidder: context.owner.account.address, vault: first.vault, capitalLedger: context.capital, amountAttoRep: unit, targetHealthFactorBps: 12_000n })
-		await writeContractAndWait(context.owner, () => context.owner.sendTransaction(deposit))
-		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.vault] }))[0]).toBe(virtual[0] + unit)
+		await approveToken(context.owner, context.token, context.capital)
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'depositAndSetHealthTarget', args: [unit, 12_000n] }))
+		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] }))[0]).toBe((virtual[0] ?? 0n) + unit)
+		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.bidder] })).targetHealthFactorBps).toBe(12_000n)
 		const walletBefore = await context.balance(context.owner.account.address)
-		const withdrawal = buildSecurityPoolAuctionVaultExecuteRequest({
-			bidder: context.owner.account.address,
-			vault: first.vault,
-			request: { account: first.vault, to: context.capital, value: 0n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [unit, first.vault] }) },
-			sweep: { repToken: context.token, recipient: context.owner.account.address },
-		})
-		await writeContractAndWait(context.owner, () => context.owner.sendTransaction(withdrawal))
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'withdrawPrincipal', args: [unit, context.owner.account.address] }))
 		expect(await context.balance(context.owner.account.address)).toBe(walletBefore + unit)
-		expect(await context.balance(first.vault)).toBe(0n)
-		await expect(context.other.sendTransaction({ ...withdrawal, account: context.other.account.address })).rejects.toThrow('Only the auction vault owner')
 	})
 
-	test('the first owner operation records initial materialization once and later operations skip the auction lookup', async () => {
+	test('each claimed bid merges into the bidder’s existing position; ordinary operations claim nothing', async () => {
 		const context = await prepare()
 		await context.report()
 		await context.open()
-		const vaultFlag = (vault: Address) => context.owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'initialPositionMaterialized' })
-		const ledgerFlag = async (bidId: bigint) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bidId] })).materialized
-		const positionId = async (vault: Address) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [vault] })).positionId
-		const operate = async (client: WriteClient, vault: Address, data: Hex = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [12_000n] }), target = context.capital) => {
-			const hash = await writeContractAndWait(client, () => client.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'execute', args: [target, 0n, data] }))
-			return (await client.waitForTransactionReceipt({ hash })).gasUsed
-		}
-		const winner = await context.bid(context.other, 2n)
-		const loser = await context.bid(context.owner, 1n, 100n * unit)
-		const partial = await context.bid(context.other, 5n)
-		await expect(operate(context.other, winner.vault)).rejects.toThrow('Auction has not been finalized')
-		expect(await vaultFlag(winner.vault)).toBe(false)
+		const capital = { abi: capitalArtifact.abi, address: context.capital } as const
+		const unclaimed = (holder: Address) => context.owner.readContract({ ...capital, functionName: 'unclaimedRepairAuctionBids', args: [holder] })
+		const bidPositions = (bidIds: bigint[]) => context.owner.readContract({ ...capital, functionName: 'repairAuctionPositions', args: [bidIds] })
+		const account = (holder: Address) => context.owner.readContract({ ...capital, functionName: 'ownerAccount', args: [holder] })
+		const position = (id: bigint) => context.owner.readContract({ abi: indexArtifact.abi, address: context.index, functionName: 'accountOf', args: [id] })
+		const claim = (client: WriteClient, bidIds: bigint[]) => writeContractAndWait(client, () => client.writeContract({ ...capital, functionName: 'materializeRepairAuctionBids', args: [bidIds] }))
+		const bidder = context.owner.account.address
+		const losing = context.other.account.address
+		const winner = await context.bid(context.owner, 2n)
+		const loser = await context.bid(context.other, 1n, 100n * unit)
+		const partial = await context.bid(context.owner, 5n)
 		await context.closingQuote()
 		await context.finalize()
-		expect([winner, loser, partial].map(bid => bid.vault)).toHaveLength(3)
-		expect(await vaultFlag(winner.vault)).toBe(false)
-		expect(await ledgerFlag(winner.id)).toBe(false)
-		// A keeper's materialization is recognized by the owner's next operation.
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBid', args: [winner.id] }))
-		expect(await ledgerFlag(winner.id)).toBe(true)
-		expect(await vaultFlag(winner.vault)).toBe(false)
-		const first = await operate(context.other, winner.vault)
-		expect(await vaultFlag(winner.vault)).toBe(true)
-		const second = await operate(context.other, winner.vault)
-		expect(await vaultFlag(winner.vault)).toBe(true)
-		expect(second).toBeLessThan(first - 40_000n)
-		expect(await positionId(winner.vault)).not.toBe(0n)
-		// A reverting owner action rolls back its materialization and the flag together.
-		const failing = encodeFunctionData({ abi: vaultArtifact.abi, functionName: 'execute', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [1_000n * unit, partial.vault] })] })
-		const hash = await context.mock.requestRaw({ method: 'eth_sendTransaction', params: [{ from: context.other.account.address, to: partial.vault, data: failing, gas: '0x2dc6c0', gasPrice: '0x0' }] })
-		await context.mock.requestRaw({ method: 'evm_mine', params: [] })
-		const receipt = await context.mock.requestRaw({ method: 'eth_getTransactionReceipt', params: [hash] })
-		if (typeof receipt !== 'object' || receipt === null || !('status' in receipt)) throw new Error('Missing reverted transaction receipt')
-		expect(receipt.status).toBe('0x0')
-		expect(await vaultFlag(partial.vault)).toBe(false)
-		expect(await ledgerFlag(partial.id)).toBe(false)
-		expect(await positionId(partial.vault)).toBe(0n)
-		const activated = await operate(context.other, partial.vault)
-		expect(await vaultFlag(partial.vault)).toBe(true)
-		expect(await ledgerFlag(partial.id)).toBe(true)
-		expect(activated).toBeGreaterThan(first)
-		// A losing bid never records a permanent zero fill and keeps asset recovery.
-		const recovery = encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'transfer', args: [context.owner.account.address, 0n] })
-		for (let attempt = 0; attempt < 2; attempt++) {
-			await operate(context.owner, loser.vault, recovery, context.token)
-			expect(await vaultFlag(loser.vault)).toBe(false)
-			expect(await positionId(loser.vault)).toBe(0n)
-		}
-		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
+		const fills = await Promise.all([winner, partial].map(bid => context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })))
+		const [winnerFill, partialFill] = fills
+		if (winnerFill === undefined || partialFill === undefined) throw new Error('Fills missing')
+		expect(winnerFill.filledLots).toBe(2n)
+		expect(partialFill.filledLots).toBeGreaterThan(0n)
+		// The owner chose this branch, so its imported position already exists.
+		const before = await account(bidder)
+		expect(before.positionId).not.toBe(0n)
+		const imported = await position(before.positionId)
+		expect(await unclaimed(bidder)).toBe(2n)
+		const totals = await context.owner.readContract({ ...capital, functionName: 'totals' })
+		// An ordinary operation no longer moves lots.
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ ...capital, functionName: 'setHealthTarget', args: [12_000n] }))
+		expect(await unclaimed(bidder)).toBe(2n)
+		expect(await position(before.positionId)).toMatchObject({ rep: imported.rep, commitment: imported.commitment })
+		// Each claim merges exactly its own bid.
+		await claim(context.other, [winner.id])
+		expect(await unclaimed(bidder)).toBe(1n)
+		expect(await position(before.positionId)).toMatchObject({ rep: imported.rep + winnerFill.principalAttoRep, commitment: imported.commitment + 2n * unit })
+		// A batch may mix claimed, winning and losing bids of several bidders; claimed ones are skipped.
+		await claim(context.other, [winner.id, partial.id, loser.id])
+		expect(await unclaimed(bidder)).toBe(0n)
+		expect(await unclaimed(losing)).toBe(0n)
+		const merged = await position(before.positionId)
+		expect(merged).toMatchObject({ rep: imported.rep + winnerFill.principalAttoRep + partialFill.principalAttoRep, commitment: imported.commitment + (2n + partialFill.filledLots) * unit })
+		expect((await account(bidder)).positionId).toBe(before.positionId)
+		expect(await context.owner.readContract({ ...capital, functionName: 'totals' })).toEqual(totals)
+		const [winnerView, partialView, loserView] = await bidPositions([winner.id, partial.id, loser.id])
+		expect(winnerView).toMatchObject({ bidder, claimed: true, materialized: true, positionId: before.positionId })
+		expect(partialView).toMatchObject({ bidder, claimed: true, materialized: true, positionId: before.positionId })
+		expect(loserView).toMatchObject({ bidder: losing, claimed: true, materialized: false, principal: 0n })
+		expect((await account(losing)).positionId).toBe(0n)
+	})
+
+	test('one account may place more bids than any former cap and claim them in one batch', async () => {
+		const context = await prepare()
+		await context.report()
+		await context.open()
+		const grid = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'repGrid' })
+		// Each later bid asks for less REP, so earlier bids never exclude it.
+		const price = (step: bigint) => 6n * unit - step * grid
+		const ids: bigint[] = []
+		for (let count = 0n; count < 10n; count++) ids.push((await context.bid(context.other, 1n, price(count))).id)
+		const capital = { abi: capitalArtifact.abi, address: context.capital } as const
+		expect(await context.owner.readContract({ ...capital, functionName: 'unclaimedRepairAuctionBids', args: [context.other.account.address] })).toBe(10n)
+		await context.closingQuote()
+		await context.finalize()
+		await writeContractAndWait(context.other, () => context.other.writeContract({ ...capital, functionName: 'materializeRepairAuctionBids', args: [ids] }))
+		expect(await context.owner.readContract({ ...capital, functionName: 'unclaimedRepairAuctionBids', args: [context.other.account.address] })).toBe(0n)
+		expect((await context.owner.readContract({ ...capital, functionName: 'repairAuctionPositions', args: [ids] })).every(view => view.claimed)).toBe(true)
+	})
+
+	test('a claim batch of the clients’ maximum size of winning bids fits in one transaction', async () => {
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture, 40n * unit)
+		await context.report()
+		await context.open()
+		const auction = { abi: auctionArtifact.abi, address: context.auction } as const
+		const capital = { abi: capitalArtifact.abi, address: context.capital } as const
+		const [grid, targetLots] = await Promise.all([context.owner.readContract({ ...auction, functionName: 'repGrid' }), context.owner.readContract({ ...auction, functionName: 'targetLots' })])
+		const ids: bigint[] = []
+		for (let count = 0n; count < targetLots && count < BigInt(MAX_REPAIR_AUCTION_CLAIM_BATCH); count++) ids.push((await context.bid(context.other, 1n, 6n * unit - count * grid)).id)
+		await context.closingQuote()
+		await context.finalize()
+		// Every bid in the batch won, so every claim merges lots: the costliest batch the clients send.
+		const views = await context.owner.readContract({ ...capital, functionName: 'repairAuctionPositions', args: [ids] })
+		expect(ids).toHaveLength(MAX_REPAIR_AUCTION_CLAIM_BATCH)
+		expect(views.every(view => view.commitment !== 0n)).toBe(true)
+		const hash = await writeContractAndWait(context.other, () => context.other.writeContract({ ...capital, functionName: 'materializeRepairAuctionBids', args: [ids] }))
+		const gas = (await context.other.getTransactionReceipt({ hash })).gasUsed
+		// The 2^24 per-transaction gas limit, with room for deeper bid and position trees.
+		expect(gas).toBeLessThan(12_000_000n)
 	})
 
 	test('#1363 a week-old opening quote cannot settle the collateral repair sale', async () => {
@@ -283,8 +301,6 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [context.other.account.address] }))
 		expect(await context.balance(context.other.account.address)).toBe(before)
 		expect(await context.other.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'demandAttoEth' })).toBe(5n * unit)
-		// A losing account can still recover accidentally sent assets after close.
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'execute', args: [context.token, 0n, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'transfer', args: [context.other.account.address, 0n] })] }))
 	})
 
 	test('a later native fork cannot cancel an auction that was valid at its earlier fixed close', async () => {

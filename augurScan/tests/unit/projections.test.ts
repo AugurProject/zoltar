@@ -332,7 +332,7 @@ describe('state projections', () => {
 			entityIdentity: `${pool.toLowerCase()}:42`,
 			semanticEventKind: 'ReportSubmitted',
 		})
-		const auction = projectionsFrom(log('BidSubmitted', { bidId: '1', bidder: vault, vault, lots: '2', minimumAttoRepPerLot: atomic(10n), targetHealthBps: '12000' })).at(-1)
+		const auction = projectionsFrom(log('BidSubmitted', { bidId: '1', bidder: vault, lots: '2', minimumAttoRepPerLot: atomic(10n) })).at(-1)
 		expect(auction).toMatchObject({ type: 'domainEvent', domain: 'auction', semanticEventKind: 'BidSubmitted' })
 		// Refund accounting reads these auction events, so each must reach the auction projection.
 		for (const [name, data] of [
@@ -349,7 +349,6 @@ describe('state projections', () => {
 			['SecurityPoolDeployed', { securityPool: vault, creator: pool }, 'risk', 'security-pool', vault.toLowerCase()],
 			['SecurityPoolRegistered', { securityPool: vault, originUniverseId: '0' }, 'risk', 'security-pool', vault.toLowerCase()],
 			['RepairAuctionOpened', { conservativePrice: '1', minimumCollateralAttoRepPerLot: atomic(2n), maximumBidAttoRepPerLot: atomic(3n) }, 'risk', 'security-pool-auction', pool.toLowerCase()],
-			['BidVaultCreated', { bidId: '1', bidder: vault, vault }, 'risk', 'security-pool-auction', pool.toLowerCase()],
 			['RepairAuctionClosed', { filledLots: '1', raisedAttoEth: atomic(1n), soldAttoRep: atomic(2n) }, 'risk', 'security-pool-auction', pool.toLowerCase()],
 			['SecurityPoolRecoveryRightsTransferred', { universeId: '1', from: vault, to: vault, amountsAttoShares: ['1', '2', '3'] }, 'system', 'share-token', pool.toLowerCase()],
 			['SecurityPoolRecoveryRightsConsumed', { universeId: '1', holder: vault, amountAttoShares: atomic(1n), cumulativeAttoShares: atomic(1n) }, 'system', 'share-token', pool.toLowerCase()],
@@ -358,8 +357,8 @@ describe('state projections', () => {
 		expect(projectionsFrom({ ...log('URI', { value: 'ipfs://share', id: '1' }), contractKind: 'shareToken' })).toEqual([])
 	})
 
-	test('a materialized auction bid belongs to the vault that owns the new position', () => {
-		expect(projectionsFrom(log('RepairAuctionBidMaterialized', { bidId: '4', vault, positionId: '3', principal: '70', commitment: '10' })).at(-1)).toMatchObject({ domain: 'risk', entityType: 'vault', entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}` })
+	test('a materialized auction bid belongs to the bidder whose account received its lots', () => {
+		expect(projectionsFrom(log('RepairAuctionBidMaterialized', { bidId: '4', bidder: vault, positionId: '3', principal: '70', commitment: '10' })).at(-1)).toMatchObject({ domain: 'risk', entityType: 'vault', entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}` })
 		// The cohort is the auction adapter's aggregate position, identified by its position id.
 		expect(projectionsFrom(log('RepairAuctionCohortInstalled', { adapter: vault, positionId: '3', lots: '1', repPerLot: '2', commitmentPerLot: '3' })).at(-1)).toMatchObject({ entityType: 'capital-position', entityIdentity: `${pool.toLowerCase()}:3` })
 	})

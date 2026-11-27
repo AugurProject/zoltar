@@ -51,3 +51,18 @@ export const questionOutcomeSeparator = ' — '
 export const forkQuestionId = 'Fork question ID'
 export const busy = 'Another security pool action is pending.'
 export const branchStates = { choose: 'Choose an outcome', unprepared: 'Not prepared', chosen: 'Capital prepared', waiting: 'Awaiting activation', active: 'Active' }
+export const claimBidsFirst = 'Claim your repair auction bids before choosing a branch.'
+export const unclaimedBids = (count: bigint) =>
+	count === 1n
+		? 'You have 1 unclaimed repair auction bid in this universe. Every bid must be claimed, including bids that won nothing, before you can choose a branch.'
+		: `You have ${count} unclaimed repair auction bids in this universe. Every bid must be claimed, including bids that won nothing, before you can choose a branch.`
+export const claimBids = 'Claim all bids'
+export const claimingBids = 'Claiming bids…'
+export const noBidsToClaim = 'No repair auction bids to claim.'
+export const claimAfterClose = 'Your bids can be claimed after the auction closes.'
+export const claimBidsReview = (batch: number, total: number) => {
+	if (batch < total) return `Claim ${batch} of your ${total} unclaimed repair auction bids in this universe in this transaction; claim again for the rest. Winning lots join your capital account here.`
+	const scope = batch === 1 ? 'your 1 unclaimed repair auction bid in this universe in one transaction' : `all ${batch} of your unclaimed repair auction bids in this universe in one transaction`
+	return `Claim ${scope}. Winning lots join your capital account here.`
+}
+export const claimLoadError = 'Unable to load your repair auction bids in this universe.'

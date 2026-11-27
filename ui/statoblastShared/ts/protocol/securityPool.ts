@@ -5,7 +5,6 @@ import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, ty
 import {
 	buildSecurityPoolDeploymentRequest,
 	buildSecurityPoolPrepareNextRequest,
-	decodeAuctionVaultBindings,
 	securityPoolAddressFromDeploymentLogs,
 	loadSecurityPoolCapitalSnapshot,
 	loadSecurityPoolClaimableEarnings,
@@ -40,7 +39,6 @@ import { getInfraContractAddresses, getSecurityPoolCreationCode, getSecurityPool
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
-import { authenticateSecurityPoolAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolRepairAuction.js'
 
 export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
@@ -198,25 +196,18 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('Capital ledger uses another services authority.')
 	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('Capital ledger uses another fork authority.')
 	const start = questionStart > questionCount ? 0n : questionStart
-	// Other contract accounts remain readable, but gain no auction-owner authority:
-	// a clone of another implementation stays an ordinary owner, and a clone of the
-	// canonical implementation is authenticated fully before it gains any.
-	const bindings = decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
-	const auctionVault = bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber)) ? await authenticateSecurityPoolAuctionVault(client, securityPool, owner, blockNumber) : undefined
-	const fundingOwner = auctionVault?.bidder ?? owner
-	const depositSpender = auctionVault?.vault ?? snapshot.capitalLedger
 	const collateralToken = await client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'collateralToken', blockNumber })
 	const collateral = collateralPresentation(collateralToken)
 	const [walletCollateral, collateralAllowance] = await Promise.all([
-		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
-		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, services], blockNumber }),
+		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner], blockNumber }),
+		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, services], blockNumber }),
 	])
 	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, premiumValue] = await Promise.all([
 		client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
 		loadSecurityPoolAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
-		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
-		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, depositSpender], blockNumber }),
-		client.getBalance({ address: fundingOwner, blockNumber }),
+		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner], blockNumber }),
+		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, snapshot.capitalLedger], blockNumber }),
+		client.getBalance({ address: owner, blockNumber }),
 		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
 		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
 	])
@@ -268,7 +259,6 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		allowanceAttoRep,
 		walletAttoEth,
 		forkController,
-		...(auctionVault === undefined ? {} : { auctionVault }),
 	}
 }
 export type SecurityPoolAccountSnapshot = Awaited<ReturnType<typeof loadSecurityPoolAccount>>

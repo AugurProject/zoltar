@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
+import { SecurityPoolCapitalState, ICapitalRepairAuctions } from './SecurityPoolCapitalState.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { IERC20 } from '../IERC20.sol';
 import { Zoltar } from '../Zoltar.sol';
@@ -24,6 +24,8 @@ interface ICapitalRepairAuctionHost {
 			uint256 commitmentPerLot
 		);
 	function repairAuctionBidPositionIds(uint256 bidId) external view returns (uint96);
+	function repairAuctionBidClaimed(uint256 bidId) external view returns (bool);
+	function forkAuthority() external view returns (address);
 	function importing() external view returns (bool);
 	function frozen() external view returns (bool);
 	function exported(address owner) external view returns (bool);
@@ -36,11 +38,13 @@ interface ICapitalRepairAuctionHost {
 }
 
 /// @notice A funded auction cohort represents individually owned, equal-ratio
-/// positions. Only one bid is detached before any owner mutation or keeper loss.
+/// lots. Each bid is claimed on its own: its winning lots join the bidder's
+/// account and the bidder's unclaimed-bid count falls. No path loops over a
+/// bidder's bids, so a bidder may place any number of them.
 contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 	address public immutable implementation = address(this);
 	event RepairAuctionCohortInstalled(address indexed adapter, uint96 indexed positionId, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot);
-	event RepairAuctionBidMaterialized(uint256 indexed bidId, address indexed vault, uint96 indexed positionId, uint256 principal, uint256 commitment);
+	event RepairAuctionBidMaterialized(uint256 indexed bidId, address indexed bidder, uint96 indexed positionId, uint256 principal, uint256 commitment);
 
 	modifier onlyDelegateCall() {
 		require(address(this) != implementation, 'Only capital delegatecall');
@@ -64,49 +68,61 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 		emit RepairAuctionCohortInstalled(adapter, id, lots, repPerLot, commitmentPerLot);
 	}
 
-	function materialize(uint256 bidId) external onlyDelegateCall returns (address vault, uint96 id) {
+	/// @notice Claim one bid. Its winning lots, if any, join the bidder's account:
+	/// a new position when it has none, otherwise a merge into its live position.
+	/// A bid that won nothing only stops counting as unclaimed. Repeating a claim
+	/// changes nothing.
+	function materializeBid(uint256 bidId) external onlyDelegateCall returns (address bidder) {
+		require(!importing && bidId != 0, 'Auction capital unavailable');
+		ISecurityPoolRepairAuctionCapital auction = _repairAuction(ICapitalRepairAuctionHost(address(this)));
+		// An unfinalized auction reports only bids already excluded by better ones.
+		ISecurityPoolRepairAuctionCapital.BidPosition memory bid = auction.bidPosition(bidId);
+		bidder = bid.bidder;
+		require(bidder != address(0), 'Auction bid missing');
+		if (repairAuctionBidClaimed[bidId]) return bidder;
+		repairAuctionBidClaimed[bidId] = true;
+		OwnerState storage state = owners[bidder];
+		state.unclaimedRepairAuctionBids -= 1;
+		if (bid.filledLots == 0) return bidder;
 		RepairAuctionCohort storage cohort = repairAuctionCohort;
-		require(!importing && address(cohort.adapter) != address(0) && bidId != 0, 'Auction capital unavailable');
-		ISecurityPoolRepairAuctionCapital.BidPosition memory bid = cohort.adapter.bidPosition(bidId);
-		vault = bid.vault;
-		require(vault != address(0) && vault != address(cohort.adapter), 'Auction vault missing');
-		id = repairAuctionBidPositionIds[bidId];
-		if (id != 0 || bid.filledLots == 0) return (vault, id);
-		require(bid.filledLots <= cohort.remainingLots && bid.targetHealthFactorBps >= BPS, 'Invalid auction position');
-		Owner storage owner = owners[vault].account;
-		require(owner.positionId == 0 && owner.freeAttoRep == 0 && !owners[vault].exported, 'Auction vault already has principal');
-		(uint256 released, uint256 ethFees, uint256 repFees, ) = commitmentIndex.claim(cohort.positionId);
+		require(address(cohort.adapter) == address(auction) && bid.filledLots <= cohort.remainingLots, 'Invalid auction position');
+		// Claim released REP and fees first, so the receiving position is live.
+		_settleOwner(bidder);
+		require(!state.exported, 'Auction bidder already exported');
+		(uint256 released, uint256 addedEth, uint256 addedRep, ) = commitmentIndex.claim(cohort.positionId);
 		require(released == 0, 'Auction cohort cannot retire');
-		(ethFees, repFees) = cohort.adapter.claimAndRemoveFees(bidId, ethFees, repFees);
+		(uint256 ethFees, uint256 repFees) = auction.claimAndRemoveFees(bidId, addedEth, addedRep);
 		uint256 principal = bid.filledLots * cohort.repPerLot;
 		uint256 commitment = bid.filledLots * cohort.commitmentPerLot;
-		id = commitmentIndex.splitRepairAuctionPosition(cohort.positionId, vault, principal, commitment);
-		repairAuctionBidPositionIds[bidId] = id;
 		cohort.remainingLots -= bid.filledLots;
-		owner.positionId = id;
-		owner.targetHealthFactorBps = bid.targetHealthFactorBps;
-		owner.feesAttoEth += ethFees;
-		owner.feesAttoRep += repFees;
-		emit RepairAuctionBidMaterialized(bidId, vault, id, principal, commitment);
+		Owner storage account = state.account;
+		uint96 id = account.positionId;
+		uint256 maxPrice;
+		if (id != 0) {
+			SecurityPoolCommitmentIndex.Account memory current = commitmentIndex.accountOf(id);
+			maxPrice = ICapitalRepairAuctionHost(address(this)).maximumHealthyPrice(current.rep + principal, current.commitment + commitment);
+		}
+		id = commitmentIndex.moveRepairAuctionShare(cohort.positionId, bidder, id, principal, commitment, maxPrice);
+		account.positionId = id;
+		account.feesAttoEth += ethFees;
+		account.feesAttoRep += repFees;
+		repairAuctionBidPositionIds[bidId] = id;
+		emit RepairAuctionBidMaterialized(bidId, bidder, id, principal, commitment);
 	}
 
 	/// @dev View calls read the selected host explicitly; they do not delegatecall
 	/// or inspect this helper's empty state. Heavy previews stay outside the host's
 	/// runtime while its ordinary public getters keep the same interpretation.
 	function previewOwner(ICapitalRepairAuctionHost host, address holder) external view returns (Owner memory owner) {
-		owner = host.storedOwnerAccount(holder);
-		(, , uint256 target) = _virtualCapital(host, holder);
-		if (target != 0) owner.targetHealthFactorBps = target;
+		return host.storedOwnerAccount(holder);
 	}
 	function previewCollateral(ICapitalRepairAuctionHost host, address holder) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
 		Owner memory owner = host.storedOwnerAccount(holder);
 		SecurityPoolCommitmentIndex index = host.commitmentIndex();
 		SecurityPoolCommitmentIndex.Account memory position = index.accountOf(owner.positionId);
-		(uint256 virtualRep, uint256 virtualCommitment, uint256 target) = _virtualCapital(host, holder);
 		withdrawable = owner.freeAttoRep + position.releasedRep;
-		uint256 pledged = position.rep + virtualRep;
-		principal = withdrawable + pledged;
-		commitment = position.commitment + virtualCommitment;
+		principal = withdrawable + position.rep;
+		commitment = position.commitment;
 		if (commitment == 0) return (principal, 0, principal);
 		if (
 			host.importing() ||
@@ -116,7 +132,7 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 			!host.isPriceValid() ||
 			index.eligibleCommitment(host.conservativePrice()) < host.demandAttoEth()
 		) return (principal, commitment, withdrawable);
-		if (target == 0) target = owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
+		uint256 target = owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
 		uint256 withdrawalCommitment = commitment;
 		if (
 			position.batch != 0 &&
@@ -125,9 +141,12 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 				SecurityPoolCommitmentIndex.RetirementStatus.Ready
 		) withdrawalCommitment -= position.commitment - position.remainingCommitment;
 		uint256 required = index.requiredRep(withdrawalCommitment, host.ownerConservativePrice(holder), host.securityMultiplierBps(), target);
-		if (pledged > required) withdrawable += pledged - required;
+		if (position.rep > required) withdrawable += position.rep - required;
 	}
-	function previewRepairAuctionPosition(ICapitalRepairAuctionHost host, uint256 bidId) external view returns (RepairAuctionPosition memory result) {
+	/// @notice Each bid's winning lots. Once claimed, they are part of the bidder's
+	/// account, whose own position and earnings `ownerAccount` reports.
+	function previewRepairAuctionPositions(ICapitalRepairAuctionHost host, uint256[] calldata bidIds) external view returns (RepairAuctionPosition[] memory results) {
+		ISecurityPoolRepairAuctionCapital auction = _repairAuction(host);
 		(
 			ISecurityPoolRepairAuctionCapital adapter,
 			uint96 cohortId,
@@ -135,41 +154,30 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 			uint256 repPerLot,
 			uint256 commitmentPerLot
 		) = host.repairAuctionCohort();
-		require(address(adapter) != address(0), 'Auction capital unavailable');
-		ISecurityPoolRepairAuctionCapital.BidPosition memory bid = adapter.bidPosition(bidId);
-		result.vault = bid.vault;
-		result.materialized = host.repairAuctionBidPositionIds(bidId) != 0;
-		Owner memory owner = host.storedOwnerAccount(bid.vault);
 		SecurityPoolCommitmentIndex index = host.commitmentIndex();
-		if (!result.materialized) {
+		results = new RepairAuctionPosition[](bidIds.length);
+		for (uint256 slot = 0; slot < bidIds.length; slot++) {
+			RepairAuctionPosition memory result = results[slot];
+			ISecurityPoolRepairAuctionCapital.BidPosition memory bid = auction.bidPosition(bidIds[slot]);
+			result.bidder = bid.bidder;
+			result.claimed = host.repairAuctionBidClaimed(bidIds[slot]);
+			// Without an installed cohort no bid won any lot.
+			if (address(adapter) != address(auction) || bid.filledLots == 0) continue;
 			result.principal = bid.filledLots * repPerLot;
 			result.commitment = bid.filledLots * commitmentPerLot;
-			result.targetHealthFactorBps = bid.targetHealthFactorBps;
-			if (bid.filledLots != 0) {
-				SecurityPoolCommitmentIndex.Account memory aggregate = index.accountOf(cohortId);
-				result.liquidationStarted = index.liquidationStarted(cohortId);
-				(result.earnedAttoEth, result.earnedAttoRep) = adapter.previewBidFees(bidId, aggregate.ethFees, aggregate.repFees);
+			result.positionId = host.repairAuctionBidPositionIds(bidIds[slot]);
+			result.materialized = result.positionId != 0;
+			if (result.materialized) {
+				result.liquidationStarted = index.liquidationStarted(result.positionId);
+				continue;
 			}
-		} else {
-			result.positionId = owner.positionId;
-			SecurityPoolCommitmentIndex.Account memory position = index.accountOf(owner.positionId);
-			result.principal = owner.freeAttoRep + position.rep + position.releasedRep;
-			result.commitment = position.commitment;
-			result.targetHealthFactorBps = owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
-			result.liquidationStarted = index.liquidationStarted(owner.positionId);
-			result.earnedAttoEth = position.ethFees;
-			result.earnedAttoRep = position.repFees;
+			SecurityPoolCommitmentIndex.Account memory aggregate = index.accountOf(cohortId);
+			result.liquidationStarted = index.liquidationStarted(cohortId);
+			(result.earnedAttoEth, result.earnedAttoRep) = auction.previewBidFees(bidIds[slot], aggregate.ethFees, aggregate.repFees);
 		}
-		result.earnedAttoEth += owner.feesAttoEth;
-		result.earnedAttoRep += owner.feesAttoRep;
 	}
-	function _virtualCapital(ICapitalRepairAuctionHost host, address holder) private view returns (uint256 principal, uint256 commitment, uint256 target) {
-		(ISecurityPoolRepairAuctionCapital adapter, , , uint256 repPerLot, uint256 commitmentPerLot) = host.repairAuctionCohort();
-		if (address(adapter) == address(0)) return (0, 0, 0);
-		uint256 bidId = adapter.bidIdForVault(holder);
-		if (bidId == 0 || host.repairAuctionBidPositionIds(bidId) != 0) return (0, 0, 0);
-		ISecurityPoolRepairAuctionCapital.BidPosition memory bid = adapter.bidPosition(bidId);
-		if (bid.filledLots == 0) return (0, 0, 0);
-		return (bid.filledLots * repPerLot, bid.filledLots * commitmentPerLot, bid.targetHealthFactorBps);
+	function _repairAuction(ICapitalRepairAuctionHost host) private view returns (ISecurityPoolRepairAuctionCapital auction) {
+		auction = ISecurityPoolRepairAuctionCapital(ICapitalRepairAuctions(host.forkAuthority()).repairAuctions(host.universeId()));
+		require(address(auction) != address(0), 'Auction capital unavailable');
 	}
 }

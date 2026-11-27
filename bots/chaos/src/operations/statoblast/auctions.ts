@@ -1,5 +1,6 @@
+import { securityPoolAuctionClaimBatch } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { collateralSpendContinuation } from './collateral-approval.ts'
-import { erc20Abi, securityPoolRepairAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolRepairAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { erc20WalletDebit, erc20AllowanceEvidence, amount, choose, eligible, encodeStep, mixSeed, optionAmount, planBase } from '../planning.ts'
 import { inputInteger, inputMatches } from '../input-values.ts'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
@@ -12,8 +13,8 @@ function bidTerms(snapshot: EcosystemSnapshot, options: PlanningOptions, auction
 	const grid = amount(auction.repGrid)
 	if (lot === 0n || grid === 0n) return undefined
 	const lots = inputInteger(options, 'lots', 1n, 1n)
-	const health = inputInteger(options, 'healthFactorBps', 10_000n, 10_000n)
-	const required = (amount(auction.unroundedCollateralAttoRepPerLot) * health + 9_999n) / 10_000n
+	// Winning lots arrive at the protocol floor; the owner sets its health target on the ledger afterwards.
+	const required = amount(auction.unroundedCollateralAttoRepPerLot)
 	const minimum = inputInteger(options, 'minimumAttoRepPerLot', ((required + grid - 1n) / grid) * grid, 1n)
 	const value = lots * lot
 	if (
@@ -26,7 +27,7 @@ function bidTerms(snapshot: EcosystemSnapshot, options: PlanningOptions, auction
 		amount(snapshot.wallet.ethBalanceAttoEth) < optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n)
 	)
 		return undefined
-	return { lots, health, minimum, value }
+	return { lots, minimum, value }
 }
 
 export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition {
@@ -46,7 +47,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 		classification: 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'high',
-		description: 'Bids whole WETH lots for a uniformly priced REP-backed owner position with a chosen health target.',
+		description: 'Bids whole WETH lots for uniformly priced REP-backed lots that join the wallet’s own capital account at the protocol floor once the bid is claimed.',
 		discoveryInputs: ['security pool auction', 'collateral lot and REP price grid', 'wallet WETH and ETH gas reserve'],
 		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No affordable open auction or high-risk operations disabled'),
 		buildPlan(snapshot, options) {
@@ -57,9 +58,9 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label: 'Bid in security pool collateral repair auction',
-				metadata: { auction: auction.address, lots: terms.lots.toString(), minimumAttoRepPerLot: terms.minimum.toString(), healthFactorBps: terms.health.toString(), collateralToken: auction.collateralToken, collateralSpender: auction.address, collateralBudget: terms.value.toString() },
+				metadata: { auction: auction.address, lots: terms.lots.toString(), minimumAttoRepPerLot: terms.minimum.toString(), collateralToken: auction.collateralToken, collateralSpender: auction.address, collateralBudget: terms.value.toString() },
 				deadlineTimestamp: auction.endTime,
-				postconditions: ['The engine records a funded bid and its dedicated owner vault'],
+				postconditions: ['The engine records a funded bid for the wallet'],
 				risk: 'high',
 				snapshot,
 				maximumCleanupTransactionCount: 1,
@@ -77,7 +78,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 								}),
 							]
 						: []),
-					encodeStep({ abi: securityPoolRepairAuctionAbi, args: [terms.lots, terms.minimum, terms.health], functionName: 'submitBid', id: 'bid', label: 'Bid collateral lots', to: auction.address, value: 0n, walletAssetDebits: [erc20WalletDebit(auction.collateralToken, terms.value, 'weth')] }),
+					encodeStep({ abi: securityPoolRepairAuctionAbi, args: [terms.lots, terms.minimum], functionName: 'submitBid', id: 'bid', label: 'Bid collateral lots', to: auction.address, value: 0n, walletAssetDebits: [erc20WalletDebit(auction.collateralToken, terms.value, 'weth')] }),
 				],
 			})
 		},
@@ -145,6 +146,54 @@ function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
 	}
 }
 
+/**
+ * Claims the wallet's claimable bids in one transaction: winning lots join its capital account and every claimed bid,
+ * winning or not, stops blocking the wallet's fork choice in a later fork of this universe.
+ */
+function claimAuctionBidsDefinition(): OperationDefinition {
+	const id = 'statoblast.auction.claim-bids'
+	const label = 'Claim repair auction bids'
+	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
+		return snapshot.auctions.filter(auction => auction.claimableBidIds.length > 0 && (options === undefined || inputMatches(options, 'auction', auction.address)))
+	}
+	// One claim transaction carries at most one SDK batch, so it fits in a block; the operation repeats for the rest.
+	const batch = (auction: AuctionSnapshot) => securityPoolAuctionClaimBatch(auction.claimableBidIds.map(bidId => amount(bidId))).bidIds
+	const metadata = (auction: AuctionSnapshot) => ({ auction: auction.address, capital: auction.capital, bidIds: batch(auction).join(',') })
+	function build(snapshot: EcosystemSnapshot, auction: AuctionSnapshot) {
+		return planBase({
+			definitionId: id,
+			ecosystem: 'statoblast',
+			label,
+			metadata: metadata(auction),
+			postconditions: ['The capital ledger marks each listed bid claimed and moves winning lots into the wallet account'],
+			priority: 'urgent',
+			risk: 'low',
+			snapshot,
+			steps: [encodeStep({ abi: securityPoolCapitalLedgerAbi, args: [batch(auction)], functionName: 'materializeRepairAuctionBids', id: 'materializeRepairAuctionBids', label, to: auction.capital })],
+		})
+	}
+	return {
+		id,
+		label,
+		method: 'materializeRepairAuctionBids',
+		contract: 'SecurityPoolCapitalLedger',
+		classification: 'lifecycle-obligation',
+		ecosystem: 'statoblast',
+		risk: 'low',
+		description: `${label} without scanning on-chain bids.`,
+		discoveryInputs: ['security pool branch auction', 'authenticated wallet bids', 'anchored claim simulation'],
+		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No claimable auction bids'),
+		buildPlan(snapshot, options) {
+			const auction = choose(candidates(snapshot, options), mixSeed(options.seed, id))
+			return auction === undefined ? undefined : build(snapshot, auction)
+		},
+		buildLifecyclePlans: (snapshot, options) => candidates(snapshot, options).map(auction => build(snapshot, auction)),
+		enumerateLifecyclePresence: snapshot => candidates(snapshot).map(metadata),
+		enumerateLifecycleObstructingPresence: (snapshot, options) => candidates(snapshot, options).map(metadata),
+	}
+}
+
+export const claimAuctionBids = claimAuctionBidsDefinition()
 export const startCollateralRepairAuction = auctionLifecycle('open')
 export const finalizeCollateralRepairAuctionRoute = auctionLifecycle('finalize')
 export const settleAuctionBids = auctionLifecycle('settle')

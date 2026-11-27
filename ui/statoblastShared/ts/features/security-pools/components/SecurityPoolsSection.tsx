@@ -142,16 +142,7 @@ export function SecurityPoolsSection({ parameters, walletConnected, enabled, env
 				<SecurityPoolAggregatePanel model={capital} actions={actions} priceReport={shownAccount.current === accountIdentity ? unfolded => <SecurityPoolPriceReport scope='universe' target={unfolded ? accountPriceTarget(model.snapshot) : undefined} actions={actions} bidder={parameters.accountAddress} /> : undefined} />
 				<SecurityPoolTakeover model={model} actions={actions} />
 				<SecurityPoolPurchasePanel model={model} purchase={purchase} actions={actions} />
-				<SecurityPoolSharedFork
-					snapshot={model.snapshot}
-					actions={actions}
-					bidder={parameters.accountAddress}
-					openUniverse={universeId => model.setUniverseInput(universeId.toString())}
-					openVault={(vault, universeId) => {
-						model.setOwnerInput(vault)
-						model.setUniverseInput(universeId.toString())
-					}}
-				/>
+				<SecurityPoolSharedFork snapshot={model.snapshot} actions={actions} bidder={parameters.accountAddress} openUniverse={universeId => model.setUniverseInput(universeId.toString())} />
 			</TransactionScopeProvider>
 		</div>
 	)

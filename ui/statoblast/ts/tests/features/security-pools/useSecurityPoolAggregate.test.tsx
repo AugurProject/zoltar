@@ -6,13 +6,12 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { useSecurityPoolAggregate } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAggregate.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { auctionCapitalSnapshot, capitalSnapshot, owner, capital, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, capital, unit } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
 	'function approve(address spender,uint256 amount)',
 	'function depositFor(address owner,uint256 amount)',
-	'function depositPrincipal(address ledger,uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setCommitment(uint256 commitment)',
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
@@ -73,21 +72,21 @@ test('approval and deposit remain separate transactions with exact capital-ledge
 	expect(requests).toHaveLength(2)
 })
 
-test('an auction vault deposit pulls REP from its controlling wallet with approval to that vault', async () => {
-	const snapshot = auctionCapitalSnapshot()
+test('an auction winner with unclaimed bids approves and deposits REP directly into the capital ledger', async () => {
+	const snapshot = capitalSnapshot({ unclaimedRepairAuctionBids: 1n })
 	const { hook, requests } = await setup(snapshot)
 	await act(() => hook.state().setDepositAmount('5'))
 	await act(() => hook.state().approve(7n * unit))
 	const approval = requests[0]
-	if (approval === undefined) throw new Error('Missing vault approval')
+	if (approval === undefined) throw new Error('Missing approval')
 	expect(approval.account).toBe(owner)
-	expect(decodeFunctionData({ abi, data: approval.data })).toEqual({ functionName: 'approve', args: [snapshot.owner, 7n * unit] })
+	expect(decodeFunctionData({ abi, data: approval.data })).toEqual({ functionName: 'approve', args: [capital, 7n * unit] })
 	await hook.setProps({ snapshot: { ...snapshot, allowanceAttoRep: 7n * unit } })
 	await act(() => hook.state().deposit())
 	const deposit = requests[1]
-	if (deposit === undefined) throw new Error('Missing vault deposit')
-	expect(deposit).toMatchObject({ account: owner, to: snapshot.owner })
-	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositPrincipal', args: [capital, 5n * unit, snapshot.ownerAccount.targetHealthFactorBps] })
+	if (deposit === undefined) throw new Error('Missing deposit')
+	expect(deposit).toMatchObject({ account: owner, to: capital })
+	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 5n * unit] })
 })
 test('stale prices block live-principal withdrawal and authorization while preserving earned fees', async () => {
 	const { hook, requests } = await setup(capitalSnapshot({ priceValid: false, withdrawableAttoRep: 0n }))

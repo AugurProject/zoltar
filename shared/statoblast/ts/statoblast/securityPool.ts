@@ -119,6 +119,7 @@ export {
 	buildSecurityPoolCapitalServeRetirementRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	loadSecurityPoolCapitalSnapshot,
+	loadSecurityPoolUnclaimedRepairAuctionBids,
 	loadSecurityPoolClaimableEarnings,
 	type SecurityPoolCapitalSnapshot,
 } from './securityPoolCapital.js'
@@ -159,15 +160,15 @@ export {
 	buildSecurityPoolAuctionOpenRequest,
 	buildSecurityPoolAuctionBidRequest,
 	buildSecurityPoolAuctionMaterializeRequest,
+	buildSecurityPoolAuctionClaimAllRequest,
+	MAX_REPAIR_AUCTION_CLAIM_BATCH,
+	securityPoolAuctionClaimBatch,
+	securityPoolAuctionClaimReason,
+	loadSecurityPoolAuctionClaimableBidIds,
 	buildSecurityPoolAuctionRefundCreditRequest,
 	buildSecurityPoolAuctionRefundWithdrawRequest,
 	quoteSecurityPoolAuctionRefundClaim,
 	buildSecurityPoolAuctionRefundClaimRequest,
-	buildSecurityPoolAuctionVaultExecuteRequest,
-	buildSecurityPoolAuctionVaultDepositRequest,
 	type SecurityPoolAuctionBid,
 } from './securityPoolRepairAuction.js'
-/** @public Vault clone code and address derivation for external verifiers, fixtures and smart-account tooling. */
-export { auctionVaultCreationCode, auctionVaultRuntimeCode } from './securityPoolRepairAuctionVaultClones.js'
-export { decodeAuctionVaultBindings, predictAuctionVaultAddress, verifyAuctionVaultCode } from './securityPoolRepairAuctionVaultClones.js'
 export { boundCloneImplementation, boundCloneRuntimeCode, verifyBoundCloneCode, universeCloneBindings } from './securityPoolBoundClone.js'

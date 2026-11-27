@@ -62,7 +62,7 @@
 					<dt id="outcome-share">Outcome share</dt>
 					<dd>An ERC-1155 token representing one outcome claim in one universe-specific question ledger.</dd>
 					<dt id="vault">Vault</dt>
-					<dd>An owner’s capital account: its own REP principal, commitment and fee claims in the shared capital ledger. An auction winner may control a separate vault contract that owns such an account.</dd>
+					<dd>An owner’s capital account: its own REP principal, commitment and fee claims in the shared capital ledger. Claiming a winning repair-auction bid moves its lots into the bidder’s own vault.</dd>
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
 					<dd>An owner’s authorized amount of collateral obligations. Healthy commitments contribute to shared security pool capacity and earn fees; losses from a distressed position stay with that owner.</dd>
 					<dt id="security-multiplier">Security multiplier</dt>
@@ -116,7 +116,7 @@
 					<dt id="fork-continuation">Fork continuation</dt>
 					<dd>The preparation needed before a child question resumes an inherited unresolved reporting game. Purchases wait until the question and shared branch are ready.</dd>
 					<dt id="collateral-repair-auction">Collateral Repair Auction</dt>
-					<dd>A uniform-price auction of a security pool branch’s saleable REP for the selected collateral to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
+					<dd>A uniform-price auction of a security pool branch’s saleable REP for the selected collateral to repair branch claims. Each winning bid’s lots move into its bidder’s vault when that bid is claimed. It does not select truth.</dd>
 				</dl>
 			</section>
 			<section id="liquidation">

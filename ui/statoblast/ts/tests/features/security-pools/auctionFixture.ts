@@ -1,13 +1,9 @@
-import { auctionVaultRuntimeCode, boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import {
-	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
-	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
-} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { auctionAddress, auctionEngine, auctionVault, auctionVaultBindings, auctionVaultImplementation, capital, owner, token, unit } from './capitalFixture.js'
+import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact, statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { auctionAddress, auctionEngine, capital, owner, token, unit } from './capitalFixture.js'
 import { modules } from './capitalClient.js'
 import { priceFixture } from './priceFixture.js'
-export { auctionAddress, auctionEngine, auctionVault, auctionVaultImplementation }
+export { auctionAddress, auctionEngine }
 export async function auctionFixture() {
 	const fixture = priceFixture()
 	fixture.setWeth(100n * unit)
@@ -31,7 +27,7 @@ export async function auctionFixture() {
 		opened: true,
 		finalized: false,
 		initialized: true,
-		vaultImplementation: auctionVaultImplementation,
+		unclaimedRepairAuctionBids: 1n,
 		controller: auctionAddress,
 		maximumBidAttoRepPerLot: 100n * unit,
 		maximumAdmissibleBidAttoRepPerLot: 100n * unit,
@@ -46,22 +42,15 @@ export async function auctionFixture() {
 		earlyRefundAttoEth: 0n,
 		bidderBidCount: 1n,
 		bidderBidId: 1n,
-		owner,
-		initialCapital: capital,
-		repairAuction: auctionAddress,
-		bidId: 1n,
-		bidIdForVault: 1n,
-		bids: [owner, auctionVault, 12_000n, 2n, 60n * unit, false, false],
-		previewBid: [owner, auctionVault, 12_000n, 1n, unit, 100n * unit, unit],
+		bids: [owner, false, false, 2n, 60n * unit],
+		previewBid: [owner, 1n, unit, 100n * unit, unit],
 		clearing: [100n * unit, 1n, unit, 100n * unit, 0n, 0n, 0n, 1n, false],
-		repairAuctionPosition: [auctionVault, 0n, 100n * unit, unit, 12_000n, 0n, false, 7n * unit, 9n * unit],
+		repairAuctionPositions: [[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit]],
 	})
 	fixture.set(capital, 'universeId', 42n)
 	fixture.set(auctionAddress, 'universeId', 42n)
 	fixture.source.codes.set(capital, boundCloneRuntimeCode(modules.capitalImplementation, universeCloneBindings(42n, token)))
 	fixture.source.codes.set(auctionAddress, `0x${auctionArtifact.evm.deployedBytecode.object}`)
 	fixture.source.codes.set(auctionEngine, `0x${engineArtifact.evm.deployedBytecode.object}`)
-	fixture.source.codes.set(auctionVaultImplementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
-	fixture.source.codes.set(auctionVault, auctionVaultRuntimeCode(auctionVaultBindings))
 	return { ...fixture, fork }
 }

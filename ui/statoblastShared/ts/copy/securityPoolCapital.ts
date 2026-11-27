@@ -58,6 +58,9 @@ export const positions = 'Your commitment position'
 export const positionsHint = 'Retirement uses spare healthy capacity and reserves capacity for earlier requests. A partial request reserves only its reduction; the commitment you keep can still back purchases.'
 export const noPositions = 'No pledged commitments'
 export const noPositionsHint = 'Deposit REP, then authorize your first commitment.'
+export const unclaimedAuctionBids = (count: bigint) => (count === 1n ? '1 repair auction bid to claim' : `${count} repair auction bids to claim`)
+export const unclaimedAuctionBidsHint = 'Claim them in the branch’s collateral repair auction. Winning lots join this account only once claimed, and unclaimed bids block your next fork choice.'
+export const unclaimedAuctionBidsDetail = (count: bigint) => `${unclaimedAuctionBids(count)}. ${unclaimedAuctionBidsHint}`
 export const phase = { active: 'Active', current: 'Retiring', next: 'Retiring' }
 export const position = (id: bigint) => `Position ${id}`
 export const positionPledged = 'Pledged REP'
@@ -121,7 +124,6 @@ export const reportChanged = 'Report terms changed. Review the commitment again.
 
 export { readUnavailable } from './securityPool.js'
 export const lastConfirmed = 'Last confirmed balances. Account refresh pending.'
-export const auctionVaultOwnership = 'This auction vault has separate collateral and obligations. Your connected wallet controls it, funds deposits and receives withdrawals.'
 
 export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
 

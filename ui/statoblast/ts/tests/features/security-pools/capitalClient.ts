@@ -125,6 +125,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 				exported: snapshot.exported,
 				ownerAccount: snapshot.ownerAccount,
 				ownerCollateral: [snapshot.ownerPrincipalAttoRep, snapshot.ownerCommitmentAttoEth, snapshot.withdrawableAttoRep],
+				unclaimedRepairAuctionBids: snapshot.unclaimedRepairAuctionBids,
 				totals: [snapshot.totalPledgedAttoRep, snapshot.totalCommitmentAttoEth, snapshot.healthyCommitmentAttoEth],
 				currentBatch: snapshot.currentBatch,
 				nextBatch: snapshot.nextBatch,

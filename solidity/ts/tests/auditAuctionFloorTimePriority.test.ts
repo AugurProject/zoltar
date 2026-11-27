@@ -39,7 +39,7 @@ describe('audit: collateral repair auction equal-limit bids fill in submission o
 		await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'startRepairAuction', args: [now, now + 1_000n, LOT, TARGET, TARGET * FLOOR * 10n, GRID, controller] }))
 		const bid = async (bidder: Address, lots: bigint) => {
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [engine, lots * LOT] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'submitBid', args: [bidder, bidder, 12_000n, lots, FLOOR] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'submitBid', args: [bidder, lots, FLOOR] }))
 			return await client.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })
 		}
 		const finalize = async () => {
@@ -63,7 +63,7 @@ describe('audit: collateral repair auction equal-limit bids fill in submission o
 		const { engine, bid, finalize, filled } = await startEngine()
 		const first = await bid(honest, TARGET)
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [engine, 10_000n * LOT] }))
-		await expect(client.simulateContract({ abi: engineArtifact.abi, address: engine, functionName: 'submitBid', args: [attacker, attacker, 12_000n, 10_000n, FLOOR] })).rejects.toThrow('Better bids already exclude this bid')
+		await expect(client.simulateContract({ abi: engineArtifact.abi, address: engine, functionName: 'submitBid', args: [attacker, 10_000n, FLOOR] })).rejects.toThrow('Better bids already exclude this bid')
 		await finalize()
 		expect(await filled(first)).toBe(TARGET)
 	})

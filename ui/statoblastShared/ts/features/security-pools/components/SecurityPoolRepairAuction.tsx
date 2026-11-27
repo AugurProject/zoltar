@@ -4,7 +4,6 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -67,7 +66,6 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 			<MetricGrid>
 				<SecurityPoolInput label={copy.lotCount} hint={copy.lotHint} value={model.lotsInput} onChange={model.setLots} disabled={disabled} />
 				<SecurityPoolInput label={copy.minimumRep} hint={copy.priceHint(auction?.repGrid)} value={model.repInput} onChange={model.setRep} disabled={disabled} numeric />
-				<SecurityPoolInput label={copy.health} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
 			</MetricGrid>
 			<MetricGrid>
 				<MetricField label={copy.bidEth}>
@@ -107,16 +105,11 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 				let refundAttoEth = bid.earlyRefundAttoEth > 0n ? bid.earlyRefundAttoEth : undefined
 				if (bid.refundSettled) refundAttoEth = bid.lots * auction.lotAttoEth
 				if (bid.fill !== undefined) refundAttoEth = bid.fill.refundAttoEth
-				const manageReason =
-					(disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (!bid.materialized ? copy.activateFirst : undefined) ?? (parameters.openVault === undefined ? copy.manageUnavailable : undefined)
 				return (
 					<article key={bid.id.toString()}>
 						<h5>{copy.bidLabel(bid.id)}</h5>
 						<UserMessage detail={bidStatus} />
 						<MetricGrid>
-							<MetricField label={copy.vault}>
-								<AddressValue address={bid.vault} />
-							</MetricField>
 							<MetricField label={copy.requestedLots}>{bid.lots.toString()}</MetricField>
 							<MetricField label={copy.filledLots}>{bid.fill?.filledLots.toString()}</MetricField>
 							<MetricField label={copy.principal}>
@@ -142,19 +135,11 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 							</MetricField>
 						</MetricGrid>
 						<RefundActions model={model} actions={parameters.actions} bid={bid} />
-						<div className='actions'>
-							<SecurityPoolButton model={parameters.actions} action={`activateSecurityPoolAuction${bid.id}`} label={copy.activate} pendingLabel={copy.activating} reason={model.activateReason(bid)} onClick={() => model.activate(bid)} />
-							<ActionLauncherButton
-								tone='secondary'
-								idleLabel={copy.manage}
-								pendingLabel={copy.loading}
-								availability={{ disabled: manageReason !== undefined, reason: manageReason }}
-								onClick={() => {
-									if (snapshot !== undefined) parameters.openVault?.(bid.vault, snapshot.universeId)
-								}}
-							/>
-						</div>
-						{bid.fill !== undefined && bid.fill.filledLots > 0n && !bid.materialized && <UserMessage detail={copy.activateHint} />}
+						{bid.claimable ? (
+							<div className='actions'>
+								<SecurityPoolButton model={parameters.actions} action={`claimSecurityPoolAuctionBid${bid.id}`} label={copy.claimBid} pendingLabel={copy.claimingBid} reason={model.bidClaimReason(bid)} onClick={() => model.claimBid(bid)} />
+							</div>
+						) : undefined}
 					</article>
 				)
 			})}
@@ -166,6 +151,16 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 				onNextPage={model.nextPage}
 				summary={auction === undefined ? undefined : copy.pages(auction.bidStart, auction.bids.length, auction.totalBidCount)}
 			/>
+			{auction === undefined || auction.totalBidCount === 0n ? undefined : (
+				<>
+					<MetricGrid>
+						<MetricField label={copy.unclaimedBids}>{auction.unclaimedBidCount.toString()}</MetricField>
+					</MetricGrid>
+					<div className='actions'>
+						<SecurityPoolButton model={parameters.actions} action='claimSecurityPoolAuctionBids' label={copy.claimAllBids} pendingLabel={copy.claimingAllBids} reason={model.claimAllReason} hint={auction.unclaimedBidCount === 0n ? undefined : copy.claimHint} onClick={model.claimAllBids} />
+					</div>
+				</>
+			)}
 			<MetricGrid>
 				<MetricField label={copy.refundEth}>
 					<CurrencyValue value={auction?.refundAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />

@@ -131,14 +131,12 @@ export function parseOracleGame(value: unknown, label: string, expectedOpenOracl
 
 function parseAuctionBid(value: unknown, label: string): AuctionBidSnapshot {
 	const bid = requiredRecord(value, label)
-	assertExactKeys(bid, ['bidId', 'vault', 'lots', 'minimumAttoRepPerLot', 'targetHealthBps', 'settled'], [], label)
+	assertExactKeys(bid, ['bidId', 'lots', 'minimumAttoRepPerLot', 'settled'], [], label)
 	if (typeof bid['settled'] !== 'boolean') throw new Error(`${label}.settled must be a boolean`)
 	return {
 		bidId: boundedUnsignedString(bid['bidId'], `${label}.bidId`, 96),
-		vault: getAddress(nonemptyString(bid['vault'], `${label}.vault`)),
 		lots: boundedUnsignedString(bid['lots'], `${label}.lots`, 256),
 		minimumAttoRepPerLot: boundedUnsignedString(bid['minimumAttoRepPerLot'], `${label}.minimumAttoRepPerLot`, 256),
-		targetHealthBps: boundedUnsignedString(bid['targetHealthBps'], `${label}.targetHealthBps`, 256),
 		settled: bid['settled'],
 	}
 }

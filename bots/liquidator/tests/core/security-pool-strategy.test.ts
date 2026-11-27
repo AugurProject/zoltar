@@ -5,7 +5,7 @@ import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/executio
 import { assertSecurityPoolPlanStillAllowed } from '../../src/execution/security-pool-executor.ts'
 import { initialRuntimeState, operatorSnapshot } from '../../src/state/operator-state.ts'
 import { securityPoolScanMetrics } from '../../src/state/security-pool-view.ts'
-import { ownerAddress, targetAddress, securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
+import { ownerAddress, securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
 
 function evaluate(observation = securityPoolObservation(), settings = securityPoolSettings(), totalPrincipal = observation.snapshot.ownerPrincipalAttoRep, marketAllowed = true) {
 	const position = observation.positions[0]
@@ -32,11 +32,11 @@ test('scan metrics use active security pool observations', () => {
 	expect(securityPoolScanMetrics(state, settings)).toMatchObject({ poolCount: 3, selectedPoolCount: 2, eligiblePoolCount: 1 })
 })
 
-test('an independently accounted auction vault controlled by the keeper is not an external profit opportunity', () => {
+test('a winning bid of the keeper itself is not an external profit opportunity', () => {
 	const observation = securityPoolObservation()
 	const position = observation.positions[0]
 	if (position === undefined) throw new Error('Fixture target missing')
-	Object.assign(position, { controllingOwner: observation.snapshot.owner })
+	Object.assign(position, { owner: observation.snapshot.owner, auctionTarget: { auction: observation.selection.address, bidId: 1n, bidder: observation.snapshot.owner } })
 	expect(evaluate(observation).plan).toBeUndefined()
 })
 
@@ -285,7 +285,7 @@ test('inherited dust does not reset retirement intent when the cure cannot remov
 	expect(securityPoolCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 9n, batch: 2n, remainingCommitment: 8n, healthy: false })
 })
 
-test('auction vault commitments consume the same managed commitment budget as direct takeovers', () => {
+test('pending auction commitments consume the same managed commitment budget as direct takeovers', () => {
 	const observation = securityPoolObservation()
 	observation.managedCommitmentAttoEth = 999n * unit
 	expect(evaluate(observation).plan).toBeUndefined()
@@ -350,20 +350,18 @@ test('same-pool managed principal limits direct takeovers even when the global c
 	expect(evaluate(observation, securityPoolSettings(), 800n * unit).plan).toBeDefined()
 })
 
-test('vault funding includes other owned positions in the pool cap (#1635)', async () => {
+test('capital funding includes pending auction exposure in the pool cap (#1635)', async () => {
 	const { buildSecurityPoolInstructionRequest } = await import('../../src/execution/security-pool-instruction-request.ts')
 	const { createPublicClient, http } = await import('@zoltar/bot-shared/ethereum')
 	const { mainnet } = await import('@zoltar/core-shared/evm/ethereum')
 	const observation = securityPoolObservation()
-	const vault = { ...observation.snapshot, owner: targetAddress, ownerPrincipalAttoRep: 10n * unit }
-	observation.ownedVaults = [vault]
 	observation.managedPrincipalAttoRep = 990n * unit
 	observation.walletRep = 100n * unit
 	const client = createPublicClient({ chain: mainnet, transport: http('http://127.0.0.1:1') })
 	await expect(
 		buildSecurityPoolInstructionRequest(
 			{ client, observation, settings: securityPoolSettings(), blockNumber: 1n, totalPrincipal: 990n * unit },
-			{ id: 'over-budget', action: 'vault-deposit', securityPool: observation.selection.address, universeId: observation.selection.universeId, vault: vault.owner, amountAttoRep: 20n * unit, targetHealthFactorBps: 15000n },
+			{ id: 'over-budget', action: 'capital-deposit', securityPool: observation.selection.address, universeId: observation.selection.universeId, amountAttoRep: 20n * unit, targetHealthFactorBps: 15000n },
 		),
 	).rejects.toThrow('exposure')
 })

@@ -29,6 +29,7 @@ export function securityPoolObservation(): SecurityPoolObservation {
 		walletRep: 10_000n * unit,
 		walletAttoEth: 10n * unit,
 		snapshot: {
+			unclaimedRepairAuctionBids: 0n,
 			chainId: 1,
 			blockNumber: 123n,
 			blockHash: `0x${'a'.repeat(64)}`,

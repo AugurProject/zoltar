@@ -46,7 +46,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 					recoveryKnowledge.value = { selection, applicable: quote.recoveryAttoRep > 0n }
 					if (maximumRecoveryRep.value.trim() === '' && quote.maximumRecoveryAttoRep > 0n) maximumRecoveryRep.value = formatUnits(quote.maximumRecoveryAttoRep, 18)
 				}
-				const recovery = await loadRecoveryMintFunding(client, snapshot.securityPool, snapshot.universeId, snapshot.auctionVault?.bidder ?? snapshot.owner, quote.recoveryAttoRep, snapshot.blockNumber)
+				const recovery = await loadRecoveryMintFunding(client, snapshot.securityPool, snapshot.universeId, snapshot.owner, quote.recoveryAttoRep, snapshot.blockNumber)
 				if (current) {
 					loaded.value = { key, quote, question, recovery }
 				}
@@ -94,7 +94,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 		approve: (approvalAmount: bigint) =>
 			actions.runSecurityPoolAction('approvePurchaseCollateral', 'Approve purchase collateral', () => {
 				if (snapshot === undefined) throw new Error('Security pool unavailable.')
-				const account = snapshot.auctionVault?.bidder ?? snapshot.owner
+				const account = snapshot.owner
 				return {
 					account,
 					to: snapshot.collateralToken,
@@ -113,7 +113,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 		approveRecoveryRep: (approvalAmount: bigint) =>
 			actions.runSecurityPoolAction('approvePurchaseRecoveryRep', 'Approve recovery REP', () => {
 				if (snapshot === undefined || current?.recovery?.token === undefined || current.recovery.spender === undefined) throw new Error('Recovery REP funding is unavailable.')
-				return { account: snapshot.auctionVault?.bidder ?? snapshot.owner, to: current.recovery.token, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [current.recovery.spender, approvalAmount] }) }
+				return { account: snapshot.owner, to: current.recovery.token, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [current.recovery.spender, approvalAmount] }) }
 			}),
 		questionInput: questionInput.value,
 		setQuestionInput: (value: string) => {
@@ -139,7 +139,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 			actions.runSecurityPoolAction('mintSecurityPoolCompleteSets', 'Buy complete sets', () => {
 				if (reason !== undefined || snapshot === undefined || questionId === undefined || amount === undefined || fee === undefined || minimum === undefined || quote === undefined || recoveryBudget === undefined) throw new Error(reason ?? 'Purchase quote unavailable.')
 				const selected = snapshot
-				const buyer = selected.auctionVault?.bidder ?? selected.owner
+				const buyer = selected.owner
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum, maximumRecoveryAttoRep: recoveryBudget }
 				return {
 					...buildSecurityPoolMintRequest({ trader: buyer, securityPool: selected.securityPool, universeId: selected.universeId, recipient: buyer, ...captured }),

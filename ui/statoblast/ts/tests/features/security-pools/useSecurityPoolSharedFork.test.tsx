@@ -17,8 +17,8 @@ import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalSnapshot, token, capital, owner, unit } from './capitalFixture.js'
 import { capitalClient, modules } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
-async function setup() {
-	const snapshot = capitalSnapshot({ forkTime: 900n })
+async function setup(overrides: Parameters<typeof capitalSnapshot>[0] = {}, extraValues: Record<string, unknown> = {}) {
+	const snapshot = capitalSnapshot({ forkTime: 900n, ...overrides })
 	const source = capitalClient(snapshot)
 	let chosen = false
 	let prepared = true
@@ -38,6 +38,7 @@ async function setup() {
 				zoltarQuestionData: token,
 				questions: ['Fork question', 0n, 0n, 0n, 0n, 0n, 0n, ''],
 				getOutcomeLabels: ['Yes'],
+				...extraValues,
 			}
 			if (request.functionName in values) return values[request.functionName]
 			return source.client.readContract(request)
@@ -379,4 +380,41 @@ test('a prepared branch can activate without a separate migration-start transact
 	await expect(request.validateBeforeSubmit?.()).resolves.toBeUndefined()
 	setPrepared(false)
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Prepare branch capital first')
+})
+
+test('unclaimed repair auction bids in the source universe block the choice and offer the claim', async () => {
+	const state = await setup({ unclaimedRepairAuctionBids: 2n }, { repairAuctions: zeroAddress })
+	await waitFor(() => expect(state.hook.state().unclaimedBids).toBe(2n))
+	expect(state.hook.state().chooseReason).toBe('Claim your repair auction bids before choosing a branch.')
+	await expect(state.hook.state().choose()).rejects.toThrow('Claim your repair auction bids')
+	// No closed auction is readable here, so the claim explains why it is unavailable.
+	expect(state.hook.state().claimBidsReason).toBe(forkCopy.claimAfterClose)
+	await expect(state.hook.state().claimBids()).rejects.toThrow(forkCopy.claimAfterClose)
+	expect(state.requests).toHaveLength(0)
+	const view = await renderIntoDocument(<SecurityPoolSharedFork {...state.parameters} />)
+	lifecycle.trackRendered(view)
+	await act(() => {
+		const input = [...view.container.querySelectorAll('input')].find(node => node.closest('.field')?.querySelector('label')?.textContent === forkCopy.outcome)
+		if (input === undefined) throw new Error('Missing outcome field')
+		input.value = '1'
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	await waitFor(() => expect(view.container.textContent).toContain(forkCopy.unclaimedBids(2n)))
+	expect([...view.container.querySelectorAll('button')].some(node => node.textContent === forkCopy.claimBids)).toBe(true)
+})
+
+test('an auction that fails to load leaves the choice blocked with the claim unavailable', async () => {
+	// An auction without branch REP fails its identity read.
+	const state = await setup({ unclaimedRepairAuctionBids: 1n }, { repairAuctions: owner, getRepToken: zeroAddress })
+	await waitFor(() => expect(state.hook.state().unclaimedBids).toBe(1n))
+	expect(state.hook.state().chooseReason).toBe(forkCopy.claimBidsFirst)
+	expect(state.hook.state().claimBidsReason).toBe(`${forkCopy.claimLoadError} Reason: Auction capital or REP is unavailable.`)
+	expect(state.hook.state().error).toBeUndefined()
+})
+
+test('without unclaimed bids the choice is not blocked by the auction', async () => {
+	const state = await setup()
+	expect(state.hook.state().unclaimedBids).toBe(0n)
+	expect(state.hook.state().chooseReason).not.toBe(forkCopy.claimBidsFirst)
+	expect(state.hook.state().claimBidsReason).toBe(forkCopy.noBidsToClaim)
 })

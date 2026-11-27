@@ -262,7 +262,7 @@ test('virtual winner takeover uses the bid API and rejects materialization or id
 	const f = fixture()
 	const position = f.observation.positions[0]
 	if (position === undefined) throw new Error('Fixture target missing')
-	const target = { auction: f.observation.snapshot.securityPool, bidId: 44n, vault: position.owner }
+	const target = { auction: f.observation.snapshot.securityPool, bidId: 44n, bidder: position.owner }
 	position.auctionTarget = target
 	position.id = 44n
 	f.observation.snapshot.ownerPrincipalAttoRep = 100n * unit
