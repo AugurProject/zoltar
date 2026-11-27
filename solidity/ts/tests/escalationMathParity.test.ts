@@ -1,7 +1,7 @@
 import { allocatedWinningPayout, ordinaryWinningPayout } from '../../../augurScan/src/claim-payout'
-import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
+import { buildCarryMerkleMountainRangeProof, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { beforeEach, describe, test } from 'bun:test'
-import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import type { WriteClient } from '../testSupport/simulator/utils/clients'
@@ -29,8 +29,6 @@ describe('Escalation math parity', () => {
 		advanceForkContinuationPastStart,
 		createCarryProof,
 	} = fixture
-	const NULLIFIER_DEPTH = 64
-	const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
@@ -63,40 +61,6 @@ describe('Escalation math parity', () => {
 	const hashCarryLeaf = (depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint, parentDepositIndex: bigint, cumulativeAmountAttoRep: bigint, sourceNodeId: bigint) =>
 		keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
 
-	const hashParent = (left: Hex, right: Hex) => keccak256(concatHex([left, right]))
-
-	const buildZeroHashes = () => {
-		const zeroHashes: Hex[] = [ZERO_HASH]
-		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-			const previousHash = zeroHashes[depth]
-			if (previousHash === undefined) throw new Error(`Zero hash missing at depth ${depth.toString()}`)
-			zeroHashes.push(hashParent(previousHash, previousHash))
-		}
-		return zeroHashes
-	}
-
-	const createNullifierPath = (leafIndex: bigint) => leafIndex
-
-	class SparseNullifierTree {
-		private readonly zeroHashes = buildZeroHashes()
-		private readonly nodes = new Map<string, Hex>()
-		private readonly pathMask = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
-
-		getProof(parentDepositIndex: bigint) {
-			const path = createNullifierPath(parentDepositIndex) & this.pathMask
-			const siblings: Hex[] = []
-			let nodeIndex = path
-			for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-				const siblingIndex = nodeIndex ^ 1n
-				const defaultHash = this.zeroHashes[depth]
-				if (defaultHash === undefined) throw new Error(`Sparse tree zero hash missing at depth ${depth.toString()}`)
-				siblings.push(this.nodes.get(`${depth}:${siblingIndex}`) ?? defaultHash)
-				nodeIndex >>= 1n
-			}
-			return siblings
-		}
-	}
-
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow
 		client = fixture.client
@@ -116,14 +80,15 @@ describe('Escalation math parity', () => {
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		const verifier = requireContractAddress(receipt.contractAddress, 'Proof verifier')
 		const abi = statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
-		for (const [principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] of [
-			[81n, 33n, 75n, 100n, 160n, 500n, 1000n],
-			[100n, 77n, 160n, 100n, 160n, 1000n, 1000n],
-			[1n, 1n, 1000n, 0n, 1000n, 0n, 1000n],
-			[10n ** 23n + 1n, 7n * 10n ** 18n + 1n, 19n * 10n ** 18n + 3n, 11n * 10n ** 18n, 20n * 10n ** 18n, 713n, 1000n],
+		for (const [rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] of [
+			[33n, 75n, 100n, 160n, 500n, 1000n],
+			[77n, 160n, 100n, 160n, 1000n, 1000n],
+			[1n, 1000n, 0n, 1000n, 0n, 1000n],
+			[7n * 10n ** 18n + 1n, 19n * 10n ** 18n + 3n, 11n * 10n ** 18n, 20n * 10n ** 18n, 713n, 1000n],
 		] as const) {
-			const expected = await client.readContract({ abi, address: verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] })
-			const actual = allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
+			// A claim's principal is its authenticated deposit amount.
+			const expected = await client.readContract({ abi, address: verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] })
+			const actual = allocatedWinningPayout({ principal: rewardAmount, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
 			assert.strictEqual(actual.payout, expected.amountToWithdrawAttoRep)
 			assert.strictEqual(actual.burn, expected.burnAmountAttoRep)
 			const ordinary = await client.readContract({ abi, address: verifier, functionName: 'computeOrdinaryWinningWithdrawal', args: [rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] })
@@ -151,9 +116,6 @@ describe('Escalation math parity', () => {
 			const root = await client.readContract({ abi, address: verifier, functionName: 'computeMerkleMountainRangeRootFromProof', args: [leaf, 6n, proof.leafIndex, proof.merkleMountainRangePeakIndex, proof.merkleMountainRangeSiblings] })
 			assert.strictEqual(root, proof.root)
 		}
-		const nullifiers = createSparseNullifier([1n, 4n])
-		const root = await client.readContract({ abi, address: verifier, functionName: 'computeNullifierRoot', args: [2n, nullifiers.getProof(2n), ZERO_HASH] })
-		assert.strictEqual(root, nullifiers.getRoot())
 	})
 
 	test('shared finality cutoffs match deployed forward-curve deadlines', async () => {
@@ -244,7 +206,7 @@ describe('Escalation math parity', () => {
 		await assert.rejects(readPreviewDepositOnOutcome(escalationGame, QuestionOutcome.Invalid, 8n * reportBond), /Invalid deposit preview/)
 	})
 
-	test('shared winning-withdrawal math matches claimDepositForWinning', async () => {
+	test('shared winning-withdrawal math matches local withdrawDeposit', async () => {
 		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 5n * reportBond)
 		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 5n * reportBond)
@@ -270,7 +232,7 @@ describe('Escalation math parity', () => {
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,
 			address: testQuestionLedgerAddress,
-			functionName: 'claimDepositForWinning',
+			functionName: 'withdrawLocalDeposit',
 			args: [0n, QuestionOutcome.Yes],
 		})
 		const [, claimedAmount, originalDepositAmountAttoRep] = preview.result
@@ -288,24 +250,18 @@ describe('Escalation math parity', () => {
 		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, secondWinningDepositAmount)
 		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, losingDepositAmount)
 
-		const { peaks: emptyOutcomePeaks, leafCount: emptyOutcomeLeafCount, carryTotal: emptyOutcomeCarryTotal, nullifierRoot: emptyOutcomeNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
-		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
-		const { peaks: parentNoPeaks, leafCount: parentNoLeafCount, carryTotal: parentNoCarryTotal, nullifierRoot: parentNoNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.No)
+		const { peaks: emptyOutcomePeaks, leafCount: emptyOutcomeLeafCount, carryTotal: emptyOutcomeCarryTotal } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
+		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentNoPeaks, leafCount: parentNoLeafCount, carryTotal: parentNoCarryTotal } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.No)
 
 		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, firstWinningDepositAmount, 0n, firstWinningDepositAmount, 1n)
-		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestQuestionLedger(
-			child.testQuestionLedgerAddress,
-			[emptyOutcomePeaks, parentYesPeaks, parentNoPeaks],
-			[emptyOutcomeLeafCount, parentYesLeafCount, parentNoLeafCount],
-			[emptyOutcomeCarryTotal, parentYesCarryTotal, parentNoCarryTotal],
-			[emptyOutcomeNullifierRoot, parentYesNullifierRoot, parentNoNullifierRoot],
-		)
+		const child = await deployForkContinuationEscalationGame(0n, emptyOutcomeCarryTotal + parentYesCarryTotal + parentNoCarryTotal)
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [emptyOutcomePeaks, parentYesPeaks, parentNoPeaks], [emptyOutcomeLeafCount, parentYesLeafCount, parentNoLeafCount], [emptyOutcomeCarryTotal, parentYesCarryTotal, parentNoCarryTotal])
 		const childBindingCapital = await readBindingCapital(child.escalationGameAddress)
 		assert.strictEqual(childBindingCapital, losingDepositAmount, 'child fork should inherit the parent binding-capital depth for this snapshot')
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
-		const secondProof = await createCarryProof(parent.escalationGameAddress, 1n, 1n, 1n, [firstLeafHash], new SparseNullifierTree().getProof(1n))
+		const secondProof = await createCarryProof(parent.escalationGameAddress, 1n, 1n, 1n, [firstLeafHash])
 		const childBalances = await getBalances(client, child.escalationGameAddress)
 		const sharedWithdrawal = getWinningImportedEscalationDepositClaimAmount({
 			bindingCapitalAttoRep: childBindingCapital,

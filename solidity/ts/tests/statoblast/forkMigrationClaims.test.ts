@@ -12,7 +12,7 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
+import { createCarryProof } from '../carryProofHelpers'
 import { useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Security pool own-fork reporter claims', () => {
@@ -27,7 +27,7 @@ describe('Security pool own-fork reporter claims', () => {
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		for (const side of [1, 2]) await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [side, threshold] }))
 		const sourceGame = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
-		const proof = await createCarryProof(owner, sourceGame, { expectedOutcome: outcome, parentDepositIndex: 0n, sourceNodeId: BigInt(outcome), leafIndex: 0n, merkleMountainRangePeakIndex: 0n, merkleMountainRangeSiblings: [], nullifierSiblings: new SparseNullifierTree().getProof(0n) })
+		const proof = await createCarryProof(owner, sourceGame, { expectedOutcome: outcome, parentDepositIndex: 0n, sourceNodeId: BigInt(outcome), leafIndex: 0n, merkleMountainRangePeakIndex: 0n, merkleMountainRangeSiblings: [] })
 		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...forker, functionName: 'forkZoltarWithOwnEscalationGame', args: [pool] }))
 		await expect(owner.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [outcome, [0n]] })).rejects.toThrow()

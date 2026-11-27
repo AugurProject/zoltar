@@ -20,7 +20,6 @@ export const createDemoClaimFixtures = (claimState: string | null) => {
 			leafIndex: '4',
 			merkleMountainRangePeakIndex: '0',
 			merkleMountainRangeSiblings: ['0x' + '12'.repeat(32)],
-			nullifierSiblings: Array.from({ length: 64 }, () => '0x' + '00'.repeat(32)),
 		},
 	}
 	const claimEvidence = claimState === 'unavailable' ? { status: 'unavailable', reason: 'Historical proof state is unavailable on this provider' } : { status: 'available', positions: [claimPosition], truncated: false }

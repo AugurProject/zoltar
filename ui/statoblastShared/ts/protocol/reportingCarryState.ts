@@ -11,7 +11,7 @@ import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-s
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { executeForkAuctionAction, readQuestionLedgerUniverseId } from './questionLedgerActions.js'
-import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
+import { buildCarryMerkleMountainRangeProof, hashCarryLeaf } from './reportingCarryProof.js'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
@@ -21,8 +21,6 @@ import * as copy from '../copy/reporting.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { rep } from '@zoltar/ui-core-shared/copy/common.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-
-const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
 type CarryLeafViewStruct = {
 	cumulativeAmountAttoRep: bigint
@@ -125,23 +123,6 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 	return carryLeaves.sort((left, right) => compareBigint(left.carryLeafIndex, right.carryLeafIndex))
 }
 
-async function readAppendOnlyCarry(client: Pick<ReadClient, 'readContract'>, game: Address) {
-	return await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'appendOnlyCarry' })
-}
-
-async function buildHistoricalLocalCarrySnapshotEntries(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey, localLeaves: readonly HistoricalCarryLeafViewStruct[]): Promise<HistoricalCarrySnapshotEntry[]> {
-	if (await readAppendOnlyCarry(client, escalationGameAddress)) return localLeaves.map(leaf => ({ leaf, leafHash: hashCarryLeaf(leaf, outcome) }))
-	const activeLeaves = await loadCarryLeafPage(client, escalationGameAddress, outcome)
-	const activeSourceNodeIds = new Set(activeLeaves.map(leaf => leaf.sourceNodeId.toString()))
-	return localLeaves.map(leaf => {
-		const sourceNodeId = leaf.sourceNodeId.toString()
-		return {
-			leaf,
-			leafHash: activeSourceNodeIds.has(sourceNodeId) ? hashCarryLeaf(leaf, outcome) : EMPTY_CARRY_LEAF_HASH,
-		}
-	})
-}
-
 async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<HistoricalCarrySnapshotEntry[]> {
 	const [outcomeState, forkContinuation] = await Promise.all([readEscalationOutcomeState(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress)])
 	const snapshotLeafCount = outcomeState.snapshotLeafCount
@@ -157,8 +138,8 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 	for (const [localIndex, leaf] of localLeaves.entries()) {
 		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error(reportErrors.depositOrder)
 	}
-	const localEntries = await buildHistoricalLocalCarrySnapshotEntries(client, escalationGameAddress, outcome, localLeaves)
-	return [...inheritedLeaves, ...localEntries]
+	// Carry is append-only: consumed local leaves keep their original hash in the carry root.
+	return [...inheritedLeaves, ...localLeaves.map(leaf => ({ leaf, leafHash: hashCarryLeaf(leaf, outcome) }))]
 }
 
 async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey) {
@@ -179,15 +160,6 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 		startIndex += CONTRACT_PAGE_SIZE
 	}
 	return parentDepositIndexes
-}
-
-async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<bigint[]> {
-	const [localConsumedIndexes, forkContinuation] = await Promise.all([loadProofConsumedCarriedDepositIndexes(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress)])
-	if (forkContinuation !== true || (await readAppendOnlyCarry(client, escalationGameAddress))) return localConsumedIndexes
-	const parentEscalationGameAddress = await readParentEscalationGameAddress(client, escalationGameAddress)
-	if (parentEscalationGameAddress === undefined) return localConsumedIndexes
-	const inheritedConsumedIndexes = await loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome)
-	return [...inheritedConsumedIndexes, ...localConsumedIndexes]
 }
 
 /** The escalation game of the parent pool a fork continuation inherits from, or `undefined` when there is none. */
@@ -240,10 +212,9 @@ async function loadRecursiveCarrySnapshot(
 	orderedLeaves: CarryLeafViewStruct[]
 	carryRoot: Hex
 	carryLeafCount: bigint
-	nullifierRoot: Hex
 }> {
 	const [outcomeState, forkContinuation, localLeaves] = await Promise.all([readEscalationOutcomeState(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress), loadCarryLeafPage(client, escalationGameAddress, outcome)])
-	const { currentCarryRoot: carryRoot, currentLeafCount: carryLeafCount, currentNullifierRoot: nullifierRoot } = outcomeState
+	const { currentCarryRoot: carryRoot, currentLeafCount: carryLeafCount } = outcomeState
 	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigint(left.sourceNodeId, right.sourceNodeId))
 	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
 	if (parentEscalationGameAddress === undefined) {
@@ -251,7 +222,6 @@ async function loadRecursiveCarrySnapshot(
 			orderedLeaves: orderedLocalLeaves,
 			carryRoot,
 			carryLeafCount,
-			nullifierRoot,
 		}
 	}
 	const parentSnapshot = await loadRecursiveCarrySnapshot(client, parentEscalationGameAddress, outcome)
@@ -259,7 +229,6 @@ async function loadRecursiveCarrySnapshot(
 		orderedLeaves: [...parentSnapshot.orderedLeaves, ...orderedLocalLeaves],
 		carryRoot,
 		carryLeafCount,
-		nullifierRoot,
 	}
 }
 
@@ -353,7 +322,7 @@ async function loadParentSnapshot(
 		const [{ orderedLeaves: leaves }, history, consumed] = await Promise.all([
 			loadRecursiveCarrySnapshot(parentRead, parentEscalationGameAddress, outcome),
 			loadRecursiveHistoricalCarryLeaves(parentRead, parentEscalationGameAddress, outcome),
-			loadRecursiveProofConsumedCarriedDepositIndexes(parentRead, parentEscalationGameAddress, outcome),
+			loadProofConsumedCarriedDepositIndexes(parentRead, parentEscalationGameAddress, outcome),
 		])
 		parent = { leaves, history, consumed }
 	}
@@ -431,24 +400,12 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 	if (parentEscalationGameAddress === zeroAddress) throw new Error(copy.inheritedClaimParentDepositsUnavailable)
 	const [parentHistoricalLeaves, inheritedConsumedParentDepositIndexes, localConsumedParentDepositIndexes, childOutcomeState] = await Promise.all([
 		loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
-		loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
+		loadProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
 		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
 		readEscalationOutcomeState(client, childEscalationGameAddress, outcome),
 	])
 	const consumedParentDepositIndexes = [...inheritedConsumedParentDepositIndexes, ...localConsumedParentDepositIndexes]
-	const { currentNullifierRoot: childNullifierRoot } = childOutcomeState
 	const { orderedLeaves, leafHashes } = authenticateCarrySnapshot(parentHistoricalLeaves, childOutcomeState)
-	const appendOnly = await readAppendOnlyCarry(client, childEscalationGameAddress)
-	const nullifierTree = appendOnly
-		? undefined
-		: createSparseNullifier(
-				consumedParentDepositIndexes.map(parentIndex => {
-					const index = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentIndex)
-					if (index < 0) throw new Error(reportErrors.missingClaimedDeposit)
-					return BigInt(index)
-				}),
-			)
-	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error(reportErrors.claimedDepositsUnverified)
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(parentDepositIndex => parentDepositIndex.toString()))
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {
@@ -459,7 +416,6 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 		const targetLeaf = orderedLeaves[leafIndex]
 		if (targetLeaf === undefined) throw new Error(copy.inheritedDepositUnavailable(parentDepositIndex))
 		const { leafIndex: globalLeafIndex, merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
-		const nullifierSiblings = nullifierTree?.getProof(globalLeafIndex) ?? []
 		proofs.push({
 			amountAttoRep: targetLeaf.amountAttoRep,
 			cumulativeAmountAttoRep: targetLeaf.cumulativeAmountAttoRep,
@@ -467,11 +423,9 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 			leafIndex: globalLeafIndex,
 			merkleMountainRangePeakIndex,
 			merkleMountainRangeSiblings,
-			nullifierSiblings,
 			parentDepositIndex: targetLeaf.parentDepositIndex,
 			sourceNodeId: targetLeaf.sourceNodeId,
 		})
-		nullifierTree?.consume(globalLeafIndex)
 		consumedParentDepositIndexSet.add(parentDepositIndexKey)
 	}
 	return proofs
@@ -489,7 +443,6 @@ export async function withdrawForkedEscalationDeposits(client: WriteClient, ques
 			proofs.map(proof => ({
 				...proof,
 				merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
-				nullifierSiblings: Array.from(proof.nullifierSiblings),
 			})),
 		],
 	} as const

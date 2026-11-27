@@ -84,8 +84,6 @@ export const reportErrors = {
 	inheritedDepositsUnverified: 'Couldn’t verify the inherited deposits.',
 	depositOrder: 'Couldn’t verify the order of recorded deposits.',
 	invalidSavedDeposit: 'A saved parent deposit record is invalid.',
-	missingClaimedDeposit: 'A claimed deposit is missing from the deposit history.',
-	claimedDepositsUnverified: 'Couldn’t verify which inherited deposits have already been claimed.',
 	searchBlock: 'Deposit search requires a confirmed block.',
 	searchChainChanged: 'The chain changed during the deposit search. Retry this page.',
 }

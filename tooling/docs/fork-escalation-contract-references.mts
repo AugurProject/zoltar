@@ -1,16 +1,15 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const forkEscalationContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '37fc03e296257bd7856a82fda38427d3fd1e429d517bbdf847a2124abfa63db8',
+		compiledAbiFingerprint: '48e2c438ed7dfaf02cfaf860d93fd087c77ce841bda2f7ec1ae7d6360b6d7dac',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
-		readAbiFingerprint: '7c16f91444d6377aef71b959c9d84b60b579d8857f1306b26ec4c05b8ac7f3fb',
+		readAbiFingerprint: 'a7604ba45e77347e8f6791abe700076bf35855e27ab5a9f01a2e202b545d5074',
 		readSurface:
-			'Before start, `hasReachedNonDecision()` is false and `getEscalationGameEndDate()` returns `uint256.max` to indicate no finite deadline. A paused fork continuation uses the same deadline sentinel. Base getters are `questionLedger`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `ordinarySettlementInitialized`, `ordinaryWinningReserveAttoRep`, `creditedSurplusAttoRep`, `settlementForkThresholdAttoRep`, and `winnerHaircutPaidByFork`. Every accepted deposit, and a continuation\u2019s resume in an unforked universe, records the universe fork threshold in `settlementForkThresholdAttoRep`. A final continuation resumed after its universe forked again records `nonDecisionThresholdAttoRep` instead, preserving unscaled entitlements; winning claims scale by that value, so REP burned after the game\u2019s last change cannot lower any payout. Ordinary settlement fixes the winner liability; losing local deposits and escrow read as zero afterward, while raw historical nodes remain stored. The fallback accepts only the three signed deposit selectors delegated to `EscalationGameDepositDelegate`; other unknown selectors revert. Canonical game activation requires security pool reporter custody. Inherited claims use the authenticated leaf’s unchanged principal and reward interval, independently of ancestry depth or claim order. Membership proofs and per-game consumed-deposit checks remain mandatory. Canonical games report `appendOnlyCarry` as true: live carry roots only append, and finalized claims do not rewrite historical membership or require nullifier witnesses. Standalone games retain mutable carry roots and nullifier proofs. `disputeStakedRepByVaultAttoRep` is nominal reporter principal, not collateral value. `getDisputeBackingAttoRep` returns actual game REP; Inherited carry remains aggregate commitment state until proof settlement. Use `previewLeadingDepositOnOutcome` for a required lead and `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `computeCurveFinalityElapsed`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `forkCarrySnapshotOutcomesInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, and `getLocalUnresolvedPrincipalByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. `getCarryLeafPageByOutcome` limits visited nodes by `maxEntries`, including consumed nodes; empty or short pages may return a nonzero continuation cursor. A nonzero start cursor must be an issued node of the requested outcome. Wallet reports and finalized withdrawals route through `QuestionLedger`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome`, `depositRepOnOutcomeWithPermit`, or `depositRepOnOutcomeWithAuthorization` and mint no pool backing units.',
+			'Before start, `hasReachedNonDecision()` is false and `getEscalationGameEndDate()` returns `uint256.max` to indicate no finite deadline. A paused fork continuation uses the same deadline sentinel. Base getters are `questionLedger`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `ordinarySettlementInitialized`, `ordinaryWinningReserveAttoRep`, `creditedSurplusAttoRep`, `settlementForkThresholdAttoRep`, and `winnerHaircutPaidByFork`. Every accepted deposit, and a continuation\u2019s resume in an unforked universe, records the universe fork threshold in `settlementForkThresholdAttoRep`. A final continuation resumed after its universe forked again records `nonDecisionThresholdAttoRep` instead, preserving unscaled entitlements; winning claims scale by that value, so REP burned after the game\u2019s last change cannot lower any payout. Ordinary settlement fixes the winner liability; losing local deposits and escrow read as zero afterward, while raw historical nodes remain stored. The fallback accepts only the three signed deposit selectors delegated to `EscalationGameDepositDelegate`; other unknown selectors revert. Every game is bound to a security pool and holds REP in its reporter custody. Inherited claims use the authenticated leaf’s unchanged principal and reward interval, independently of ancestry depth or claim order. Membership proofs and per-game consumed-deposit checks remain mandatory. Carry roots only append: local deposits are consumed only after finality, consumed leaves stay in the current root, and live fork exports never contain spent deposits. `disputeStakedRepByVaultAttoRep` is nominal reporter principal, not collateral value. `getDisputeBackingAttoRep` returns actual game REP; Inherited carry remains aggregate commitment state until proof settlement. Use `previewLeadingDepositOnOutcome` for a required lead and `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `computeCurveFinalityElapsed`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `forkCarrySnapshotOutcomesInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, and `getLocalUnresolvedPrincipalByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. `getCarryLeafPageByOutcome` limits visited nodes by `maxEntries`, including consumed nodes; empty or short pages may return a nonzero continuation cursor. A nonzero start cursor must be an issued node of the requested outcome. Wallet reports and finalized withdrawals route through `QuestionLedger`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome`, `depositRepOnOutcomeWithPermit`, or `depositRepOnOutcomeWithAuthorization` and mint no pool backing units.',
 		interactionNotes:
 			'Rows marked "through `fallback()`" are not in the compiled ABI: the fallback forwards the signed and lead-protected deposit selectors to `EscalationGameDepositDelegate` by `delegatecall`, returning or reverting with the delegate output. Every other unknown selector reverts. A call restricted to the owning question ledger or its forker reverts without reason data for any other caller. See [escalation deadlines and continuations](../explanation/escalation-game.html) and [carry proofs](./merkle-mountain-range.html#proofs).',
 		readDeclarations: [
-			{ name: 'appendOnlyCarry', sourcePath: 'solidity/contracts/statoblast/EscalationGameCalculations.sol' },
 			{
 				name: 'previewDepositOnOutcome',
 			},
@@ -21,7 +20,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'getDisputeBackingAttoRep',
-				sourcePath: 'solidity/contracts/statoblast/EscalationGameEscrow.sol',
+				sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol',
 			},
 			{
 				name: 'computeIterativeAttritionCostAttoRep',
@@ -105,7 +104,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
-				sourcePath: 'solidity/contracts/statoblast/EscalationGameEscrow.sol',
+				sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol',
 			},
 		],
 		readStorageDeclarations: [
@@ -217,7 +216,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				call: '`resumeFromFork()`',
 				caller: 'Owning `QuestionLedger` only (`Only pool`)',
 				effect:
-					'Resumes once carry funding is complete. Standalone continuations use the resume transaction timestamp. Bound continuations use the child branch activation timestamp, shared by every inherited game. Without a fixed outcome, the deadline adds only remaining curve time; a bound fixed outcome follows its inherited security pool deadline (three days after activation when the current fork fixes that question); a standalone fixed outcome ends three days after resume. Late question materialization never moves the anchor. If the game is final and its universe has already forked again, resuming records the non-decision threshold as its settlement threshold so later migration cannot reduce payouts. Final resolution also checks whether the native universe forked before that deadline.',
+					'Resumes once carry funding is complete, anchored at the child branch activation timestamp shared by every inherited game. Without a fixed outcome, the deadline adds only remaining curve time; a fixed outcome follows its inherited security pool deadline (three days after activation when the current fork fixes that question). Late question materialization never moves the anchor. If the game is final and its universe has already forked again, resuming records the non-decision threshold as its settlement threshold so later migration cannot reduce payouts. Final resolution also checks whether the native universe forked before that deadline.',
 				declarations: [
 					{
 						name: 'resumeFromFork',
@@ -323,7 +322,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 					'`OrdinarySettlementInitialized` on first ordinary settlement. Winners and continuation losers emit `CarryDepositConsumed` and `VaultEscrowUpdated`; winners also emit `ClaimDeposit`, whose burn amount records only REP burned by that claim, and positive payout or burn signals. Retired ordinary losers emit no per-deposit settlement event.',
 			},
 			{
-				call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)`',
+				call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep)`',
 				caller: 'Owning `QuestionLedger` only',
 				declarations: [
 					{
@@ -332,26 +331,13 @@ export const forkEscalationContractReferences: ContractReference[] = [
 					},
 				],
 				effect:
-					'Installs one outcome\u2019s inherited root, mutable peaks, leaf count, carry total, resolution balance, and normalized nullifier root. Canonical live continuations require an empty nullifier root; finalized sources cannot export live claims. The nonzero full snapshot identity and source are fixed on the first call. The third call verifies the installed data against that identity before marking the snapshot complete. Two or more threshold-full inherited balances then set `nonDecisionState` to `InheritedThresholdTie` without creating a local timestamp.',
+					'Installs one outcome\u2019s inherited root, append-only peaks, leaf count, carry total, and resolution balance. Sources export only live carry, which never contains spent deposits. The nonzero full snapshot identity and source are fixed on the first call. The third call verifies the installed data against that identity before marking the snapshot complete. Two or more threshold-full inherited balances then set `nonDecisionState` to `InheritedThresholdTie` without creating a local timestamp.',
 				preconditions: 'Fork-continuation mode; fewer than three initialized outcomes; each leaf count fits the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome\u2019s data. The third call requires the hash of all normalized data to match that ID.',
 				signals: '`ForkCarryCheckpoint` after all three outcomes; additionally `InheritedThresholdTie` when the completed balances meet the non-decision threshold',
 			},
 			{
-				call: '`claimDepositForWinning(depositIndex, outcome)`',
-				caller: 'Owning `QuestionLedger` or its `QuestionForker`',
-				declarations: [
-					{
-						name: 'claimDepositForWinning',
-						sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol',
-					},
-				],
-				effect: "Consumes a selected local deposit as a winner, consumes its vault escrow, burns the computed escalation haircut when nonzero, and transfers the remaining positive REP payout to the deposit's immutable depositor.",
-				preconditions: 'Non-`None` supplied outcome and valid unsettled local deposit with sufficient escrow. All canonical games require final resolution. An ordinary non-fork game also checks the actual winning outcome; continuation paths rely on the trusted caller to select the winner.',
-				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and escalation-haircut burn signals only when their amounts are positive',
-			},
-			{
 				call: '`withdrawDeposit(proof, outcome)`, the `CarriedDepositProof` overload',
-				caller: 'Owning `QuestionLedger` or its `QuestionForker`',
+				caller: 'Owning `QuestionLedger` only (`Only pool`)',
 				declarations: [
 					{
 						name: 'withdrawDeposit',
@@ -359,7 +345,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 					},
 				],
 				effect: 'Consumes an inherited proof, transfers any positive winning payout, and burns the positive escalation haircut unless the fork already paid it.',
-				preconditions: 'Non-`None` supplied outcome; game final and matching the question ledger final outcome; supplied outcome is the winner; parent deposit was not directly claimed; valid membership proof and an unconsumed deposit identity; standalone games also require a nullifier proof.',
+				preconditions: 'Non-`None` supplied outcome; game final and matching the question ledger final outcome; supplied outcome is the winner; parent deposit was not directly claimed; valid membership proof and an unconsumed deposit identity.',
 				signals: '`CarryDepositConsumed` and `ClaimDeposit` with `transferredRep = true` and the actual claim burn; `WinningHaircutPrepaid` records the assessed haircut when the fork already paid it. REP payout `Transfer` and escalation-haircut burn signals occur only when positive',
 			},
 			{

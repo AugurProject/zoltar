@@ -257,7 +257,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 				data: encodeFunctionData({
 					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
 					functionName: 'creditExternalClaimOwners',
-					args: [zeroAddress, attacker.account.address, 0n, 1n, 0n],
+					args: [attacker.account.address, 1n, 0n],
 				}),
 			},
 		]

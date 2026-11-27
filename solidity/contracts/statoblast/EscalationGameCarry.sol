@@ -13,7 +13,6 @@ import {
 	Deposit,
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
 	Node,
-	NULLIFIER_DEPTH,
 	OutcomeState,
 	OutcomeStateView
 } from './EscalationGameTypes.sol';
@@ -21,9 +20,9 @@ import {
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 
 abstract contract EscalationGameCarry is EscalationGameCalculations {
-	bytes32 private constant CARRY_DEPOSIT_CONSUMED_SIGNATURE = keccak256('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)');
-	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot) external {
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.initializeForkCarryOutcome, (sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot, proofVerifier, EMPTY_NULLIFIER_ROOT)));
+	bytes32 private constant CARRY_DEPOSIT_CONSUMED_SIGNATURE = keccak256('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)');
+	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep) external {
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.initializeForkCarryOutcome, (sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, proofVerifier)));
 	}
 
 	// Each call installs one complete outcome. No partial snapshot is economically active.
@@ -32,10 +31,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	}
 
 	function getOutcomeState(BinaryOutcomes.BinaryOutcome outcome) external view returns (OutcomeStateView memory stateView) {
-		if (outcome == BinaryOutcomes.BinaryOutcome.None) {
-			stateView.currentNullifierRoot = EMPTY_NULLIFIER_ROOT;
-			return stateView;
-		}
+		if (outcome == BinaryOutcomes.BinaryOutcome.None) return stateView;
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		(
@@ -48,7 +44,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		stateView.snapshotLeafCount = state.snapshotLeafCount;
 		stateView.snapshotCarryRoot = state.snapshotCarryRoot;
 		stateView.inheritedUnresolvedTotalAttoRep = _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex);
-		stateView.currentNullifierRoot = _getCurrentNullifierRoot(outcomeIndex);
 		stateView.localHeadNodeId = state.localHeadNodeId;
 		stateView.currentLeafCount = currentLeafCount;
 		stateView.currentPeaks = currentPeaks;
@@ -64,21 +59,16 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		returns (
 			bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory carryPeaks,
 			uint256[3] memory carryLeafCounts,
-			uint256[3] memory carryTotalsAttoRep,
-			bytes32[3] memory nullifierRoots
+			uint256[3] memory carryTotalsAttoRep
 		)
 	{
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			if (_isRetiredOrdinaryOutcome(outcomeIndex)) {
-				nullifierRoots[outcomeIndex] = EMPTY_NULLIFIER_ROOT;
-				continue;
-			}
+			if (_isRetiredOrdinaryOutcome(outcomeIndex)) continue;
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			carryPeaks[outcomeIndex] = state.currentPeaks;
 			carryLeafCounts[outcomeIndex] = state.currentLeafCount;
 			carryTotalsAttoRep[outcomeIndex] =
 				_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) + state.localUnresolvedTotalAttoRep;
-			nullifierRoots[outcomeIndex] = _getCurrentNullifierRoot(outcomeIndex);
 		}
 	}
 
@@ -93,20 +83,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function isForkCarryFundingComplete() public view returns (bool) {
 		if (forkContinuation && !forkCarrySnapshotInitialized()) return false;
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
-		uint256 requiredAttoRep;
-		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			requiredAttoRep +=
-				_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) +
-				outcomeState[outcomeIndex].localUnresolvedTotalAttoRep;
-		}
-		if (forkCarryInitialBackingAttoRep != 0) {
-			// The canonical factory binds this inventory to the parent's actual
-			// escrow after irrevocable source surplus and any native fork burn.
-			// Outcome principals are mutually exclusive, so their sum is not the
-			// funding requirement.
-			requiredAttoRep = forkCarryInitialBackingAttoRep;
-		}
-		return _reporterRepBalance() >= requiredAttoRep;
+		// The canonical factory binds this inventory to the parent's actual escrow
+		// after irrevocable source surplus and any native fork burn. Outcome
+		// principals are mutually exclusive, so their sum is not the funding requirement.
+		return _reporterRepBalance() >= forkCarryInitialBackingAttoRep;
 	}
 
 	// Pages unresolved local carry leaves only, in newest-first local linked-list order.
@@ -158,75 +138,37 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 	}
 
-	/// @dev Continuation IDs pack the game address, outcome and local index in
-	/// 160/8/88 bits, matching the deposit delegate. Ordinary IDs remain local indexes.
-	function _getStableLocalParentDepositIndex(uint8 outcomeIndex, uint256 depositIndex) internal view returns (uint256) {
-		if (!forkContinuation) return depositIndex;
-		return (uint256(uint160(address(this))) << 96) | (uint256(outcomeIndex) << 88) | depositIndex;
-	}
-
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		require(forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
-		if (appendOnlyCarry()) outcomeState[outcomeIndex].proofConsumedDepositIndexes.push(proof.parentDepositIndex);
-		else
-			_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.leafIndex, proof.nullifierSiblings);
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex))));
+		outcomeState[outcomeIndex].proofConsumedDepositIndexes.push(proof.parentDepositIndex);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep)));
 	}
 
-	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex, CarryConsumptionReason reason) internal returns (Deposit memory deposit) {
+	/// @dev Callers settle only after finality, so live fork exports never contain spent deposits.
+	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex, CarryConsumptionReason reason) internal returns (Deposit memory deposit, uint256 parentDepositIndex) {
 		require(!forkContinuation || forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
-		if (appendOnlyCarry())
-			require(getFinalQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
-		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		require(depositIndex < selectedOutcomeState.localNodeIds.length, 'Bad deposit index');
-		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
-		require(!selectedOutcomeState.consumedParentDepositIndexes[stableParentDepositIndex], 'Deposit settled');
-		uint256 nodeId = selectedOutcomeState.localNodeIds[depositIndex];
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		require(depositIndex < state.localNodeIds.length, 'Bad deposit index');
+		uint256 nodeId = state.localNodeIds[depositIndex];
 		Node storage node = nodes[nodeId];
+		parentDepositIndex = node.parentDepositIndex;
+		require(!state.consumedParentDepositIndexes[parentDepositIndex], 'Deposit settled');
+		state.consumedParentDepositIndexes[parentDepositIndex] = true;
 		deposit = Deposit({depositor: node.depositor, amountAttoRep: node.amountAttoRep, cumulativeAmountAttoRep: node.cumulativeAmountAttoRep});
-		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amountAttoRep, deposit.depositor);
-		_emitCarryDepositConsumed(outcomeIndex, deposit.depositor, deposit.amountAttoRep, nodes[nodeId].parentDepositIndex, nodeId, reason);
+		state.localUnresolvedTotalAttoRep -= deposit.amountAttoRep;
+		_consumeUnresolvedRepForClaimOwners(deposit.depositor, outcomeIndex, deposit.amountAttoRep);
+		_emitCarryDepositConsumed(outcomeIndex, deposit.depositor, deposit.amountAttoRep, parentDepositIndex, nodeId, reason);
 	}
 
 	function _emitCarryDepositConsumed(uint8 outcomeIndex, address depositor, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 sourceNodeId, CarryConsumptionReason reason) internal {
 		(, , bytes32 carryRoot, uint256 carryTotalAttoRep) = _getCurrentCarrySnapshot(outcomeIndex);
 		// Every caller supplies a validated outcome; its uint8 ABI word matches the event enum.
-		bytes memory eventData = abi.encode(outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot);
+		bytes memory eventData = abi.encode(outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, carryRoot);
 		bytes32 eventSignature = CARRY_DEPOSIT_CONSUMED_SIGNATURE;
 		assembly ('memory-safe') {
 			log4(add(eventData, 0x20), mload(eventData), eventSignature, parentDepositIndex, sourceNodeId, depositor)
 		}
-	}
-
-	function _clearLocalCarryLeafFromCurrentSnapshot(OutcomeState storage state, uint256 leafIndex) private {
-		(uint256 peakHeight, uint256 peakStartIndex) = proofVerifier.getCurrentCarryPeakForLeaf(state.currentLeafCount, leafIndex);
-		bytes32 nodeHash = bytes32(0);
-		uint256 nodeStartIndex = leafIndex;
-		state.currentCarryNodeHashes[0][nodeStartIndex] = nodeHash;
-
-		for (uint256 height = 0; height < peakHeight; height++) {
-			uint256 subtreeLeafCount = uint256(1) << height;
-			bool isRightNode = (((nodeStartIndex - peakStartIndex) >> height) & 1) == 1;
-			uint256 siblingStartIndex =
-				isRightNode ? nodeStartIndex - subtreeLeafCount : nodeStartIndex + subtreeLeafCount;
-			bytes32 siblingHash = state.currentCarryNodeHashes[height][siblingStartIndex];
-			if (isRightNode) {
-				nodeHash = MerkleMountainRange.hashParent(siblingHash, nodeHash);
-				nodeStartIndex = siblingStartIndex;
-			} else {
-				nodeHash = MerkleMountainRange.hashParent(nodeHash, siblingHash);
-			}
-			state.currentCarryNodeHashes[height + 1][nodeStartIndex] = nodeHash;
-		}
-
-		state.currentPeaks[peakHeight] = nodeHash;
-	}
-
-	function _getCurrentNullifierRoot(uint8 outcomeIndex) private view returns (bytes32) {
-		bytes32 root = outcomeState[outcomeIndex].currentNullifierRoot;
-		if (root != bytes32(0)) return root;
-		return EMPTY_NULLIFIER_ROOT;
 	}
 
 	function _verifyCarriedDepositMerkleMountainRangeProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) private view returns (bytes32 leafHash) {
@@ -237,27 +179,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		leafHash = MerkleMountainRange.hashLeaf(proof.depositor, BinaryOutcomes.BinaryOutcome(outcomeIndex), proof.amountAttoRep, proof.parentDepositIndex, proof.cumulativeAmountAttoRep, proof.sourceNodeId);
 		bytes32 computedRoot = proofVerifier.computeMerkleMountainRangeRootFromProof(leafHash, leafCount, proof.leafIndex, proof.merkleMountainRangePeakIndex, proof.merkleMountainRangeSiblings);
 		require(computedRoot == state.snapshotCarryRoot, 'Bad carry proof');
-	}
-
-	function _verifyAndAdvanceNullifier(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 leafIndex, bytes32[] calldata siblings) private {
-		require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');
-		bytes32 currentRoot = _getCurrentNullifierRoot(outcomeIndex);
-		bytes32 emptyRoot = proofVerifier.computeNullifierRoot(leafIndex, siblings, bytes32(0));
-		require(emptyRoot == currentRoot, 'Bad nullifier proof');
-		OutcomeState storage state = outcomeState[outcomeIndex];
-		state.currentNullifierRoot = proofVerifier.computeNullifierRoot(leafIndex, siblings, bytes32(uint256(1)));
-		state.proofConsumedDepositIndexes.push(parentDepositIndex);
-	}
-
-	function _markLocalDepositConsumed(uint8 outcomeIndex, uint256 depositIndex, uint256 amountAttoRep, address depositor) private {
-		OutcomeState storage state = outcomeState[outcomeIndex];
-		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
-		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
-		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
-		state.localUnresolvedTotalAttoRep -= amountAttoRep;
-		uint256 nodeId = state.localNodeIds[depositIndex];
-		if (!appendOnlyCarry()) _clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
-		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amountAttoRep);
 	}
 
 	function _getCurrentCarrySnapshot(uint8 outcomeIndex)

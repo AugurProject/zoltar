@@ -11,7 +11,6 @@ uint256 constant MAX_ATANH_ITERATIONS = 16;
 uint256 constant MAX_EXP_ITERATIONS = 16;
 uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 uint256 constant MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64;
-uint256 constant NULLIFIER_DEPTH = 64;
 
 enum NonDecisionState {
 	None,
@@ -35,8 +34,7 @@ struct CarryLeafView {
 
 struct OutcomeState {
 	// Snapshot fields are the inherited proof baseline for this outcome.
-	// currentNullifierRoot tracks which inherited proof indexes have been consumed in this instance.
-	// currentLeafCount/currentPeaks are the descendant export snapshot, updated incrementally as local carry changes.
+	// currentLeafCount/currentPeaks are the append-only descendant export snapshot.
 	// localHeadNodeId/localUnresolvedTotalAttoRep track local carry added after the inherited snapshot.
 	// Cumulative resolution balance: full inherited fork-time principal in continuation games plus accepted local deposits; claims and settlement do not reduce it.
 	uint256 balanceAttoRep;
@@ -47,13 +45,9 @@ struct OutcomeState {
 	uint256 inheritedUnresolvedTotalAttoRep;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
-	// The current unresolved carry state after local and inherited deposits are consumed.
-	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
 	uint256 localUnresolvedTotalAttoRep;
 	uint256[] localNodeIds;
-	// MMR subtree height -> zero-based starting leaf index -> current subtree hash.
-	mapping(uint256 => mapping(uint256 => bytes32)) currentCarryNodeHashes;
 	// Authoritative settled-set for inherited and local carried parentDepositIndexes in this instance.
 	mapping(uint256 => bool) consumedParentDepositIndexes;
 	// Enumerable mirror of consumed proof indexes used for recursive offchain proof reconstruction.
@@ -65,7 +59,6 @@ struct OutcomeStateView {
 	uint256 snapshotLeafCount;
 	bytes32 snapshotCarryRoot;
 	uint256 inheritedUnresolvedTotalAttoRep;
-	bytes32 currentNullifierRoot;
 	uint256 localHeadNodeId;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
@@ -98,5 +91,4 @@ struct CarriedDepositProof {
 	bytes32[] merkleMountainRangeSiblings;
 	// Height of the peak containing leafIndex; must match the height derived from it.
 	uint256 merkleMountainRangePeakIndex;
-	bytes32[] nullifierSiblings;
 }

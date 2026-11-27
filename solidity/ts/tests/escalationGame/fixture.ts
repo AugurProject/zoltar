@@ -5,7 +5,6 @@ import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindo
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
-import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getEscalationGameOutcomeState, getEscrowedRepByVault, getTotalEscrowedRep, readTimeSinceStartFromAttritionCost, readCarryTotal, readCarryLeafPage } from '../../testSupport/simulator/utils/contracts/escalationGame'
@@ -41,8 +40,8 @@ export function useEscalationGameFixture() {
 		return deployment
 	}
 
-	async function deployEscalationGameWithProofPool(repTokenAddress: Address = getRepTokenAddress(0n), forkerAddress: Address = addressString(0n)) {
-		const testQuestionLedgerAddress = await deployProofTestQuestionLedger(forkerAddress)
+	async function deployEscalationGameWithProofPool(repTokenAddress: Address = getRepTokenAddress(0n)) {
+		const testQuestionLedgerAddress = await deployProofTestQuestionLedger()
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -84,13 +83,13 @@ export function useEscalationGameFixture() {
 		return { escalationGameAddress, testQuestionLedgerAddress, proofVerifierAddress }
 	}
 
-	async function deployProofTestQuestionLedger(forkerAddress: Address = addressString(0n)) {
+	async function deployProofTestQuestionLedger() {
 		const zoltarAddress = getZoltarAddress()
 		const testQuestionLedgerDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: escalationGameProofTestPoolArtifact.abi,
 				bytecode: `0x${escalationGameProofTestPoolArtifact.evm.bytecode.object}`,
-				args: [zoltarAddress, 0n, forkerAddress],
+				args: [zoltarAddress, 0n],
 			}),
 		})
 		const testQuestionLedgerDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testQuestionLedgerDeploymentHash })
@@ -131,7 +130,8 @@ export function useEscalationGameFixture() {
 				}),
 		)
 
-	const startEscalationFromFork = async (escalationGameAddress: Address, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedAtFork: bigint, fixedQuestionOutcome = QuestionOutcome.None) =>
+	// `forkCarryInitialBackingAttoRep` is the reporter escrow the canonical factory binds from the parent.
+	const startEscalationFromFork = async (escalationGameAddress: Address, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedAtFork: bigint, fixedQuestionOutcome = QuestionOutcome.None, forkCarryInitialBackingAttoRep = 0n) =>
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -139,13 +139,18 @@ export function useEscalationGameFixture() {
 					abi: statoblast_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
-					args: [startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, false, 0n],
+					args: [startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, false, forkCarryInitialBackingAttoRep],
 				}),
 		)
 
-	const resumeEscalationFromFork = async (escalationGameAddress: Address) => {
+	const requireQuestionLedger = (escalationGameAddress: Address) => {
 		const questionLedgerAddress = questionLedgerByEscalationGame.get(escalationGameAddress)
 		if (questionLedgerAddress === undefined) throw new Error('Missing escalation game question ledger')
+		return questionLedgerAddress
+	}
+
+	const resumeEscalationFromFork = async (escalationGameAddress: Address) => {
+		const questionLedgerAddress = requireQuestionLedger(escalationGameAddress)
 		return await writeContractAndWait(
 			client,
 			async () =>
@@ -158,24 +163,25 @@ export function useEscalationGameFixture() {
 		)
 	}
 
-	const deployForkContinuationEscalationGame = async (elapsedAtFork = 0n) => {
+	const deployForkContinuationEscalationGame = async (elapsedAtFork = 0n, forkCarryInitialBackingAttoRep = 0n) => {
 		const deployment = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, elapsedAtFork)
+		await startEscalationFromFork(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, elapsedAtFork, QuestionOutcome.None, forkCarryInitialBackingAttoRep)
 		return deployment
 	}
 
 	const readOutcomeCarrySnapshot = async (escalationGameAddress: Address, outcome: QuestionOutcome) => {
 		const state = await getEscalationGameOutcomeState(client, escalationGameAddress, outcome)
-		return { peaks: state.currentPeaks, leafCount: state.currentLeafCount, carryTotal: state.currentCarryTotalAttoRep, nullifierRoot: state.currentNullifierRoot }
+		return { peaks: state.currentPeaks, leafCount: state.currentLeafCount, carryTotal: state.currentCarryTotalAttoRep }
 	}
 
+	// Credits the game's reporter custody, the only REP balance a security pool game counts.
 	const fundEscalationGame = async (escalationGameAddress: Address, amountAttoRep: bigint) =>
 		await writeContractAndWait(client, async () =>
 			client.writeContract({
-				abi: ReputationToken_ReputationToken.abi,
-				address: getRepTokenAddress(0n),
-				functionName: 'transfer',
-				args: [escalationGameAddress, amountAttoRep],
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: requireQuestionLedger(escalationGameAddress),
+				functionName: 'fundReporterBalance',
+				args: [amountAttoRep],
 			}),
 		)
 
@@ -277,7 +283,6 @@ export function useEscalationGameFixture() {
 			leafIndex: bigint
 			merkleMountainRangeSiblings: readonly Hex[]
 			merkleMountainRangePeakIndex: bigint
-			nullifierSiblings: readonly Hex[]
 		},
 	) =>
 		await writeContractAndWait(
@@ -303,7 +308,6 @@ export function useEscalationGameFixture() {
 			leafIndex: bigint
 			merkleMountainRangeSiblings: readonly Hex[]
 			merkleMountainRangePeakIndex: bigint
-			nullifierSiblings: readonly Hex[]
 		},
 	) =>
 		await writeContractAndWait(
@@ -320,27 +324,27 @@ export function useEscalationGameFixture() {
 				}),
 		)
 
-	const claimDepositForWinningViaTestQuestionLedger = async (testQuestionLedgerAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) =>
+	// Settles one local deposit through the question ledger's `withdrawDeposit(depositIndex, outcome)` path.
+	const withdrawLocalDepositViaTestQuestionLedger = async (testQuestionLedgerAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) =>
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
 					address: testQuestionLedgerAddress,
-					functionName: 'claimDepositForWinning',
+					functionName: 'withdrawLocalDeposit',
 					args: [depositIndex, outcome],
 				}),
 		)
 
 	const readCarryLeafHash = async (escalationGameAddress: Address, nodeId: bigint) => await readCarryLeafHashFromHelpers(client, escalationGameAddress, nodeId)
 
-	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], nullifierSiblings: readonly Hex[], sourceNodeId?: bigint) =>
+	const createCarryProof = async (escalationGameAddress: Address, parentDepositIndex: bigint, leafIndex: bigint, merkleMountainRangePeakIndex: bigint, merkleMountainRangeSiblings: readonly Hex[], sourceNodeId?: bigint) =>
 		await createCarryProofFromHelpers(client, escalationGameAddress, {
 			parentDepositIndex,
 			leafIndex,
 			merkleMountainRangePeakIndex,
 			merkleMountainRangeSiblings,
-			nullifierSiblings,
 			sourceNodeId,
 		})
 
@@ -365,7 +369,7 @@ export function useEscalationGameFixture() {
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
 					address: testQuestionLedgerAddress,
-					functionName: 'claimDepositForWinning',
+					functionName: 'withdrawLocalDeposit',
 					args: [depositIndex, outcome],
 				}),
 		)
@@ -431,7 +435,7 @@ export function useEscalationGameFixture() {
 		assertLocalYesAccountingModel,
 		withdrawDepositViaProofTestQuestionLedger,
 		withdrawDepositViaProofTestQuestionLedgerWithGas,
-		claimDepositForWinningViaTestQuestionLedger,
+		withdrawLocalDepositViaTestQuestionLedger,
 		readCarryLeafHash,
 		createCarryProof,
 		computeLocalParentDepositIndex,

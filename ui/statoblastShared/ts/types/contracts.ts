@@ -222,7 +222,6 @@ export type CarriedDepositProof = {
 	leafIndex: bigint
 	merkleMountainRangeSiblings: Hex[]
 	merkleMountainRangePeakIndex: bigint
-	nullifierSiblings: Hex[]
 }
 
 export type EscalationSide = {

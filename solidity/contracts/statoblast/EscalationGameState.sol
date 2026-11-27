@@ -16,17 +16,14 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;
 	address internal immutable owner;
-	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
 
 	event GameStarted(uint256 activationTime, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep);
 	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork);
-	event ForkContinuationResumed(uint256 resumedAt);
 	/// @notice An assessed carried haircut already funded by the native fork; no burn occurs on this claim.
 	event WinningHaircutPrepaid(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 assessedHaircutAttoRep);
 	/// @notice burnAmountAttoRep is the REP actually burned by this claim, excluding prepaid haircuts.
 	event ClaimDeposit(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep);
 	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
-	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
 
 	constructor(IQuestionLedger _questionLedger, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
@@ -34,22 +31,8 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		repToken = _repToken;
 		proofVerifier = _proofVerifier;
 		owner = msg.sender;
-		EMPTY_NULLIFIER_ROOT = _readEmptyNullifierRoot(_proofVerifier);
-	}
-
-	function _readEmptyNullifierRoot(EscalationGameProofVerifier _proofVerifier) private view returns (bytes32) {
 		require(address(_proofVerifier).code.length != 0, 'Proof verifier has no code');
 		require(address(_proofVerifier).codehash == keccak256(type(EscalationGameProofVerifier).runtimeCode), 'Proof verifier invalid');
-		return _proofVerifier.computeEmptyNullifierRoot();
-	}
-
-	modifier onlyQuestionLedgerOrForker() {
-		// This guard is repeated across the size-constrained escalation runtime. A
-		// data-free revert keeps the deployed game below EIP-170's code-size limit.
-		if (msg.sender != address(questionLedger) && msg.sender != address(questionLedger.questionForker())) {
-			revert();
-		}
-		_;
 	}
 
 	function disputeStakedRepByVaultAttoRep(address vault) public view returns (uint256 amountAttoRep) {
@@ -89,6 +72,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	function _reporterRepBalance() internal view returns (uint256) {
-		return EscalationGameRepCustody.balance(address(questionLedger), address(repToken));
+		return EscalationGameRepCustody.balance(address(questionLedger));
 	}
 }

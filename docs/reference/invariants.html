@@ -123,8 +123,6 @@
 					<dd>A child Escalation Game initialized from an unresolved parent snapshot. See <a href="./glossary.html#fork-continuation">fork continuation</a>.</dd>
 					<dt><strong>Carry</strong></dt>
 					<dd>Unresolved deposits carried across a fork. See <a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.</dd>
-					<dt><strong>Nullifier</strong></dt>
-					<dd>A record that prevents a <a href="./merkle-mountain-range.html#proofs">carried deposit</a> from being claimed twice.</dd>
 					<dt><strong>Fixed payout outcome</strong></dt>
 					<dd>The ledger question's outcome a continuation game must use after its deadline, regardless of its copied balance leader.</dd>
 					<dt><strong>Direct fork</strong></dt>
@@ -1177,7 +1175,7 @@
 						<summary><code>ESCALATION</code><span class="invariant-title">Reporter liabilities and historical proofs</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Ordinary settlement fixes winning payout liabilities and required burns before paying individual claims. Inherited claims authenticate frozen Merkle-mountain-range membership and reject consumed deposit identities. Standalone games also require nullifier proofs; see the <a href="./merkle-mountain-range.html#proofs">carry proof reference</a>. Replaying a consumed proof cannot pay again.</div>
+							<div class="invariant-property">Ordinary settlement fixes winning payout liabilities and required burns before paying individual claims. Inherited claims authenticate frozen Merkle-mountain-range membership and reject consumed deposit identities. See the <a href="./merkle-mountain-range.html#proofs">carry proof reference</a>. Replaying a consumed proof cannot pay again.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1297,7 +1295,7 @@
 						<summary><code>LIFECYCLE</code><span class="invariant-title">Bounded work and explicit recovery</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Capital and settlement operations use fixed-width indexes and aggregate accounting rather than scanning every owner or question. User-supplied claim batches are divisible. Inherited claims preserve the authenticated leaf’s principal and reward coordinates at every fork depth; settlement requires membership proofs and consumed-identity checks, with additional nullifier proofs for standalone games.</div>
+							<div class="invariant-property">Capital and settlement operations use fixed-width indexes and aggregate accounting rather than scanning every owner or question. User-supplied claim batches are divisible. Inherited claims preserve the authenticated leaf’s principal and reward coordinates at every fork depth; settlement requires membership proofs and consumed-identity checks.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

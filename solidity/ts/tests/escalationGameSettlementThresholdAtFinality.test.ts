@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -72,7 +71,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		const first = inherited[0]
 		if (first === undefined) throw new Error('Missing winner leaf')
 		const expected = expectedWinningClaim(first.amount, first.cumulative, 50n * K, 70n * K).payout
-		expect(await e2e.claimInherited(r5, child.pool, YES, inherited, [first], new SparseNullifierTree())).toBe(expected)
+		expect(await e2e.claimInherited(r5, child.pool, YES, inherited, [first])).toBe(expected)
 	})
 
 	test('a continued game pays its entitlement at finality when REP is burned before the first claim', async () => {
@@ -128,7 +127,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 
 		const firstEntitlement = expectedWinningClaim(first.amount, first.cumulative, binding, balances[INVALID]).payout
 		expect(firstEntitlement).toBe(56n * K)
-		expect(await e2e.claimInherited(r6, child.pool, INVALID, inherited, [first], new SparseNullifierTree())).toBe(firstEntitlement)
+		expect(await e2e.claimInherited(r6, child.pool, INVALID, inherited, [first])).toBe(firstEntitlement)
 		const secondEntitlement = expectedWinningClaim(second.amount, second.cumulative, binding, balances[INVALID]).payout
 		expect(secondEntitlement).toBe(70n * K)
 		expect(await e2e.claimLocal(r6, child.pool, INVALID, [second.localIndex], second.depositor)).toBe(secondEntitlement)

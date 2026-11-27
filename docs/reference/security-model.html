@@ -234,7 +234,7 @@
 					</li>
 					<li id="assumption-a20" value="20">
 						<h3><span class="assumption-id">A20</span> Canonical chain data and proof construction remain available</h3>
-						<p>Participants can obtain canonical history through the required snapshot and reconstruct the outcome root for an inherited claim. Standalone games also need a nullifier proof. Canonical games use a consumed-deposit check.</p>
+						<p>Participants can obtain canonical history through the required snapshot and reconstruct the outcome root for an inherited claim. Each game rejects a deposit identity it has already consumed.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A valid dispute, settlement, migration, or inherited claim can become practically unavailable even while its contract entrypoint remains live.</p>
 						<p class="assumption-links"><a href="../how-to/monitor-security-assumptions.html#check-deployment">Monitoring checks</a>. Mechanics: <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/STATE_MODEL.md">indexer replay and canonicality</a>, <a href="../reference/merkle-mountain-range.html#proofs">carry proofs</a>, and <a href="#security-review-orientation">operator orientation</a>.</p>
 					</li>

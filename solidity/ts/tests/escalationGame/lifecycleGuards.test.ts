@@ -7,7 +7,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { contractExists } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getActivationTime, getBalances, getQuestionResolution, readEscalationGameEndDate, readCarryPeaks, readCarryLeafCount, readCarryTotal, readNullifierRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getActivationTime, getBalances, getQuestionResolution, readEscalationGameEndDate, readCarryPeaks, readCarryLeafCount, readCarryTotal, readCarryRoot } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
@@ -48,7 +48,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		const child = await deployForkContinuationEscalationGame()
 		const preview = (functionName: 'previewDepositOnOutcome' | 'previewLeadingDepositOnOutcome') => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName, args: [QuestionOutcome.Yes, reportBond] })
 		for (const name of ['previewDepositOnOutcome', 'previewLeadingDepositOnOutcome'] as const) await assert.rejects(preview(name), /Invalid deposit preview/)
-		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n])
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		for (const name of ['previewDepositOnOutcome', 'previewLeadingDepositOnOutcome'] as const) assert.deepStrictEqual(await preview(name), [reportBond, reportBond])
 	})
@@ -184,14 +184,14 @@ describe('Escalation Game: lifecycle and guards', () => {
 			/Only pool/,
 		)
 		await assert.rejects(resumeEscalationFromFork(fork.escalationGameAddress), /Fork snapshot incomplete/)
-		await initializeSnapshotViaTestQuestionLedger(fork.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(fork.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n])
 		await resumeEscalationFromFork(fork.escalationGameAddress)
 		await assert.rejects(resumeEscalationFromFork(fork.escalationGameAddress), /Fork resumed/)
 	})
 
 	test('carry snapshot initialization guards reject wrong callers, modes, repeated snapshots, oversized counts, and bad ids', async () => {
 		const normal = await deployEscalationGameTestQuestionLedger()
-		await assert.rejects(initializeSnapshotViaTestQuestionLedger(normal.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /No fork mode/)
+		await assert.rejects(initializeSnapshotViaTestQuestionLedger(normal.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n]), /No fork mode/)
 
 		const unauthorized = await deployForkContinuationEscalationGame()
 		await assert.rejects(
@@ -199,21 +199,21 @@ describe('Escalation Game: lifecycle and guards', () => {
 				abi: initializeGameForkCarrySnapshotAbi,
 				address: unauthorized.escalationGameAddress,
 				functionName: 'initializeForkCarryOutcome',
-				args: [zeroAddress, zeroHash(), zeroPeakArray(), 0n, 0n, 0n, zeroHash()],
+				args: [zeroAddress, zeroHash(), zeroPeakArray(), 0n, 0n, 0n],
 			}),
 			/Only pool/,
 		)
 
 		const repeated = await deployForkContinuationEscalationGame()
 		const emptySnapshot = [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()] as const
-		await initializeSnapshotViaTestQuestionLedger(repeated.testQuestionLedgerAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await assert.rejects(initializeSnapshotViaTestQuestionLedger(repeated.testQuestionLedgerAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot initialized/)
+		await initializeSnapshotViaTestQuestionLedger(repeated.testQuestionLedgerAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n])
+		await assert.rejects(initializeSnapshotViaTestQuestionLedger(repeated.testQuestionLedgerAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n]), /Snapshot initialized/)
 
 		const oversized = await deployForkContinuationEscalationGame()
-		await assert.rejects(initializeSnapshotViaTestQuestionLedger(oversized.testQuestionLedgerAddress, emptySnapshot, [1n << 64n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Leaf count high/)
+		await assert.rejects(initializeSnapshotViaTestQuestionLedger(oversized.testQuestionLedgerAddress, emptySnapshot, [1n << 64n, 0n, 0n], [0n, 0n, 0n]), /Leaf count high/)
 
 		const badId = await deployForkContinuationEscalationGame()
-		await assert.rejects(initializeSnapshotFromSourceViaTestQuestionLedger(badId.testQuestionLedgerAddress, client.account.address, `0x${'0'.repeat(63)}1`, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot id mismatch/)
+		await assert.rejects(initializeSnapshotFromSourceViaTestQuestionLedger(badId.testQuestionLedgerAddress, client.account.address, `0x${'0'.repeat(63)}1`, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n]), /Snapshot id mismatch/)
 	})
 
 	test('deposit preview rejects a tie trim that accepts zero REP (#1413)', async () => {
@@ -263,7 +263,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 
 		const resolved = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(resolved.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
-		await initializeSnapshotViaTestQuestionLedger(resolved.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(resolved.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n])
 		await resumeEscalationFromFork(resolved.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
@@ -278,7 +278,7 @@ describe('Escalation Game: lifecycle and guards', () => {
 		await assert.rejects(record(resolved.testQuestionLedgerAddress, reportBond, reportBond), /Question resolved/)
 
 		const maximumHeight = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestQuestionLedger(maximumHeight.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, (1n << 64n) - 1n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(maximumHeight.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, (1n << 64n) - 1n, 0n], [0n, 0n, 0n])
 		await assert.rejects(record(maximumHeight.testQuestionLedgerAddress, reportBond, reportBond), /MMR too tall/)
 	})
 
@@ -286,14 +286,8 @@ describe('Escalation Game: lifecycle and guards', () => {
 		test(`an expired continuation rejects a response at elapsed ${elapsed} without a fresh grace period`, async () => {
 			const parent = await deployEscalationGameTestQuestionLedger()
 			await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 100n * reportBond)
-			const child = await deployForkContinuationEscalationGame()
-			await initializeSnapshotViaTestQuestionLedger(
-				child.testQuestionLedgerAddress,
-				[zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
-				[0n, 1n, 0n],
-				[0n, 100n * reportBond, 0n],
-				[zeroHash(), await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
-			)
+			const child = await deployForkContinuationEscalationGame(0n, 100n * reportBond)
+			await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()], [0n, 1n, 0n], [0n, 100n * reportBond, 0n])
 			await fundEscalationGame(child.escalationGameAddress, 300n * reportBond)
 			await resumeEscalationFromFork(child.escalationGameAddress)
 			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'forkResumedAt' })
@@ -323,7 +317,6 @@ describe('Escalation Game: lifecycle and guards', () => {
 
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeIterativeAttritionCostAttoRep', args: [1n, 2n, 0n, 2n, 1n] }), /Time too high/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeAcceptedDepositAmount', args: [1n, 0n, 0n, 10n, 1n, 10n, [1n, 0n, 0n]] }), /Below start bond/)
-		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'getCurrentCarryPeakForLeaf', args: [0n, 0n] }), /Carry peak absent/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 1n, 0n, 64n, []] }), /Bad carry peak/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 3n, 2n, 1n, []] }), /Bad carry peak/)
 		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 2n, 2n, 1n, []] }), /Bad carry leaf/)
@@ -369,15 +362,15 @@ describe('Escalation Game: lifecycle and guards', () => {
 	test('carried proof verification rejects a zero amount before mutating the inherited snapshot', async () => {
 		const parent = await deployEscalationGameTestQuestionLedger()
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const { peaks: parentPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const { peaks: parentPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
-		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, parentCarryTotal)
+		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, parentCarryTotal, 0n])
 		await resumeEscalationFromFork(child.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes, 'real inherited snapshot should resolve to the fixed child outcome')
-		const childNullifierRootBefore = await readNullifierRoot(client, child.escalationGameAddress, QuestionOutcome.Yes)
+		const childCarryRootBefore = await readCarryRoot(client, child.escalationGameAddress, QuestionOutcome.Yes)
 
 		const zeroAmountProof = {
 			depositor: client.account.address,
@@ -388,11 +381,10 @@ describe('Escalation Game: lifecycle and guards', () => {
 			leafIndex: 0n,
 			merkleMountainRangeSiblings: [],
 			merkleMountainRangePeakIndex: 0n,
-			nullifierSiblings: [],
 		}
 		await assert.rejects(withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, zeroAmountProof), /Proof amount zero/)
 		assert.strictEqual(await readCarryLeafCount(client, child.escalationGameAddress, QuestionOutcome.Yes), parentLeafCount, 'a rejected zero-amount proof must preserve the inherited leaf count')
 		assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.Yes), parentCarryTotal, 'a rejected zero-amount proof must preserve the inherited carry total')
-		assert.strictEqual(await readNullifierRoot(client, child.escalationGameAddress, QuestionOutcome.Yes), childNullifierRootBefore, 'a rejected zero-amount proof must preserve the inherited nullifier root')
+		assert.strictEqual(await readCarryRoot(client, child.escalationGameAddress, QuestionOutcome.Yes), childCarryRootBefore, 'a rejected zero-amount proof must preserve the inherited carry root')
 	})
 })

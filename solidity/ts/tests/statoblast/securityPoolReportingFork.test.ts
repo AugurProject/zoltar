@@ -15,7 +15,7 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
+import { createCarryProof } from '../carryProofHelpers'
 import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
@@ -101,12 +101,12 @@ describe('Statoblast: native fork reporter registration', () => {
 		expect(await escrow()).toBe(0n)
 	})
 
-	test('#1539 child liquidation preserves reporter claims and canonical carry needs no nullifier witness', async () => {
+	test('#1539 child liquidation preserves reporter claims and canonical carry proofs pay once', async () => {
 		const sourceGame = await prepareReport(400n * unit)
 		const owner = fixture.owner()
 		const reporter = fixture.other()
 		await fixture.deposit(3_000n * unit)
-		const proof = await createCarryProof(owner, sourceGame, { expectedOutcome: 1, parentDepositIndex: 0n, sourceNodeId: 1n, leafIndex: 0n, merkleMountainRangePeakIndex: 0n, merkleMountainRangeSiblings: [], nullifierSiblings: new SparseNullifierTree().getProof(0n) })
+		const proof = await createCarryProof(owner, sourceGame, { expectedOutcome: 1, parentDepositIndex: 0n, sourceNodeId: 1n, leafIndex: 0n, merkleMountainRangePeakIndex: 0n, merkleMountainRangeSiblings: [] })
 		const { child, childPool } = await activateUnrelatedFork(true, 3, true)
 		const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...securityPool(), functionName: 'capitalLedger', args: [child] }) }
 		const pool = { abi: poolArtifact.abi, address: childPool }
@@ -144,12 +144,12 @@ describe('Statoblast: native fork reporter registration', () => {
 		await fixture.base.mockWindow.setTime(end + 1n)
 		const reporterBefore = await getERC20Balance(owner, token, reporter.account.address)
 		const keeperBefore = await getERC20Balance(owner, token, owner.account.address)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [{ ...proof, nullifierSiblings: [] }]] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] }))
 		await writeContractAndWait(reporter, () => reporter.writeContract({ ...pool, functionName: 'withdrawFromEscalationGame', args: [1, [0n]] }))
 		expect(await getERC20Balance(owner, token, reporter.account.address)).toBe(reporterBefore + totalEscrow)
 		expect(await getERC20Balance(owner, token, owner.account.address)).toBe(keeperBefore)
 		expect(await escrow()).toBe(0n)
-		await expect(owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [{ ...proof, nullifierSiblings: [] }]] })).rejects.toThrow()
+		await expect(owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] })).rejects.toThrow()
 	})
 
 	test.each([false, true])('#1689 public share quote matches same-block redemption after fees (stale: %s)', async stale => {

@@ -20,7 +20,7 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../testSuppor
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { hashCarryLeaf, hashParent, SparseNullifierTree } from './carryProofHelpers'
+import { hashCarryLeaf, hashParent } from './carryProofHelpers'
 import type { useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Shared end-to-end harness for the auditE2E* integration tests. It drives the real
@@ -263,7 +263,7 @@ export function createE2E(fixture: Fixture) {
 					localIndex: BigInt(localIndex),
 				}),
 			)
-	const proofFor = (leaves: readonly CarryLeaf[], leaf: CarryLeaf, tree: SparseNullifierTree) => {
+	const proofFor = (leaves: readonly CarryLeaf[], leaf: CarryLeaf) => {
 		const { siblings, peakHeight } = buildMmrProof(
 			leaves.map(entry => entry.hash),
 			Number(leaf.leafIndex),
@@ -277,21 +277,15 @@ export function createE2E(fixture: Fixture) {
 			leafIndex: leaf.leafIndex,
 			merkleMountainRangeSiblings: siblings,
 			merkleMountainRangePeakIndex: peakHeight,
-			nullifierSiblings: tree.getProof(leaf.leafIndex),
 		}
 	}
 	/** Claims `claimed` (all owned by one depositor) in a single transaction and returns the wallet delta. */
-	const claimInherited = async (sender: WriteClient, pool: Address, outcome: number, leaves: readonly CarryLeaf[], claimed: readonly CarryLeaf[], tree: SparseNullifierTree) => {
+	const claimInherited = async (sender: WriteClient, pool: Address, outcome: number, leaves: readonly CarryLeaf[], claimed: readonly CarryLeaf[]) => {
 		const universe = await owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'universeId' })
 		const beneficiary = claimed[0]?.depositor
 		if (beneficiary === undefined) throw new Error('Nothing to claim')
 		const before = await rep(universe, beneficiary)
-		// Each proof's nullifier path is built against the tree as the previous proofs in this batch left it.
-		const proofs: ReturnType<typeof proofFor>[] = []
-		for (const leaf of claimed) {
-			proofs.push(proofFor(leaves, leaf, tree))
-			tree.consume(leaf.leafIndex)
-		}
+		const proofs = claimed.map(leaf => proofFor(leaves, leaf))
 		const supplyBefore = await supply(universe)
 		const hash = await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, proofs], gas: BRANCH_GAS }))
 		const receipt = await sender.getTransactionReceipt({ hash })
@@ -311,23 +305,22 @@ export function createE2E(fixture: Fixture) {
 		return (await rep(universe, beneficiary)) - before
 	}
 	/** Every depositor claims all of their carried deposits on the winning outcome, newest first, with exact payouts. */
-	const claimEveryWinner = async (sender: WriteClient, pool: Address, outcome: number, leaves: readonly CarryLeaf[], binding: bigint, winningBalance: bigint, tree = new SparseNullifierTree()) => {
+	const claimEveryWinner = async (sender: WriteClient, pool: Address, outcome: number, leaves: readonly CarryLeaf[], binding: bigint, winningBalance: bigint) => {
 		let paid = 0n
 		let burn = 0n
 		for (const depositor of [...new Set(leaves.map(leaf => leaf.depositor))].reverse()) {
 			const mine = leaves.filter(leaf => leaf.depositor === depositor).reverse()
 			const expected = mine.map(leaf => expectedWinningClaim(leaf.amount, leaf.cumulative, binding, winningBalance))
-			const received = await claimInherited(sender, pool, outcome, leaves, mine, tree)
+			const received = await claimInherited(sender, pool, outcome, leaves, mine)
 			expect(received).toBe(expected.reduce((sum, claim) => sum + claim.payout, 0n))
 			paid += received
 			burn += expected.reduce((sum, claim) => sum + claim.burn, 0n)
 			const again = mine[0]
-			if (again !== undefined) await expect(simulateInheritedClaim(sender, pool, outcome, leaves, again, tree)).rejects.toThrow()
+			if (again !== undefined) await expect(simulateInheritedClaim(sender, pool, outcome, leaves, again)).rejects.toThrow()
 		}
-		return { paid, burn, tree }
+		return { paid, burn }
 	}
-	const simulateInheritedClaim = (sender: WriteClient, pool: Address, outcome: number, leaves: readonly CarryLeaf[], leaf: CarryLeaf, tree: SparseNullifierTree) =>
-		sender.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, [proofFor(leaves, leaf, tree)]] })
+	const simulateInheritedClaim = (sender: WriteClient, pool: Address, outcome: number, leaves: readonly CarryLeaf[], leaf: CarryLeaf) => sender.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, [proofFor(leaves, leaf)]] })
 	const claimLocal = async (sender: WriteClient, pool: Address, outcome: number, indexes: readonly bigint[], beneficiary: Address) => {
 		const universe = await owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'universeId' })
 		const before = await rep(universe, beneficiary)

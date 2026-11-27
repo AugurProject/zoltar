@@ -1,8 +1,8 @@
 import { carryStorageAbi as storageAbi } from '../contracts/carry-storage-abi.ts'
-import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { escalationGameAbi, questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { drainConcurrent, type ChaosReadClient } from './discovery-client.ts'
-import { carryCommitment, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeafSlot, type CarryOutcome } from './carry-proof-index.ts'
+import { carryCommitment, createMerkleMountainRangeProof, hashCarryLeaf, type CarryLeafSlot, type CarryOutcome } from './carry-proof-index.ts'
 
 function compareIntegers(left: bigint, right: bigint) {
 	if (left < right) return -1
@@ -14,7 +14,7 @@ export const CARRY_STORAGE_MAXIMUM_WITHDRAWALS = 32
 export type CarryStorageClient = Pick<ChaosReadClient, 'readContract'>
 export type CarryStorageRoute = { pool: Address; escalationGame: Address }
 
-/** Adapts the Statoblast UI reporting.ts storage traversal, retaining literal-zero consumed leaf slots. */
+/** Adapts the Statoblast UI reporting.ts storage traversal. Carry is append-only, so every historical leaf keeps its hash. */
 export async function loadCarryStorageCandidates(client: CarryStorageClient, routes: readonly CarryStorageRoute[], wallet: Address, blockNumber: bigint, maximumItems: number) {
 	let readCount = 0
 	function budget(count = 1) {
@@ -25,16 +25,15 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 	async function readGame(game: Address) {
 		budget()
 		const pool = await client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'questionLedger' })
-		const [parent, actualGame, forker, continuation, appendOnly] = await drainConcurrent([
+		const [parent, actualGame, forker, continuation] = await drainConcurrent([
 			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'parent' }),
 			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
 			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'questionForker' }),
 			client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'forkContinuation' }),
-			client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'appendOnlyCarry' }),
 		])
 		if (actualGame.toLowerCase() !== game.toLowerCase()) throw new Error('Carry storage game/pool route mismatch')
 		const parentGame = parent === zeroAddress ? zeroAddress : await client.readContract({ abi: questionLedgerAbi, address: parent, blockNumber, functionName: 'escalationGame' })
-		return { pool, parent, parentGame, forker, continuation, appendOnly }
+		return { pool, parent, parentGame, forker, continuation }
 	}
 	function gameInfo(game: Address) {
 		const key = game.toLowerCase()
@@ -59,7 +58,6 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 		}
 		return value
 	}
-	const localConsumedCache = new Map<string, Promise<string[]>>()
 	async function readConsumed(game: Address, outcome: CarryOutcome) {
 		const indexes: string[] = []
 		for (let start = 0n; ; start += PAGE_SIZE) {
@@ -70,22 +68,6 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			indexes.push(...page.map(value => value.toString()))
 			if (page.length < Number(PAGE_SIZE)) return indexes
 		}
-	}
-	function localConsumed(game: Address, outcome: CarryOutcome) {
-		const key = `${game.toLowerCase()}:${outcome}`
-		let value = localConsumedCache.get(key)
-		if (value === undefined) {
-			value = readConsumed(game, outcome)
-			localConsumedCache.set(key, value)
-		}
-		return value
-	}
-	async function inheritedConsumed(game: Address, outcome: CarryOutcome, ancestors = new Set<string>()): Promise<string[]> {
-		if (ancestors.has(game.toLowerCase())) throw new Error('Carry storage ancestor chain contains a cycle')
-		const next = new Set(ancestors).add(game.toLowerCase())
-		const [info, local] = await drainConcurrent([gameInfo(game), localConsumed(game, outcome)])
-		if (!info.continuation || info.parentGame === zeroAddress) return local
-		return [...(await inheritedConsumed(info.parentGame, outcome, next)), ...local]
 	}
 	const historyCache = new Map<string, CarryLeafSlot[]>()
 	async function historicalSlots(game: Address, outcome: CarryOutcome, ancestors = new Set<string>()): Promise<CarryLeafSlot[]> {
@@ -99,18 +81,6 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 		let inherited: CarryLeafSlot[] = []
 		if (info.continuation && info.parentGame !== zeroAddress) inherited = (await historicalSlots(info.parentGame, outcome, next)).slice(0, Number(state.snapshotLeafCount))
 		if (BigInt(inherited.length) !== state.snapshotLeafCount) throw new Error('Inherited carry snapshot is not reconstructible from storage')
-		const active = new Set<string>()
-		const pages = new Set<string>()
-		for (let nodeId = 0n; ; ) {
-			budget()
-			if (pages.has(nodeId.toString())) throw new Error('Carry storage leaf pagination contains a cycle')
-			pages.add(nodeId.toString())
-			const [page, nextNode] = await client.readContract({ abi: storageAbi, address: game, args: [outcome, nodeId, PAGE_SIZE], blockNumber, functionName: 'getCarryLeafPageByOutcome' })
-			if (page.length > Number(PAGE_SIZE)) throw new Error('Oversized carry leaf page')
-			for (const leaf of page) active.add(leaf.sourceNodeId.toString())
-			if (nextNode === 0n) break
-			nodeId = nextNode
-		}
 		const locals: { index: bigint; slot: CarryLeafSlot }[] = []
 		const visited = new Set<string>()
 		for (let nodeId = state.localHeadNodeId; nodeId !== 0n; ) {
@@ -120,8 +90,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			const [parentNode, depositor, nodeOutcome, amount, parentIndex, cumulative, index] = await client.readContract({ abi: storageAbi, address: game, args: [nodeId], blockNumber, functionName: 'nodes' })
 			if (Number(nodeOutcome) !== outcome || amount === 0n) throw new Error('Invalid historical carry node')
 			const leaf = { depositor, outcome, amountAttoRep: amount.toString(), parentDepositIndex: parentIndex.toString(), cumulativeAmountAttoRep: cumulative.toString(), sourceNodeId: nodeId.toString() }
-			const present = active.has(nodeId.toString())
-			locals.push({ index, slot: { leaf, hash: info.appendOnly || present ? hashCarryLeaf(leaf) : zeroHash, originGame: game, consumedLocally: !present } })
+			locals.push({ index, slot: { leaf, hash: hashCarryLeaf(leaf), originGame: game } })
 			nodeId = parentNode
 		}
 		locals.sort((left, right) => compareIntegers(left.index, right.index))
@@ -148,31 +117,22 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			budget(slots.length)
 			const commitment = carryCommitment(slots)
 			if (commitment.leafCount !== state.snapshotLeafCount.toString() || commitment.root.toLowerCase() !== state.snapshotCarryRoot.toLowerCase()) throw new Error('Stored parent carry snapshot root is not reconstructible')
-			const consumed = new Set([...(info.appendOnly ? [] : await inheritedConsumed(info.parentGame, outcome)), ...(await localConsumed(route.escalationGame, outcome))])
-			const nullifier = {
-				consumed: (info.appendOnly ? [] : [...consumed])
-					.sort((left, right) => compareIntegers(BigInt(left), BigInt(right)))
-					.map(parentDepositIndex => {
-						const index = slots.findIndex(slot => slot.leaf.parentDepositIndex === parentDepositIndex)
-						if (index < 0) throw new Error('Consumed carry deposit is absent from history')
-						return { parentDepositIndex, path: nullifierPath(index.toString()).toString() }
-					}),
-			}
-			if (sparseNullifierRoot(nullifier).toLowerCase() !== state.currentNullifierRoot.toLowerCase()) throw new Error('Stored carry nullifier root is not reconstructible')
+			// Inherited proof consumption is tracked only by this game's consumed parent deposit indexes.
+			const consumed = new Set(await readConsumed(route.escalationGame, outcome))
 			for (const [index, slot] of slots.entries()) {
 				const leaf = slot.leaf
-				if (slot.hash === zeroHash || leaf.depositor.toLowerCase() !== wallet.toLowerCase() || consumed.has(leaf.parentDepositIndex)) continue
+				if (leaf.depositor.toLowerCase() !== wallet.toLowerCase() || consumed.has(leaf.parentDepositIndex)) continue
 				const encodedSource = getAddress(`0x${(BigInt(leaf.parentDepositIndex) >> 96n).toString(16).padStart(40, '0')}`)
 				const claimSourceGame = slot.originGame
 				if (encodedSource !== zeroAddress && encodedSource.toLowerCase() !== claimSourceGame.toLowerCase()) throw new Error('Carry claim source differs from authenticated history')
 				const claimInfo = await gameInfo(claimSourceGame)
 				if (claimInfo.forker.toLowerCase() !== info.forker.toLowerCase()) throw new Error('Carry claim source uses a different forker')
-				candidates.push({ pool: route.pool, game: route.escalationGame, sourcePool: info.parent, sourceGame: info.parentGame, claimSourceGame, forker: info.forker, state, appendOnly: info.appendOnly, ...leaf, slots, index, nullifier })
+				candidates.push({ pool: route.pool, game: route.escalationGame, sourcePool: info.parent, sourceGame: info.parentGame, claimSourceGame, forker: info.forker, state, ...leaf, slots, index })
 			}
 		}
 	}
 	const start = candidates.length === 0 ? 0 : Number(blockNumber % BigInt(candidates.length))
-	return candidates.map(({ slots, index, nullifier, ...candidate }, position) => {
+	return candidates.map(({ slots, index, ...candidate }, position) => {
 		const selected = (position - start + candidates.length) % candidates.length < CARRY_STORAGE_MAXIMUM_WITHDRAWALS
 		if (!selected) return { ...candidate, leafIndex: index.toString(), proof: undefined }
 		const mmr = createMerkleMountainRangeProof(
@@ -189,7 +149,6 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 				parentDepositIndex: candidate.parentDepositIndex,
 				sourceNodeId: candidate.sourceNodeId,
 				...mmr,
-				nullifierSiblings: candidate.appendOnly ? [] : createSparseNullifierProof(nullifier, mmr.leafIndex),
 			},
 		}
 	})

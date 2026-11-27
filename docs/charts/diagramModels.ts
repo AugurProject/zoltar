@@ -97,8 +97,8 @@ export const diagramGraphSpecs = {
 	'fig-mmr-proof-anatomy': diagram(
 		{
 			ariaDescription:
-				'The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane uses the unique carry leaf position and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.',
-			ariaLabel: 'A carried-deposit proof has an MMR membership lane and a separate nullifier lane',
+				'The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The replay lane looks up the deposit’s parentDepositIndex in the game’s consumed-deposit record, which must not already contain it.',
+			ariaLabel: 'A carried-deposit claim has an MMR membership lane and a consumed-deposit replay check',
 			height: 470,
 			width: 940,
 		},
@@ -115,12 +115,10 @@ export const diagramGraphSpecs = {
 				[edge('mmr-leaf-siblings', 'deposit-leaf', 'siblings', 'hash path'), edge('mmr-siblings-selected', 'siblings', 'selected-peak'), edge('mmr-selected-other', 'selected-peak', 'other-peaks', 'combine peaks'), edge('mmr-other-root', 'other-peaks', 'snapshot-root')],
 				{ description: 'Reconstruct the carried snapshot root', title: 'MMR membership lane' },
 			),
-			section(
-				'nullifier',
-				[node('deposit-index', 'leafIndex', 'blue', ['unique carry position']), node('nullifier-siblings', 'Nullifier siblings', 'slate', ['fixed depth = 64']), node('nullifier-root', 'Current nullifier root', 'gold', ['empty leaf proves unspent'])],
-				[edge('nullifier-index-siblings', 'deposit-index', 'nullifier-siblings', '64-bit position'), edge('nullifier-siblings-root', 'nullifier-siblings', 'nullifier-root')],
-				{ description: 'Prove the stable deposit identity remains unspent', title: 'Nullifier lane' },
-			),
+			section('replay', [node('deposit-identity', 'parentDepositIndex', 'blue', ['stable deposit identity']), node('consumed-record', 'Consumed-deposit record', 'gold', ['per game and outcome', 'must not contain it'])], [edge('replay-identity-record', 'deposit-identity', 'consumed-record', 'lookup')], {
+				description: 'Reject a deposit identity this game already settled',
+				title: 'Replay check',
+			}),
 		],
 	),
 	'fig-statoblast-share-lifecycle': diagram(

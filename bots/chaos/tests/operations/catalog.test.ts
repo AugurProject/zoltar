@@ -544,7 +544,7 @@ describe('chaos operation catalog', () => {
 		expect(urgentOperationPlans(snapshot, permissiveOptions).some(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')).toBe(false)
 		pool.escalationForkContinuation = true
 		const losing = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
-		expect(losing?.steps[0]?.evidence[0]).toMatchObject({ signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)' })
+		expect(losing?.steps[0]?.evidence[0]).toMatchObject({ signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)' })
 
 		deposit.outcome = 1
 		const winning = urgentOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.escalation.withdraw')
@@ -605,12 +605,10 @@ describe('chaos operation catalog', () => {
 				leafIndex: '0',
 				merkleMountainRangePeakIndex: '0',
 				merkleMountainRangeSiblings: [],
-				nullifierSiblings: Array.from({ length: 64 }, () => hash(0)),
 				parentDepositIndex: '7',
 				sourceNodeId: '9',
 			},
 			resultingCarryRoot: hash(80),
-			resultingNullifierRoot: hash(81),
 			sourceGame: address(83),
 			sourceNodeId: '9',
 			sourcePool: address(84),
@@ -622,14 +620,13 @@ describe('chaos operation catalog', () => {
 		expect(invalid?.lastValidBlockNumber).toBe('101')
 		expect(invalid?.metadata).toEqual({ claimSourceGame: address(83), game: pool.escalationGame, outcome: 0, parentDepositIndex: '7', pool: pool.address, sourceGame: address(83), sourceNodeId: '9' })
 		expect(invalid?.steps).toHaveLength(1)
-		expect(invalid?.steps[0]?.data.startsWith('0xcd8e4401')).toBeTrue()
+		expect(invalid?.steps[0]?.data.startsWith('0x276f2705')).toBeTrue()
 		expect(invalid?.steps[0]?.preflightCalls).toHaveLength(1)
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: 0, field: 'reason', indexed: { depositor: snapshot.wallet.address, parentDepositIndex: '7', sourceNodeId: '9' } }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: true, field: 'transferredRep', indexed: { depositor: snapshot.wallet.address, outcome: '0', parentDepositIndex: '7' } }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '12', field: 'amountToWithdrawAttoRep' }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '3', field: 'burnAmountAttoRep' }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: hash(80), field: 'resultingCarryRoot' }))
-		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: hash(81), field: 'resultingNullifierRoot' }))
 		const presence = canonicalLifecyclePresence(snapshot, { ...permissiveOptions, maxEthSpendAttoEth: 0n.toString(), maxRepSpendAttoRep: 0n.toString() }).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
 		expect(presence.map(entry => entry.metadata['parentDepositIndex'])).toEqual(['7', '8'])
 	})
@@ -660,12 +657,10 @@ describe('chaos operation catalog', () => {
 				leafIndex: '0',
 				merkleMountainRangePeakIndex: '0',
 				merkleMountainRangeSiblings: [],
-				nullifierSiblings: Array.from({ length: 64 }, () => hash(0)),
 				parentDepositIndex: '0',
 				sourceNodeId: '0',
 			},
 			resultingCarryRoot: hash(80),
-			resultingNullifierRoot: hash(81),
 			sourceGame: address(83),
 			sourceNodeId: '0',
 			sourcePool: address(84),

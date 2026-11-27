@@ -4,28 +4,26 @@ pragma solidity 0.8.35;
 import { Pagination } from '../Pagination.sol';
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
+import { EscalationGameCarry } from './EscalationGameCarry.sol';
 import { IQuestionForker } from './interfaces/IQuestionForker.sol';
 import { CarriedDepositProof, Deposit, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 
-abstract contract EscalationGameSettlement is EscalationGameEscrow {
-	function claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome)
-		public
-		onlyQuestionLedgerOrForker
-		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
-	{
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		(depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep) = _claimDepositForWinning(depositIndex, outcome);
-		_creditClaimOwners(depositor, amountToWithdrawAttoRep);
+abstract contract EscalationGameSettlement is EscalationGameCarry {
+	/// @notice Actual game inventory, distinct from mutually exclusive nominal reporter principal.
+	function getDisputeBackingAttoRep() public view returns (uint256) {
+		return _reporterRepBalance();
 	}
 
-	function withdrawDeposit(CarriedDepositProof calldata proof, BinaryOutcomes.BinaryOutcome outcome)
-		public
-		onlyQuestionLedgerOrForker
-		returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep)
-	{
+	function getLocalUnresolvedPrincipalByVaultAndOutcome(address vault, BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
+		if (_isRetiredOrdinaryOutcome(uint8(outcome))) return 0;
+		return localUnresolvedPrincipalByVault[vault][uint8(outcome)];
+	}
+
+	function withdrawDeposit(CarriedDepositProof calldata proof, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
+		require(msg.sender == address(questionLedger), 'Only pool');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
@@ -36,8 +34,8 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		_emitCarryDepositConsumed(outcomeIndex, proof.depositor, proof.amountAttoRep, proof.parentDepositIndex, proof.sourceNodeId, CarryConsumptionReason.WinningClaim);
 		uint256 burnAmountAttoRep;
-		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep);
-		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditExternalClaimOwners, (forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdrawAttoRep, burnAmountAttoRep)));
+		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep);
+		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditExternalClaimOwners, (depositor, amountToWithdrawAttoRep, burnAmountAttoRep)));
 		_burnWinningHaircut(burnAmountAttoRep, winnerHaircutPaidByFork);
 		if (winnerHaircutPaidByFork) emit WinningHaircutPrepaid(outcome, proof.parentDepositIndex, burnAmountAttoRep);
 		emit ClaimDeposit(depositor, outcome, proof.parentDepositIndex, originalDepositAmountAttoRep, amountToWithdrawAttoRep, winnerHaircutPaidByFork ? 0 : burnAmountAttoRep, true);
@@ -51,6 +49,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		if (!forkContinuation) {
 			_settleOrdinaryGame(false);
+			require(questionResolution == ordinarySettlementOutcome, 'Not winning ordinary claim');
 			if (outcome != questionResolution) {
 				OutcomeState storage state = outcomeState[uint8(outcome)];
 				require(depositIndex < state.localNodeIds.length, 'Bad deposit index');
@@ -58,14 +57,10 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 				return (node.depositor, 0, node.amountAttoRep);
 			}
 		}
-		if (outcome == questionResolution) {
-			(depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep) = claimDepositForWinning(depositIndex, questionResolution);
-			return (depositor, amountToWithdrawAttoRep, originalDepositAmountAttoRep);
-		}
-		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex, CarryConsumptionReason.LosingSettlement);
-		depositor = deposit.depositor;
-		originalDepositAmountAttoRep = deposit.amountAttoRep;
-		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);
+		if (outcome == questionResolution) return _claimDepositForWinning(depositIndex, outcome);
+		(Deposit memory deposit, ) = _consumeLocalDeposit(uint8(outcome), depositIndex, CarryConsumptionReason.LosingSettlement);
+		_consumeEscrowedRepForBundle(deposit.depositor, deposit.amountAttoRep);
+		return (deposit.depositor, 0, deposit.amountAttoRep);
 	}
 
 	function sweepResidualRepToQuestionLedger() external {
@@ -125,12 +120,9 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(questionResolution == IQuestionForker(questionLedger.questionForker()).getQuestionOutcome(questionLedger), 'Pool/game outcome mismatch');
 	}
 
+	/// @dev Ordinary games were settled by the caller, so their winning outcome is already fixed.
 	function _claimDepositForWinning(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) private returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
-		if (!forkContinuation && nonDecisionState == NonDecisionState.None) {
-			if (!ordinarySettlementInitialized) _settleOrdinaryGame(false);
-			require(outcome == ordinarySettlementOutcome, 'Not winning ordinary claim');
-		}
-		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex, CarryConsumptionReason.WinningClaim);
+		(Deposit memory deposit, uint256 parentDepositIndex) = _consumeLocalDeposit(uint8(outcome), depositIndex, CarryConsumptionReason.WinningClaim);
 		depositor = deposit.depositor;
 		originalDepositAmountAttoRep = deposit.amountAttoRep;
 		uint256 burnAmountAttoRep;
@@ -138,7 +130,17 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		if (ordinarySettlementInitialized) ordinaryWinningReserveAttoRep -= amountToWithdrawAttoRep + burnAmountAttoRep;
 		_consumeEscrowedRepForBundle(depositor, originalDepositAmountAttoRep);
 		_burnWinningHaircut(burnAmountAttoRep, false);
-		emit ClaimDeposit(depositor, outcome, _getStableLocalParentDepositIndex(uint8(outcome), depositIndex), originalDepositAmountAttoRep, amountToWithdrawAttoRep, burnAmountAttoRep, true);
+		emit ClaimDeposit(depositor, outcome, parentDepositIndex, originalDepositAmountAttoRep, amountToWithdrawAttoRep, burnAmountAttoRep, true);
+		_creditClaimOwners(depositor, amountToWithdrawAttoRep);
+	}
+
+	function _totalUnresolvedPrincipal() private view returns (uint256 unresolvedPrincipal) {
+		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			if (_isRetiredOrdinaryOutcome(outcomeIndex)) continue;
+			unresolvedPrincipal +=
+				_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) +
+				outcomeState[outcomeIndex].localUnresolvedTotalAttoRep;
+		}
 	}
 
 	function _burnWinningHaircut(uint256 burnAmountAttoRep, bool haircutPaidByFork) private {

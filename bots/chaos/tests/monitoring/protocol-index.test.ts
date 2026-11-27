@@ -670,7 +670,7 @@ describe('durable protocol index', () => {
 			],
 		})
 		const claimTopic = keccak256(toHex('ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'))
-		const carryTopic = keccak256(toHex('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'))
+		const carryTopic = keccak256(toHex('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)'))
 		const implementation = {
 			getBlock: canonicalBlock,
 			async getLogs(parameters: { address?: Address | Address[] }) {

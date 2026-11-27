@@ -1,4 +1,4 @@
-import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as poolArtifact } from '../../../../types/contractArtifact'
 import { type AccountAddress, QuestionOutcome } from '../../types/types'
 import type { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
@@ -121,7 +121,7 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint) => {
 	const poolHash = await writeClient.sendTransaction({
-		data: encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n, zeroAddress] }),
+		data: encodeDeployData({ abi: poolArtifact.abi, bytecode: `0x${poolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n] }),
 	})
 	const poolReceipt = await writeClient.waitForTransactionReceipt({ hash: poolHash })
 	const pool = requireContractAddress(poolReceipt.contractAddress, 'Escalation test pool deployment address')
@@ -320,8 +320,6 @@ export const readCarryLeafCount = async (client: ReadClient, escalationGame: Acc
 
 export const readCarryTotal = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => (await getEscalationGameOutcomeState(client, escalationGame, outcome)).currentCarryTotalAttoRep
 
-export const readNullifierRoot = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => (await getEscalationGameOutcomeState(client, escalationGame, outcome)).currentNullifierRoot
-
 export const readIsForkCarryFundingComplete = async (client: ReadClient, escalationGame: AccountAddress) =>
 	await client.readContract({
 		abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -338,14 +336,15 @@ export const readForkCarrySnapshotInitialized = async (client: ReadClient, escal
 		args: [],
 	})
 
-/** Test-only: empties the REP a standalone game holds directly, by sending a transfer as the game. */
-export const drainEscalationGameRepForTest = async (ethereum: AnvilWindowEthereum, repToken: AccountAddress, escalationGame: AccountAddress, receiver: AccountAddress) => {
+/** Test-only: empties a game's reporter custody on the proof test question ledger by withdrawing as the game. */
+export const drainEscalationGameRepForTest = async (ethereum: AnvilWindowEthereum, escalationGame: AccountAddress, receiver: AccountAddress) => {
 	await ethereum.impersonateAccount(escalationGame)
 	await ethereum.setBalance(escalationGame, 10n ** 18n)
 	const game = createWriteClient(ethereum, BigInt(escalationGame))
-	const amountAttoRep = await game.readContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'balanceOf', args: [escalationGame] })
+	const pool = await game.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'questionLedger' })
+	const amountAttoRep = await game.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'balanceOfGame', args: [escalationGame] })
 	if (amountAttoRep === 0n) return
-	await writeContractAndWait(game, () => game.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'transfer', args: [receiver, amountAttoRep] }))
+	await writeContractAndWait(game, () => game.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'transferFromGame', args: [escalationGame, receiver, amountAttoRep] }))
 }
 
 type CarryLeaf = {

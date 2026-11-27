@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakRoots, CARRY_NULLIFIER_DEPTH, computeCarryNullifierRootFromProof, createSparseNullifier, getCarryNullifierPath, hashCarryParent } from './carryProof.js'
-import { concatHex, keccak256, toHex, zeroHash, type Hex } from './ethereum.js'
-
-const CONSUMED_LEAF = toHex(1n, { size: 32 })
+import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakRoots, hashCarryParent } from './carryProof.js'
+import { concatHex, keccak256, toHex, type Hex } from './ethereum.js'
 
 function leafHashes(count: number) {
 	return Array.from({ length: count }, (_, index) => keccak256(toHex(`leaf-${index.toString()}`)))
@@ -48,21 +46,5 @@ describe('carry proof primitives', () => {
 				expect(proof.merkleMountainRangeSiblings).toHaveLength(targetPeak.height + peaks.length - 1)
 			}
 		}
-	})
-
-	test('uses the unique carry leaf position directly as the nullifier path', () => {
-		for (const leafIndex of [0n, 1n, (1n << 64n) - 1n]) expect(getCarryNullifierPath(leafIndex)).toBe(leafIndex)
-		expect(() => getCarryNullifierPath(1n << 64n)).toThrow('outside the supported range')
-	})
-
-	test('recomputes sparse nullifier roots from absence and consumption proofs', () => {
-		const nullifier = createSparseNullifier([3n, 9n])
-		const absenceProof = nullifier.getProof(4n)
-		expect(absenceProof).toHaveLength(CARRY_NULLIFIER_DEPTH)
-		expect(computeCarryNullifierRootFromProof(4n, absenceProof, zeroHash)).toBe(nullifier.getRoot())
-		nullifier.consume(4n)
-		expect(computeCarryNullifierRootFromProof(4n, absenceProof, CONSUMED_LEAF)).toBe(nullifier.getRoot())
-		expect(computeCarryNullifierRootFromProof(4n, absenceProof, zeroHash)).not.toBe(nullifier.getRoot())
-		expect(() => computeCarryNullifierRootFromProof(4n, absenceProof.slice(1), zeroHash)).toThrow('63 siblings instead of 64')
 	})
 })

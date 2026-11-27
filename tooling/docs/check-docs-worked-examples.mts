@@ -41,9 +41,6 @@ export async function checkMmrConformanceVector(): Promise<void> {
 		assert.equal(vectorValue('Leaf 2 hash'), leaf2, 'MMR conformance vector leaf 2 hash must match keccak256(abi.encode(...))')
 		assert.equal(vectorValue('Two-leaf root'), twoLeafRoot, 'MMR conformance vector root must hash leaf 0 before leaf 1 with abi.encodePacked')
 		assert.equal(vectorValue('Three-leaf root'), keccak256(concatHex([leaf2, twoLeafRoot])), 'MMR conformance vector must bag the lower peak as the left operand')
-		let emptyNullifierRoot: `0x${string}` = `0x${'00'.repeat(32)}`
-		for (let level = 0; level < 64; level += 1) emptyNullifierRoot = keccak256(concatHex([emptyNullifierRoot, emptyNullifierRoot]))
-		assert.equal(vectorValue('Empty nullifier root'), emptyNullifierRoot, 'MMR conformance vector empty nullifier root must hash the zero leaf with itself 64 times')
 	} finally {
 		window.close()
 	}
