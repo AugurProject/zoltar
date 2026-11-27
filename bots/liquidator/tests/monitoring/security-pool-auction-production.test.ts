@@ -38,7 +38,6 @@ describe('security pool operator funded auction capital integration', () => {
 		// Unclaimed winning lots are outside the account view, so exposure adds them per bid; no open bid needs a reserve.
 		const firstLots = await bidPosition(reader, context.capital, first.id)
 		expect(firstLots.claimed).toBe(false)
-		expect(firstLots.materialized).toBe(false)
 		expect(ownerExposure.snapshot.unclaimedRepairAuctionBids).toBe(1n)
 		expect(ownerExposure.managedPrincipalAttoRep).toBe(ownerExposure.snapshot.ownerPrincipalAttoRep + firstLots.principal)
 		expect(ownerExposure.managedCommitmentAttoEth).toBe(ownerExposure.snapshot.ownerCommitmentAttoEth + firstLots.commitment)
@@ -64,7 +63,7 @@ describe('security pool operator funded auction capital integration', () => {
 		})
 		try {
 			// Cures are unpaid, so the keeper never cures standalone and both winners stay virtual until a funded acquisition.
-			expect((await bidPosition(reader, context.capital, first.id)).materialized).toBe(false)
+			expect((await bidPosition(reader, context.capital, first.id)).claimed).toBe(false)
 			await context.mock.setBalance(account.address, 100n * unit)
 			const { next, winner } = await distressedSecondWinner(context, keeperOperator, second.id)
 			for (let step = 0; step < 3; step++) {
@@ -72,7 +71,6 @@ describe('security pool operator funded auction capital integration', () => {
 				await executeSecurityPoolTakeover(wallet, settings, state, pool, next, securityPoolTarget(winner), async () => true)
 				expect(state.activities.filter(activity => activity.status === 'confirmed')).toHaveLength(before + 1)
 				const after = await bidPosition(reader, context.capital, second.id)
-				expect(after.materialized).toBe(step === 2)
 				expect(after.claimed).toBe(step === 2)
 			}
 			const taken = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerCollateral', args: [account.address] })

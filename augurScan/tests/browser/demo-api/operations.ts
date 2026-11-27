@@ -71,7 +71,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 			bid_count: 18,
 			bidder_count: 11,
 			block_number: asOf.blockNumber,
-			start_data: { opensAt: String(BigInt(asOf.blockTimestamp) - 1_800n), closesAt: String(BigInt(asOf.blockTimestamp) + 1_800n), lotAttoEth: 1000000n.toString(), targetLots: '20', inventoryAttoRep: String(5_000n * 10n ** 18n), maximumAttoRepPerLot: String(500n * 10n ** 18n) },
+			start_data: { closesAt: String(BigInt(asOf.blockTimestamp) + 1_800n), lotAttoEth: 1000000n.toString(), targetLots: '20', inventoryAttoRep: String(5_000n * 10n ** 18n), maximumAttoRepPerLot: String(500n * 10n ** 18n) },
 		},
 	]
 	const cappedKpiCatalog = context.pageUrl.searchParams.get('operationsKpiCapped') === '1'
@@ -83,7 +83,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 	const allEscalations = cappedKpiCatalog
 		? [...Array.from({ length: 250 }, (_, index) => ({ ...escalationTemplate, game_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, event_name: index % 2 === 0 ? 'OrdinarySettlementInitialized' : 'NonDecisionReached' })), { ...escalationTemplate, game_address: `0x${(251).toString(16).padStart(40, '0')}` }]
 		: escalations
-	const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Fully settled' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
+	const allAuctions = cappedKpiCatalog ? [...Array.from({ length: 250 }, (_, index) => ({ ...auctionTemplate, auction_address: `0x${(index + 1).toString(16).padStart(40, '0')}`, status: 'Finalized' })), { ...auctionTemplate, auction_address: `0x${(251).toString(16).padStart(40, '0')}` }] : auctions
 	const poolMetricsMode = context.pageUrl.searchParams.get('poolMetrics')
 	const poolMetricsUnavailable = poolMetricsMode === 'unavailable' || poolMetricsMode === 'stale-unavailable'
 	const risk = {

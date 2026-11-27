@@ -338,7 +338,6 @@ describe('state projections', () => {
 		for (const [name, data] of [
 			['RefundWithdrawn', { bidder: vault, recipient: vault, amountAttoEth: atomic(1n) }],
 			['FeesRemoved', { bidId: '1', attoEth: atomic(1n), attoRep: atomic(2n) }],
-			['RaisedWithdrawn', { recipient: vault, amountAttoEth: atomic(3n) }],
 		] as const)
 			expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain: 'auction', entityType: 'auction', semanticEventKind: name })
 	})

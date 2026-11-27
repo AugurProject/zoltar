@@ -33,7 +33,7 @@ describe('capital repairs never leave a position between the liquidation and con
 		return writeContractAndWait(mallory, () => mallory.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPrice', args: [amount, Number(now) + 100_000] }))
 	}
 	const demand = (amount: bigint) => writeContractAndWait(mallory, () => mallory.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [amount] }))
-	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'depositFor', args: [client.account.address, amount] }))
+	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'deposit', args: [amount] }))
 	const setCommitment = (client: WriteClient, commitment: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [commitment] }))
 	const serve = (client: WriteClient, id: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'serveRetirement', args: [id] }))
 	const take = (client: WriteClient, id: bigint, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'takeOver', args: [id, amount, 0n, 10_000n * E] }))

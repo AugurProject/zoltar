@@ -38,14 +38,13 @@ export async function auctionFixture() {
 		priceValidUntil: 4_000n,
 		acceptedExposureLimitAttoEth: 20n * unit,
 		acceptedRepExposureLimitAttoRep: 100n * unit,
-		refundCreditAttoEth: 0n,
 		earlyRefundAttoEth: 0n,
 		bidderBidCount: 1n,
 		bidderBidId: 1n,
 		bids: [owner, false, false, 2n, 60n * unit],
 		previewBid: [owner, 1n, unit, 100n * unit, unit],
-		clearing: [100n * unit, 1n, unit, 100n * unit, 0n, 0n, 0n, 1n, false],
-		repairAuctionPositions: [[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit]],
+		clearing: [100n * unit, 1n, unit, 100n * unit, false],
+		repairAuctionPositions: [[owner, 100n * unit, unit, 0n, false, 7n * unit, 9n * unit]],
 	})
 	fixture.set(capital, 'universeId', 42n)
 	fixture.set(auctionAddress, 'universeId', 42n)

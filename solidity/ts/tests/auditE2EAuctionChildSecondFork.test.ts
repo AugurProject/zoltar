@@ -66,7 +66,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(await e2e.cash(context.engine)).toBe(14n * unit)
 		// The excluded bid is refundable before the close; no better bid can be displaced by a worse one.
 		expect(await owner.readContract({ ...engine, functionName: 'earlyRefundAttoEth', args: [losing.id] })).toBe(2n * unit)
-		await writeContractAndWait(loser, () => loser.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [losing.id, loser.account.address] }))
+		await writeContractAndWait(loser, () => loser.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [losing.id, loser.account.address] }))
 		expect(await e2e.cash(loser.account.address)).toBe(cashBeforeBids['loser'] ?? 0n)
 		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'submitBid', args: [1n, 100n * unit] })).rejects.toThrow('Better bids already exclude this bid')
 
@@ -90,12 +90,11 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// Four lots at the best price; equal limits fill in submission order, so the earlier tied bid fills first.
 		expect(fills.map(fill => fill.filledLots)).toEqual([0n, 4n, 3n, 3n])
 		expect(fills.map(fill => fill.refundAttoEth)).toEqual([2n * unit, 0n, 0n, 2n * unit])
-		// The early refund was final: the excluded bid cannot be credited a second time after the close.
-		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [losing.id, loser.account.address] })).rejects.toThrow('Auction has no refund credit for this bidder')
-		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [losing.id] })).rejects.toThrow('Auction bid has already been settled')
+		// The early refund was final: the excluded bid cannot be refunded a second time after the close.
+		await expect(loser.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [losing.id, loser.account.address] })).rejects.toThrow('Auction bid has already been settled')
 		for (const fill of fills) expect(fill.principalAttoRep).toBe(fill.filledLots * repPerLot)
-		await expect(b4.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tieA.id, b4.account.address] })).rejects.toThrow('Auction has no refund credit for this bidder')
-		await writeContractAndWait(b5, () => b5.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tieB.id, b5.account.address] }))
+		await expect(b4.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [tieA.id, b4.account.address] })).rejects.toThrow('Auction bid has no refund')
+		await writeContractAndWait(b5, () => b5.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [tieB.id, b5.account.address] }))
 		const cashAfterAuction = await cashOf(wallets)
 		expect([cashAfterAuction['loser'], cashAfterAuction['b3'], cashAfterAuction['b4'], cashAfterAuction['b5']]).toEqual([cashBeforeBids['loser'], (cashBeforeBids['b3'] ?? 0n) - 4n * unit, (cashBeforeBids['b4'] ?? 0n) - 3n * unit, (cashBeforeBids['b5'] ?? 0n) - 3n * unit])
 		// Custody after the close: the engine and auction are empty, sold REP is in capital, and the full repair burned the rest.
@@ -114,9 +113,9 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// ---- lazy materialization: a keeper materializes b3; b4 and b5 stay in the shared cohort ----
 		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[best.id]] }))
 		const position = (bidId: bigint) => repairAuctionPositionOf(owner, capitalC.address, bidId)
-		expect((await position(best.id)).materialized).toBe(true)
-		expect((await position(tieA.id)).materialized).toBe(false)
-		expect((await position(tieB.id)).materialized).toBe(false)
+		expect((await position(best.id)).claimed).toBe(true)
+		expect((await position(tieA.id)).claimed).toBe(false)
+		expect((await position(tieB.id)).claimed).toBe(false)
 		const totalsC = await owner.readContract({ ...capitalC, functionName: 'totals' })
 		expect(totalsC[0]).toBe(2_000n * unit + sold)
 		expect(totalsC[1]).toBe(210n * unit)
@@ -150,10 +149,10 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		await e2e.choose(owner, C, YES)
 		const chooseAs = (bidder: WriteClient, outcome: number) => writeContractAndWait(bidder, () => bidder.writeContract({ ...coordinator, functionName: 'choose', args: [C, BigInt(outcome)], gas: BRANCH_GAS }))
 		// An unclaimed bid blocks its bidder's choice until anyone claims it; the claim then lets the lots follow the choice.
-		expect((await position(tieA.id)).materialized).toBe(false)
+		expect((await position(tieA.id)).claimed).toBe(false)
 		await expect(chooseAs(b4, YES)).rejects.toThrow('Claim repair auction bids before choosing')
 		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[tieA.id]] }))
-		expect((await position(tieA.id)).materialized).toBe(true)
+		expect((await position(tieA.id)).claimed).toBe(true)
 		await chooseAs(b4, YES)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'prepareBranch', args: [C, BigInt(NO)], gas: BRANCH_GAS }))
 		await chooseAs(b3, NO)
@@ -255,9 +254,9 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(await e2e.rep(U0, capital0)).toBe(0n)
 
 		// ---- the winner who never acted: its lots stayed in the snapshot and now back the branches' claims ----
-		expect((await position(tieB.id)).materialized).toBe(false)
+		expect((await position(tieB.id)).claimed).toBe(false)
 		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBids', args: [[tieB.id]] }))
-		expect((await position(tieB.id)).materialized).toBe(true)
+		expect((await position(tieB.id)).claimed).toBe(true)
 		const idle = await collateralOf(context.capital, b5.account.address)
 		expect(idle.slice(0, 2)).toEqual([3n * repPerLot, 3n * unit])
 		await expect(b5.simulateContract({ ...capitalC, functionName: 'withdrawPrincipal', args: [1n, b5.account.address] })).rejects.toThrow()

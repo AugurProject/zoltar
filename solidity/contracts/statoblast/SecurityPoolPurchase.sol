@@ -73,17 +73,21 @@ contract SecurityPoolPurchase {
 	function feeStream(IQuestionLedger pool) external view returns (uint96 rate, uint48 stop) {
 		ISecurityPoolPurchaseRoot root = ISecurityPoolPurchaseRoot(securityPool);
 		SecurityPoolSettlement engine = root.settlement();
-		uint256 nativeTime = engine.feeTimestamp(pool.universeId());
+		uint248 universeId = pool.universeId();
+		uint256 questionId = pool.questionId();
+		uint256 nativeTime = engine.feeTimestamp(universeId);
 		if (address(pool.escalationGame()) != address(0)) return (0, 0);
-		if (root.sourceGame(pool.universeId(), pool.questionId()) != address(0)) return (0, 0);
-		(SecurityPoolSettlementBook.Question memory question, ) = engine.ledger().scaledQuestion(engine.bookIds(pool.universeId()), pool.questionId());
+		if (root.sourceGame(universeId, questionId) != address(0)) return (0, 0);
+		SecurityPoolSettlementBook book = engine.ledger();
+		uint64 bookId = engine.bookIds(universeId);
+		(SecurityPoolSettlementBook.Question memory question, ) = book.scaledQuestion(bookId, questionId);
 		if (question.finalAfter != 0) return (0, 0);
 		uint256 calculated = Math.mulDiv(question.feePrincipalAttoEth, root.annualFeeBps(), SecurityPoolUtils.BPS_DENOMINATOR * 365 days);
 		require(calculated <= type(uint96).max, 'Question fee domain exceeded');
 		if (calculated == 0) return (0, 0);
-		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().scaledAvailableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);
+		uint256 budget = book.scaledAvailableFeeBudget(bookId, questionId);
+		uint256 duration = Math.min(type(uint48).max - nativeTime, budget / calculated);
 		if (duration == 0) return (0, 0);
-		return
-			engine.ledger().normalizeFeeStream(uint96(calculated), uint48(nativeTime + duration), uint48(nativeTime), engine.ledger().scaledAvailableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()));
+		return book.normalizeFeeStream(uint96(calculated), uint48(nativeTime + duration), uint48(nativeTime), budget);
 	}
 }

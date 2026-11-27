@@ -190,10 +190,8 @@ export {
 	securityPoolAuctionClaimBatch,
 	securityPoolAuctionClaimReason,
 	loadSecurityPoolAuctionClaimableBidIds,
-	buildSecurityPoolAuctionRefundCreditRequest,
-	buildSecurityPoolAuctionRefundWithdrawRequest,
-	quoteSecurityPoolAuctionRefundClaim,
-	buildSecurityPoolAuctionRefundClaimRequest,
+	quoteSecurityPoolAuctionRefund,
+	buildSecurityPoolAuctionRefundRequest,
 	type SecurityPoolAuctionBid,
 } from './securityPoolRepairAuction.js'
 export { boundCloneImplementation, boundCloneRuntimeCode, verifyBoundCloneCode, universeCloneBindings } from './securityPoolBoundClone.js'

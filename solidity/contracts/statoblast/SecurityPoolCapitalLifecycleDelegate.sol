@@ -20,6 +20,7 @@ interface ICapitalLifecycleHost {
 	function securityPool() external view returns (address);
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
+	function minimumCommitmentAttoEth() external view returns (uint256);
 	function ownerConservativePrice(address owner) external view returns (uint256);
 	function repToken() external view returns (IERC20);
 	function zoltar() external view returns (Zoltar);
@@ -33,10 +34,6 @@ interface ICapitalLifecycleHost {
 contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
 	address public immutable implementation = address(this);
-	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
-	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
-	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
-	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	modifier onlyDelegateCall() {
 		require(address(this) != implementation, 'Only capital delegatecall');
 		_;
@@ -84,18 +81,19 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit CapitalPriceAccepted(price, validUntil);
 	}
 
-	/// @dev The ledger has already checkpointed fees, served prior retirements,
-	/// and required an open universe with a fresh accepted price.
-	function authorize(uint256 commitment, uint256 reportId, bool useReport, uint256 minimumCommitment) external onlyDelegateCall returns (uint96 id) {
-		_settleOwner(_capitalOwner());
+	/// @dev The ledger has already checkpointed fees, settled the owner, served
+	/// prior retirements, and required an open universe with a fresh accepted
+	/// price. It calls only for a commitment at least the current one, which a
+	/// position queued for retirement can never request, because its saved
+	/// remaining commitment is always below its live commitment.
+	function authorize(uint256 commitment, uint256 reportId, bool useReport) external onlyDelegateCall returns (uint96 id) {
+		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 health = _target(owner);
-		require(commitment >= minimumCommitment, 'Commitment below minimum');
+		require(commitment >= host.minimumCommitmentAttoEth(), 'Commitment below minimum');
 		id = owner.positionId;
 		SecurityPoolCommitmentIndex.Account memory old;
 		if (id != 0) old = commitmentIndex.accountOf(id);
-		require(old.batch == 0, 'Retirement pending');
-		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.securityPool()).priceFeed(host.universeId()));
 		if (useReport) {
 			(, uint256 totalCommitment) = commitmentIndex.totals();
@@ -105,8 +103,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		}
 		uint256 rep = owner.freeAttoRep + old.rep;
 		require(rep >= _requiredRep(host, commitment, health), 'Chosen health target unmet');
-		// Owners cannot bypass a closed retirement cohort with direct reductions.
-		require(commitment >= old.commitment, 'Retire before reducing');
 		totalFreeAttoRep -= owner.freeAttoRep;
 		owner.freeAttoRep = 0;
 		if (id == 0) {
@@ -162,9 +158,10 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
 	}
 
-	function cure(uint96 id, uint256 target, bool ownerExit, uint256 minimumCommitmentAttoEth, uint256 securityMultiplierBps) public onlyDelegateCall returns (uint256 removed) {
+	function cure(uint96 id, uint256 target, bool ownerExit) external onlyDelegateCall returns (uint256 removed) {
 		require(id != 0 && id != repairAuctionCohort.positionId, 'Materialize an individual repair auction bidder');
-		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit);
+		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
+		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, host.securityMultiplierBps(), host.minimumCommitmentAttoEth(), demandAttoEth, target, ownerExit);
 		removed = result.removed;
 		if (removed != 0) {
 			owners[result.owner].account.freeAttoRep += result.freedRep;
@@ -173,10 +170,11 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		}
 	}
 
-	function takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds, bool enforceBounds, uint256 minimumCommitmentAttoEth) external onlyDelegateCall returns (uint96 receiverId) {
+	function takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds, bool enforceBounds) external onlyDelegateCall returns (uint96 receiverId) {
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		address receiverOwner = _capitalOwner();
 		uint256 securityMultiplierBps = host.securityMultiplierBps();
+		uint256 minimumCommitmentAttoEth = host.minimumCommitmentAttoEth();
 		(
 			SecurityPoolCommitmentIndex.Cure memory cured,
 			SecurityPoolCommitmentIndex.Account memory source,

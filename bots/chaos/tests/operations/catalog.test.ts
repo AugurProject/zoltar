@@ -109,23 +109,21 @@ describe('chaos operation catalog', () => {
 			address: address(index),
 			bids: [],
 			endTime: '1',
-			finalized: false,
-			pendingEthRefund: '1000',
-			pendingEthRefundGeneration: hash(index),
+			finalized: true,
+			refundableBidIds: ['1'],
 			pool: snapshot.pools[0]?.address ?? address(11),
-			startTime: '1',
 		}))
 		const identities = (seed: number) =>
 			urgentOperationPlans(snapshot, { ...permissiveOptions, seed })
-				.filter(plan => plan.definitionId === 'open-oracle.settle' || plan.definitionId === 'statoblast.auction.withdraw-refund')
+				.filter(plan => plan.definitionId === 'open-oracle.settle' || plan.definitionId === 'statoblast.auction.settle-bids')
 				.map(plan => `${plan.definitionId}:${plan.metadata['reportId'] ?? plan.metadata['auction']}`)
 				.sort()
-		const expected = ['open-oracle.settle:1', 'open-oracle.settle:2', `statoblast.auction.withdraw-refund:${address(41)}`, `statoblast.auction.withdraw-refund:${address(42)}`].sort()
+		const expected = ['open-oracle.settle:1', 'open-oracle.settle:2', `statoblast.auction.settle-bids:${address(41)}`, `statoblast.auction.settle-bids:${address(42)}`].sort()
 		expect(identities(1)).toEqual(expected)
 		expect(identities(0xffff_fffe)).toEqual(expected)
 		const auctionPlanIds = (seed: number) =>
 			urgentOperationPlans(snapshot, { ...permissiveOptions, seed })
-				.filter(plan => plan.definitionId === 'statoblast.auction.withdraw-refund')
+				.filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')
 				.map(plan => [String(plan.metadata['auction']), plan.id] as const)
 				.sort(([left], [right]) => left.localeCompare(right))
 		const firstAuctionIds = auctionPlanIds(1)

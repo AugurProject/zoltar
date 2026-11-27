@@ -65,7 +65,6 @@ function publicTopologyItem(value: unknown, kind: 'auction' | 'pair' | 'pool' | 
 			finalized: booleanField(source, 'finalized'),
 			securityPool: stringField(source, 'securityPool'),
 			universeId: stringField(source, 'universeId'),
-			startTime: scalar(source, 'startTime'),
 		})
 	}
 	const address = stringField(source, 'address')

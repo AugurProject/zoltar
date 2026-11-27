@@ -34,7 +34,7 @@ describe('Statoblast: production security pool module deployment', () => {
 		const lifecycle = await client.readContract({ abi: capitalArtifact.abi, address: firstCapital, functionName: 'lifecycleDelegate' })
 		const auction = await client.readContract({ abi: capitalArtifact.abi, address: firstCapital, functionName: 'repairAuctionDelegate' })
 		await expect(client.writeContract({ abi: lifecycleArtifact.abi, address: lifecycle, functionName: 'setHealthTarget', args: [15_000n] })).rejects.toThrow('Only capital delegatecall')
-		await expect(client.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'install', args: [firstCapital, 1n, 1n, 1n, 1n] })).rejects.toThrow('Only capital delegatecall')
+		await expect(client.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'install', args: [firstCapital, 1n, 1n, 1n] })).rejects.toThrow('Only capital delegatecall')
 	})
 
 	test('staged setup creates correctly bound lifecycle and reporting modules with runtime headroom', async () => {

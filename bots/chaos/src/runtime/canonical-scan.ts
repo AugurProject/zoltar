@@ -6,7 +6,7 @@ import { discoveryCoverageIsComplete } from '../monitoring/discovery-coverage.ts
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../monitoring/carry-proof-storage.ts'
 import { scanCarryStorage } from '../monitoring/carry-storage-scan.ts'
 import { canonicalScanReadiness } from './scan-readiness.ts'
-import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from './protocol-index-snapshot.ts'
+import { snapshotWithProtocolIndex } from './protocol-index-snapshot.ts'
 import { createPublicClient, createRpcEndpointPool, defineChain, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -423,7 +423,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 			? undefined
 			: `Protocol log history is unavailable for blocks ${partialIndex.startBlock} through ${(BigInt(partialIndex.availableStartBlock) - 1n).toString()}; indexing available logs from block ${partialIndex.availableStartBlock} through ${partialIndex.cursor.blockNumber}. Known claims can be recovered, including carry claims verified from contract storage. Older claims may be undiscovered.`
 	const carryUpdated = wallet !== undefined && discoveryComplete ? await updateCarryWithQuorum(settings, pool, wallet, anchor, topology) : undefined
-	const updated = updatedCandidate === undefined ? undefined : { ...updatedCandidate, index: snapshotProtocolIndex(updatedCandidate.toBlock === anchor.blockNumber.toString() ? indexWithCurrentRefunds(topology, updatedCandidate.index) : updatedCandidate.index, settings.network.chainId) }
+	const updated = updatedCandidate === undefined ? undefined : { ...updatedCandidate, index: snapshotProtocolIndex(updatedCandidate.index, settings.network.chainId) }
 	const indexedThroughBlock = updated?.toBlock ?? compatibleIndex?.cursor.blockNumber ?? 'not started'
 	const indexedSnapshot =
 		updated !== undefined && updated.toBlock === anchor.blockNumber.toString()

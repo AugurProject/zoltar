@@ -36,7 +36,7 @@ describe('audit: collateral repair auction equal-limit bids fill in submission o
 	const startEngine = async () => {
 		const engine = await deployContract(client, encodeDeployData({ abi: engineArtifact.abi, bytecode: `0x${engineArtifact.evm.bytecode.object}`, args: [controller, token] }))
 		const now = (await client.getBlock()).timestamp
-		await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'startRepairAuction', args: [now, now + 1_000n, LOT, TARGET, TARGET * FLOOR * 10n, GRID, controller] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'startRepairAuction', args: [now + 1_000n, LOT, TARGET, TARGET * FLOOR * 10n, GRID] }))
 		const bid = async (bidder: Address, lots: bigint) => {
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [engine, lots * LOT] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'submitBid', args: [bidder, lots, FLOOR] }))

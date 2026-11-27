@@ -51,7 +51,7 @@ describe('security pool operator earnings integration', () => {
 			if (claim?.hash === undefined) throw new Error('Earnings claim was not confirmed')
 			const receipt = await reader.waitForTransactionReceipt({ hash: claim.hash })
 			expect(receipt.status).toBe('success')
-			const stored = await reader.readContract({ address: capital, abi: capitalAbi, functionName: 'storedOwnerAccount', args: [account.address] })
+			const stored = await reader.readContract({ address: capital, abi: capitalAbi, functionName: 'ownerAccount', args: [account.address] })
 			expect(stored.feesAttoEth).toBe(0n)
 			expect(stored.feesAttoRep).toBe(0n)
 			if (receipt.effectiveGasPrice === undefined) throw new Error('Earnings claim receipt has no effective gas price')

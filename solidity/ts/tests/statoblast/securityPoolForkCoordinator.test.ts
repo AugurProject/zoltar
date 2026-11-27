@@ -76,7 +76,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		for (const client of [alice, bob]) {
 			await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'mint', args: [0n, client.account.address, 150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, 150n * E] }))
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'depositFor', args: [client.account.address, 150n * E] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'deposit', args: [150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setHealthTarget', args: [12_000n] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setCommitment', args: [100n * E] }))
 		}

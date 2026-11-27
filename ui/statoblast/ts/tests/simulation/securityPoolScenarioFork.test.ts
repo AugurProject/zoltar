@@ -8,7 +8,7 @@ import { forkSeededSecurityPool } from '@zoltar/ui-statoblast-shared/simulation/
 import { createCompleteSetInQuestionLedger, loadShareMigrationTargets, loadTradingDetails, migrateSharesFromUniverse, redeemCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
-import { loadSecurityPoolForkSnapshot, quoteSecurityPoolAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { loadSecurityPoolForkSnapshot, quoteSecurityPoolAuctionRefund } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
 import { expect, test } from 'bun:test'
 import { createPublicClient, custom, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -125,8 +125,8 @@ test(
 			const excluded = auction.bids.find(bid => bid.earlyRefundAttoEth > 0n)
 			const binding = auction.bids.find(bid => bid.earlyRefundAttoEth === 0n)
 			if (excluded === undefined || binding === undefined) throw new Error('Missing excluded or binding demand')
-			expect(quoteSecurityPoolAuctionRefundClaim(snapshot, excluded.id).bidRefundAttoEth).toBe(excluded.lots * auction.lotAttoEth)
-			expect(() => quoteSecurityPoolAuctionRefundClaim(snapshot, binding.id)).toThrow('may still win')
+			expect(quoteSecurityPoolAuctionRefund(snapshot, excluded.id)).toBe(excluded.lots * auction.lotAttoEth)
+			expect(() => quoteSecurityPoolAuctionRefund(snapshot, binding.id)).toThrow('may still win')
 		} finally {
 			resetActiveEnvironmentForTesting()
 		}

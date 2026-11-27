@@ -128,7 +128,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		eth: await getETHBalance(client, questionLedger),
 		capitalRep: await getERC20Balance(client, await getRepToken(client, questionLedger), securityPool.capitalLedger),
 		capital: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'totals' }),
-		owner: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'storedOwnerAccount', args: [client.account.address] }),
+		owner: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'ownerAccount', args: [client.account.address] }),
 	})
 
 	test('factory initialization and security pool custody binding reject attackers without changing capital', async () => {

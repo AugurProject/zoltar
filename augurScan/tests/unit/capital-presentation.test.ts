@@ -57,7 +57,7 @@ test('attributes take-overs, cures and report operations to owners and a univers
 
 test("presents an owner's ledger events in REP and the ledger collateral", () => {
 	const at = (event_name: string, event_data: Record<string, unknown>) => capitalEventPresentation({ event_name, event_data, collateral: usdc })
-	expect(at('PrincipalDeposited', { payer: alice, owner: alice, amountAttoRep: (5n * 10n ** 18n).toString() })).toEqual({ title: 'Principal deposit', summary: '5 REP from 0xaaaaaa…aaaaaa' })
+	expect(at('PrincipalDeposited', { owner: alice, amountAttoRep: (5n * 10n ** 18n).toString() })).toEqual({ title: 'Principal deposit', summary: '5 REP' })
 	expect(at('PrincipalWithdrawn', { owner: alice, recipient: bob, amountAttoRep: (5n * 10n ** 18n).toString() })).toEqual({ title: 'Principal withdrawal', summary: '5 REP to 0xbbbbbb…bbbbbb' })
 	expect(at('CommitmentAuthorized', { owner: alice, positionId: '7', rep: (5n * 10n ** 18n).toString(), commitment: '100000000', targetHealthFactorBps: '12000' })?.summary).toBe('position 7 · 5 REP backing 100 USDC · target health 120%')
 	expect(at('EarningsClaimed', { owner: alice, ethAmount: '1500000', repAmount: '0' })?.summary).toBe('1.5 USDC · 0 REP')

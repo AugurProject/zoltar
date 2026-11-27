@@ -30,6 +30,12 @@ abstract contract SecurityPoolCapitalState {
 		uint96 expectedSourceBatch;
 	}
 
+	// The ledger and its lifecycle delegate share these events: the delegate
+	// emits them in the ledger's context, and the ledger's ABI carries them.
+	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
+	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
+	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
+	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
 	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment);
 	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 takeoverRewardAttoRep);
 	SecurityPoolCommitmentIndex public commitmentIndex;
@@ -100,19 +106,18 @@ abstract contract SecurityPoolCapitalState {
 		uint256 repPerLot;
 		uint256 commitmentPerLot;
 	}
+	/// @dev Liquidation and earnings describe an unclaimed winning bid's share of
+	/// the cohort. A claimed bid's lots belong to its bidder's account.
 	struct RepairAuctionPosition {
 		address bidder;
-		uint96 positionId;
 		uint256 principal;
 		uint256 commitment;
 		uint48 liquidationStarted;
 		bool claimed;
-		bool materialized;
 		uint256 earnedAttoEth;
 		uint256 earnedAttoRep;
 	}
 	RepairAuctionCohort public repairAuctionCohort;
-	mapping(uint256 => uint96) public repairAuctionBidPositionIds;
 	mapping(uint256 => bool) public repairAuctionBidClaimed;
 
 	function _settleOwner(address owner) internal {

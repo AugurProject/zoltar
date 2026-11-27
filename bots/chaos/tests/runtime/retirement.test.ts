@@ -1001,8 +1001,5 @@ test('#1702 funded live auction bids block completion through settlement', () =>
 	auction.finalized = true
 	expect(assessRetirement(parameters).status).toBe('waiting')
 	for (const bid of auction.bids) bid.settled = true
-	auction.pendingEthRefund = '4'
-	expect(assessRetirement(parameters).status).not.toBe('drained')
-	auction.pendingEthRefund = '0'
 	expect(assessRetirement(parameters).status).toBe('drained')
 })

@@ -36,20 +36,16 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	SecurityPoolCapitalLifecycleDelegate public immutable lifecycleDelegate;
 	SecurityPoolCapitalRepairAuctionDelegate public immutable repairAuctionDelegate;
 	uint256 public immutable securityMultiplierBps;
-	uint256 private immutable minimumCommitmentAttoEth;
+	uint256 public immutable minimumCommitmentAttoEth;
 
 	bool private constant ENFORCE_TAKEOVER_BOUNDS = true;
 	bool private constant OMIT_TAKEOVER_BOUNDS = false;
 	bool private constant USE_FUNDED_REPORT = true;
 	bool private constant USE_ACCEPTED_PRICE = false;
 
-	event PrincipalDeposited(address indexed payer, address indexed owner, uint256 amountAttoRep);
-	event PrincipalWithdrawn(address indexed owner, address indexed recipient, uint256 amountAttoRep);
+	event PrincipalDeposited(address indexed owner, uint256 amountAttoRep);
 	event HealthTargetSet(address indexed owner, uint256 targetHealthFactorBps);
-	event CommitmentAuthorized(address indexed owner, uint96 indexed positionId, uint256 rep, uint256 commitment, uint256 targetHealthFactorBps);
 	event RetirementServed(uint256 rep, uint256 commitment);
-	event CapitalPriceAccepted(uint256 price, uint48 validUntil);
-	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
 	event UnassignedFeesBurned(uint256 ethAmount, uint256 repAmount);
 
 	constructor(address authority, Zoltar protocol, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalLifecycleDelegate lifecycle, SecurityPoolCapitalRepairAuctionDelegate repairAuction) {
@@ -110,11 +106,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		if (universe == 0) IERC20(token).safeApprove(address(zoltar), type(uint256).max);
 	}
 
-	function storedOwnerAccount(address owner) external view returns (Owner memory) {
-		return owners[owner].account;
-	}
 	function ownerAccount(address owner) external view returns (Owner memory) {
-		return repairAuctionDelegate.previewOwner(ICapitalRepairAuctionHost(address(this)), owner);
+		return owners[owner].account;
 	}
 	/// @notice Deposited principal includes virtual winning bids and excludes
 	/// earnings, even before either the position or its earnings are claimed.
@@ -125,7 +118,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return repairAuctionDelegate.previewRepairAuctionPositions(ICapitalRepairAuctionHost(address(this)), bidIds);
 	}
 	function installRepairAuctionCohort(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external onlyForkAuthority nonReentrant {
-		DelegateCall.invoke(address(repairAuctionDelegate), abi.encodeCall(repairAuctionDelegate.install, (adapter, lots, repPerLot, commitmentPerLot, minimumCommitmentAttoEth)));
+		DelegateCall.invoke(address(repairAuctionDelegate), abi.encodeCall(repairAuctionDelegate.install, (adapter, lots, repPerLot, commitmentPerLot)));
 	}
 	/// @notice Count one more unclaimed bid for `bidder`. Only this universe's auction calls.
 	function registerRepairAuctionBidder(address bidder) external {
@@ -187,16 +180,17 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	/// @dev Every deposit immediately backs the owner's entire live commitment.
-	function depositFor(address owner, uint256 amount) external nonReentrant {
-		_depositFor(owner, amount);
+	function deposit(uint256 amount) external nonReentrant {
+		_deposit(amount);
 	}
 	function depositAndSetHealthTarget(uint256 amount, uint256 targetHealthFactorBps) external nonReentrant {
-		_depositFor(_capitalOwner(), amount);
+		_deposit(amount);
 		_setHealthTarget(targetHealthFactorBps);
 	}
-	function _depositFor(address owner, uint256 amount) private {
+	function _deposit(uint256 amount) private {
 		_requireOpen();
-		require(owner == _capitalOwner() && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
+		address owner = _capitalOwner();
+		require(owner != forkAuthority && amount > 0, 'Invalid capital deposit');
 		_checkpointAccounting();
 		_settleOwner(owner);
 		Owner storage account = owners[owner].account;
@@ -213,8 +207,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			}
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
-		repToken().safeTransferFrom(_capitalOwner(), address(this), amount);
-		emit PrincipalDeposited(_capitalOwner(), owner, amount);
+		repToken().safeTransferFrom(owner, address(this), amount);
+		emit PrincipalDeposited(owner, amount);
 	}
 
 	function withdrawPrincipal(uint256 amount, address recipient) external nonReentrant {
@@ -258,7 +252,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		if (commitment >= position.commitment) {
 			_requireFresh();
 			return
-				abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.authorize, (commitment, reportId, useReport, minimumCommitmentAttoEth))), (uint96));
+				abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.authorize, (commitment, reportId, useReport))), (uint96));
 		}
 		require(!useReport, 'Reports price growth only');
 		require(commitment == 0 || commitment >= minimumCommitmentAttoEth, 'Commitment below minimum');
@@ -276,6 +270,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
 		_checkpointAccounting();
+		// The owner paths below serve only an owner's own position, never the cohort's.
 		require(id == 0 || id != repairAuctionCohort.positionId, 'Materialize an individual repair auction bidder');
 		_serveRetirement(id);
 	}
@@ -283,7 +278,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		if (id == 0) return;
 		SecurityPoolCommitmentIndex.Account memory pending = commitmentIndex.accountOf(id);
 		if (pending.batch == 0 || pending.commitment == 0) return;
-		require(id == 0 || id != repairAuctionCohort.positionId, 'Materialize an individual repair auction bidder');
 		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId()) != 0) return;
 		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth, id);
 		retirementCashAttoRep += result.rep;
@@ -406,7 +400,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// `setCommitment` and a takeover, which needs an adverse observation, cure.
 	function _cure(uint96 id, uint256 target, bool ownerExit) private returns (uint256) {
 		return
-			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.cure, (id, target, ownerExit, minimumCommitmentAttoEth, securityMultiplierBps))), (uint256));
+			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.cure, (id, target, ownerExit))), (uint256));
 	}
 
 	/// @notice Auction repair; the takeover reward from the source stays pledged in the receiver vault.
@@ -442,7 +436,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		// executable at the last accepted valuation after that report expires.
 		_checkpointAccounting();
 		return
-			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, enforceBounds, minimumCommitmentAttoEth))), (uint96));
+			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, enforceBounds))), (uint96));
 	}
 
 	function freeze() external onlyForkAuthority {

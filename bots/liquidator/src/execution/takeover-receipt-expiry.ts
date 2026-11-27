@@ -36,7 +36,7 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 				client.readContract({ ...atReceipt, functionName: 'universeId' }),
 			])
 			const forkTime = await client.readContract({ address: zoltar, abi: zoltarAbi, functionName: 'getForkTime', args: [universeId], blockNumber })
-			const positionId = call.functionName === 'takeOverWithBounds' ? target : await client.readContract({ ...atReceipt, functionName: 'repairAuctionBidPositionIds', args: [target] })
+			const positionId = call.functionName === 'takeOverWithBounds' ? target : await claimedBidPositionId(client, atReceipt, target)
 			const position = positionId === 0n ? undefined : await client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'accountOf', args: [positionId], blockNumber })
 			// An owner may rescue its position in place; the rescue ends the liquidation without changing its commitment.
 			const [liquidationStarted, priorLiquidationStarted] =
@@ -64,4 +64,11 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 	if (state.position !== undefined && state.priorLiquidationStarted !== 0n && state.priorLiquidationStarted !== undefined && state.liquidationStarted === 0n) return 'Target position is no longer liquidating'
 	if (state.position !== undefined && state.priorPosition !== undefined && (state.position.owner !== state.priorPosition.owner || state.position.commitment !== state.priorPosition.commitment)) return 'Target position changed'
 	return undefined
+}
+
+/** A claimed bid's lots joined its bidder's own position; an unclaimed bid's lots are still in the auction cohort. */
+async function claimedBidPositionId(client: ReadClient, atReceipt: { address: `0x${string}`; abi: typeof securityPoolCapitalLedgerAbi; blockNumber: bigint }, bidId: bigint) {
+	const [bid] = await client.readContract({ ...atReceipt, functionName: 'repairAuctionPositions', args: [[bidId]] })
+	if (bid === undefined || !bid.claimed) return 0n
+	return (await client.readContract({ ...atReceipt, functionName: 'ownerAccount', args: [bid.bidder] })).positionId
 }

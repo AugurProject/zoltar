@@ -16,7 +16,7 @@ for (const [entityType, contractKind] of [
 		const mismatches: string[] = []
 		const outputValues: Readonly<Record<string, readonly unknown[]>> = {
 			getOutcomeBalancesAttoRep: [[1n, 2n, 3n]],
-			clearing: [2n, 200n, 400n, 800n, 2n, 100n, 100n, 100n, true],
+			clearing: [2n, 200n, 400n, 800n, true],
 			initialized: [true],
 			awaitingForkContinuation: [false],
 			isEscalationResolved: [false],
@@ -63,7 +63,6 @@ test('normalizes chain snapshot targets and rejects unsupported entity types', (
 
 test('samples a complete auction state through tagged reads', async () => {
 	const values: Readonly<Record<string, unknown>> = {
-		opensAt: 100n,
 		closesAt: 200n,
 		lotAttoEth: 2n,
 		targetLots: 250n,
@@ -74,7 +73,7 @@ test('samples a complete auction state through tagged reads', async () => {
 		bidCount: 3n,
 		initialized: true,
 		finalized: true,
-		clearing: [2n, 200n, 400n, 800n, 2n, 100n, 100n, 100n, true],
+		clearing: [2n, 200n, 400n, 800n, true],
 	}
 	const read: StateRead = async (_address, _abi, functionName) => {
 		const value = values[functionName]
@@ -86,7 +85,6 @@ test('samples a complete auction state through tagged reads', async () => {
 		readStatus: 'success',
 		sourceMethod: 'augurscan.auction-state.v1',
 		readResult: {
-			opensAt: '100',
 			closesAt: '200',
 			clearing: { attoRepPerLot: '2', filledLots: '200', raisedAttoEth: '400', soldAttoRep: '800', raiseLimitReached: true },
 		},
@@ -95,7 +93,7 @@ test('samples a complete auction state through tagged reads', async () => {
 
 test('records the auction collateral token metadata so attoEth amounts use its decimals', async () => {
 	const token = getAddress('0x5555555555555555555555555555555555555555')
-	const metadata: Readonly<Record<string, unknown>> = { collateralToken: token, symbol: 'USDC', decimals: 6n, initialized: true, finalized: false, clearing: [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false] }
+	const metadata: Readonly<Record<string, unknown>> = { collateralToken: token, symbol: 'USDC', decimals: 6n, initialized: true, finalized: false, clearing: [0n, 0n, 0n, 0n, false] }
 	const read: StateRead = async (_address, _abi, functionName) => metadata[functionName] ?? 1n
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'auction', entityIdentity: pool.toLowerCase(), address: pool }, read)
 	expect(snapshot.readStatus).toBe('success')

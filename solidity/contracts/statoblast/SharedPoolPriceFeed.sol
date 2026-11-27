@@ -417,7 +417,7 @@ contract SharedPoolPriceFeed {
 			selector == SecurityPoolCapitalLedger.takeOver.selector ||
 			selector == SecurityPoolCapitalLedger.takeOverWithBounds.selector ||
 			selector == SecurityPoolCapitalLedger.takeOverRepairAuctionBid.selector ||
-			selector == SecurityPoolCapitalLedger.depositFor.selector ||
+			selector == SecurityPoolCapitalLedger.deposit.selector ||
 			selector == SecurityPoolCapitalLedger.depositAndSetHealthTarget.selector ||
 			selector == SecurityPoolCapitalLedger.withdrawPrincipal.selector ||
 			selector == SecurityPoolCapitalLedger.setHealthTarget.selector ||

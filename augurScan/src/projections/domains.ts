@@ -55,7 +55,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	// The reporter ledger names the game it registers or schedules, so both join that game's history.
 	...definitions('escalation', 'escalation', ['GameRegistered', 'ReporterFinalityScheduled'], ['game']),
 	...definitions('risk', 'reporter-ledger', ['ReporterBalanceChanged'], ['universeId']),
-	...definitions('auction', 'auction', ['RepairAuctionStarted', 'BidSubmitted', 'RepairAuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
+	...definitions('auction', 'auction', ['RepairAuctionStarted', 'BidSubmitted', 'RepairAuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn']),
 	...definitions('risk', 'pool', ['DeployQuestionLedger', 'QuestionLedgerRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['questionLedger']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'HealthTargetSet', 'EarningsClaimed'], ['owner']),
 	// Claiming a winning bid moves its lots into its bidder's own capital account, so the bidder is the owner.

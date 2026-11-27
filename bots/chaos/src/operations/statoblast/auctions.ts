@@ -30,8 +30,7 @@ function bidTerms(snapshot: EcosystemSnapshot, options: PlanningOptions, auction
 	return { lots, minimum, value }
 }
 
-export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition {
-	if (kind === 'withdraw-refund') return auctionLifecycle('withdraw')
+function auctionBidDefinition(): OperationDefinition {
 	const id = 'statoblast.auction.bid'
 	function candidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 		return snapshot.auctions.flatMap(auction => {
@@ -89,29 +88,27 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 	return definition
 }
 
-type LifecycleKind = 'open' | 'finalize' | 'settle' | 'early-refund' | 'withdraw'
+type LifecycleKind = 'open' | 'finalize' | 'settle' | 'early-refund'
 function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
-	const id = { open: 'statoblast.auction.start', finalize: 'statoblast.auction.finalize-route', settle: 'statoblast.auction.settle-bids', 'early-refund': 'statoblast.auction.refund', withdraw: 'statoblast.auction.withdraw-refund' }[kind]
-	const method = { open: 'open', finalize: 'finalizeBranch', settle: 'settleRefund', 'early-refund': 'settleRefund', withdraw: 'withdrawRefunds' }[kind]
-	const label = { open: 'Open security pool collateral repair auction', finalize: 'Finalize security pool branch auction', settle: 'Settle auction bid refund', 'early-refund': 'Refund provably losing bid', withdraw: 'Withdraw auction collateral refund' }[kind]
+	const id = { open: 'statoblast.auction.start', finalize: 'statoblast.auction.finalize-route', settle: 'statoblast.auction.settle-bids', 'early-refund': 'statoblast.auction.refund' }[kind]
+	const method = { open: 'open', finalize: 'finalizeBranch', settle: 'refundBid', 'early-refund': 'refundBid' }[kind]
+	const label = { open: 'Open security pool collateral repair auction', finalize: 'Finalize security pool branch auction', settle: 'Refund unused auction bid collateral', 'early-refund': 'Refund provably losing bid' }[kind]
 	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 		const now = amount(snapshot.anchor.timestamp)
 		return snapshot.auctions.flatMap<{ auction: AuctionSnapshot; bidId: string | undefined }>(auction => {
 			if (options !== undefined && !inputMatches(options, 'auction', auction.address)) return []
 			if (kind === 'settle' || kind === 'early-refund') return auction.finalized === (kind === 'settle') ? auction.refundableBidIds.map(bidId => ({ auction, bidId })) : []
-			let enabled = amount(auction.pendingEthRefund) > 0n && auction.pendingEthRefundGeneration !== undefined
-			if (kind === 'open') enabled = auction.openingExpectedSuccess && !auction.opened && !auction.finalized && now + 86_400n <= amount(auction.endTime)
-			if (kind === 'finalize') enabled = !auction.finalized && now >= amount(auction.endTime)
+			const enabled = kind === 'open' ? auction.openingExpectedSuccess && !auction.opened && !auction.finalized && now + 86_400n <= amount(auction.endTime) : !auction.finalized && now >= amount(auction.endTime)
 			return enabled ? [{ auction, bidId: undefined }] : []
 		})
 	}
 	function metadata(candidate: { auction: AuctionSnapshot; bidId: string | undefined }) {
-		return { auction: candidate.auction.address, ...(candidate.bidId === undefined ? {} : { bidId: candidate.bidId }), ...(kind === 'withdraw' && candidate.auction.pendingEthRefundGeneration !== undefined ? { refundGeneration: candidate.auction.pendingEthRefundGeneration } : {}) }
+		return { auction: candidate.auction.address, ...(candidate.bidId === undefined ? {} : { bidId: candidate.bidId }) }
 	}
 	function build(snapshot: EcosystemSnapshot, candidate: { auction: AuctionSnapshot; bidId: string | undefined }) {
 		const { auction, bidId } = candidate
-		let args: (bigint | string)[] = bidId === undefined ? [] : [amount(bidId)]
-		if (kind === 'withdraw') args = [snapshot.wallet.address]
+		// A refund pays the wallet's own bid back to the wallet.
+		let args: (bigint | string)[] = bidId === undefined ? [] : [amount(bidId), snapshot.wallet.address]
 		if (kind === 'finalize') args = [amount(auction.universeId)]
 		return planBase({
 			definitionId: id,
@@ -198,3 +195,4 @@ export const startCollateralRepairAuction = auctionLifecycle('open')
 export const finalizeCollateralRepairAuctionRoute = auctionLifecycle('finalize')
 export const settleAuctionBids = auctionLifecycle('settle')
 export const refundLosingAuctionBids = auctionLifecycle('early-refund')
+export const bidInCollateralRepairAuction = auctionBidDefinition()

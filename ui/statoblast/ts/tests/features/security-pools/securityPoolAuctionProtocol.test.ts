@@ -37,11 +37,10 @@ function fixture() {
 		maximumAdmissibleBidAttoRepPerLot: 10n * unit,
 		depositedAttoEth: unit,
 		bidderBidCount: 0n,
-		refundCreditAttoEth: 0n,
 		bids: [owner, false, false, 1n, 3n * unit],
 		previewBid: { bidder: owner, filledLots: 1n, usedAttoEth: unit, principalAttoRep: 10n * unit, refundAttoEth: 0n },
-		repairAuctionPositions: [{ bidder: owner, positionId: 0n, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n }],
-		clearing: [10n * unit, 1n, unit, 10n * unit, 0n, 0n, 0n, 1n, false],
+		repairAuctionPositions: [{ bidder: owner, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, earnedAttoEth: 7n, earnedAttoRep: 9n }],
+		clearing: [10n * unit, 1n, unit, 10n * unit, false],
 	}
 	const scoped = new Map<string, unknown>()
 	const reads: { functionName: string; address: Address; blockNumber?: bigint | undefined }[] = []
@@ -64,7 +63,7 @@ test('branch auction loading authenticates the adapter, engine and custody modul
 	source.values['bidderBidCount'] = 1n
 	source.values['bidderBidId'] = 3n
 	const loaded = await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)
-	expect(loaded.auction?.bids.map(bid => [bid.id, bid.bidder, bid.fill?.filledLots, bid.claimed, bid.position?.materialized])).toEqual([[3n, owner, 1n, false, false]])
+	expect(loaded.auction?.bids.map(bid => [bid.id, bid.bidder, bid.fill?.filledLots, bid.claimed, bid.materialized])).toEqual([[3n, owner, 1n, false, false]])
 	expect(loaded.claimableBidIds).toEqual([3n])
 	expect(new Set(source.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
 	source.source.codes.set(engine, '0x6000')
@@ -78,7 +77,7 @@ test('branch auction loading rejects bids of another bidder', async () => {
 	source.values['bids'] = [token, false, false, 1n, 3n * unit]
 	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('another wallet')
 	source.values['bids'] = [owner, false, false, 1n, 3n * unit]
-	source.values['repairAuctionPositions'] = [{ bidder: token, positionId: 0n, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n }]
+	source.values['repairAuctionPositions'] = [{ bidder: token, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, earnedAttoEth: 7n, earnedAttoRep: 9n }]
 	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('identity')
 })
 

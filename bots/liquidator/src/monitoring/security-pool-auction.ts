@@ -88,9 +88,9 @@ export async function loadSecurityPoolAuctionPosition(client: ReadClient, multic
 	const [position] = positions
 	if (position === undefined || positions.length !== 1) throw new Error('Auction bid position response is invalid')
 	// A claimed bid belongs exclusively to the ordinary position registry.
-	if (position.claimed || position.materialized || fill.filledLots === 0n) return undefined
+	if (position.claimed || fill.filledLots === 0n) return undefined
 	const bidder = getAddress(position.bidder)
-	if (bidder === zeroAddress || getAddress(fill.bidder) !== bidder || position.positionId !== 0n) throw new Error('Auction bid identity changed')
+	if (bidder === zeroAddress || getAddress(fill.bidder) !== bidder) throw new Error('Auction bid identity changed')
 	const materialize = { address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'materializeRepairAuctionBids', args: [[bidId]] } as const
 	const [joined] = await client.multicall({ contracts: [materialize], allowFailure: false, blockNumber, multicallAddress: multicall3 })
 	const id = joined?.[0]

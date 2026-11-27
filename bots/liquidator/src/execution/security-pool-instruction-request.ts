@@ -6,7 +6,7 @@ import { encodeFunctionData, type Address, type Hex } from '@zoltar/bot-shared/e
 import {
 	buildSecurityPoolAuctionBidRequest,
 	quoteSecurityPoolAuctionBid,
-	buildSecurityPoolAuctionRefundClaimRequest,
+	buildSecurityPoolAuctionRefundRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	buildSecurityPoolCapitalDepositAndSetHealthRequest,
 	buildSecurityPoolCapitalSetHealthRequest,
@@ -140,7 +140,7 @@ async function auctionInstructionRequest(context: Context, instruction: AuctionI
 		if (auction === undefined || auction.bidStart + 64n >= auction.totalBidCount) throw new Error('Instruction bid does not belong to this operator')
 		auctionSnapshot = await loadSecurityPoolAuctionSnapshot({ client: pinnedClient, securityPool: instruction.securityPool, universeId: instruction.universeId, bidder: snapshot.owner, bidStart: auction.bidStart + 64n, bidCount: 64 })
 	}
-	const request = buildSecurityPoolAuctionRefundClaimRequest(auctionSnapshot, instruction.bidId, snapshot.owner)
+	const request = buildSecurityPoolAuctionRefundRequest(auctionSnapshot, instruction.bidId, snapshot.owner)
 	return { request, completes: true }
 }
 

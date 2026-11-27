@@ -209,7 +209,6 @@ export interface AuctionSnapshot {
 	securityPool: Address
 	universeId: string
 	forkController: Address
-	startTime: string
 	endTime: string
 	opened: boolean
 	finalized: boolean
@@ -218,9 +217,8 @@ export interface AuctionSnapshot {
 	unroundedCollateralAttoRepPerLot: CanonicalUintString
 	maximumBidAttoRepPerLot: CanonicalUintString
 	maximumAdmissibleBidAttoRepPerLot: CanonicalUintString
-	pendingEthRefund: string
-	pendingEthRefundGeneration?: Hash
 	bids: AuctionBidSnapshot[]
+	/** The wallet's bids whose unused collateral it can take back at the anchor block. */
 	refundableBidIds: string[]
 	/** The capital ledger that records this auction's bids as claimed. */
 	capital: Address

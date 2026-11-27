@@ -74,8 +74,7 @@ test('formats pool share supply and feed prices with collateral precision', () =
 })
 
 test('formats auction windows as dates without treating security pool clock values as timestamps', () => {
-	expect(semanticFields({ opensAt: '1750000000', closesAt: '1750000000', lastSettlementSecurityPoolTime: '1750000000' }, 'ETH')).toEqual([
-		['Opens At', '2025-06-15 15:06:40 UTC'],
+	expect(semanticFields({ closesAt: '1750000000', lastSettlementSecurityPoolTime: '1750000000' }, 'ETH')).toEqual([
 		['Closes At', '2025-06-15 15:06:40 UTC'],
 		['Last Settlement Security Pool Time', '1,750,000,000'],
 	])

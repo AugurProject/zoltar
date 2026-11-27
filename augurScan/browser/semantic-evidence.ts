@@ -32,7 +32,7 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	const text = String(value)
 	if (/^(questionResolution|finalQuestionResolution)$/.test(key)) return outcomes[Number(text)] ?? `Unknown outcome (${text})`
 	if (/^-?\d+$/.test(text)) {
-		if (/^(activationTime|endTimestamp|nonDecisionTimestamp|observationTimestamp|priceValidUntil|lastSettlementTimestamp|opensAt|closesAt)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
+		if (/^(activationTime|endTimestamp|nonDecisionTimestamp|observationTimestamp|priceValidUntil|lastSettlementTimestamp|closesAt)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
 		// The ledger reports zero until an adverse price observation starts a position's take-over clock.
 		if (key === 'liquidationStartedAt') return text === '0' ? 'Not started' : utcDateTime(Number(text) * 1000)
 		// Capital-ledger prices are attoREP per atomic unit of collateral scaled by 1e18; a position without commitment has no price limit.

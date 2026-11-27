@@ -82,18 +82,17 @@ test('describes report round changes against the next older evidence row', () =>
 })
 
 test('derives auction lifecycle at exact boundaries', () => {
-	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '20', bidCount: 1, settlementCount: 0 })).toBe('Awaiting finalization')
-	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '19', bidCount: 0, settlementCount: 0 })).toBe('Open')
-	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '9', bidCount: 0, settlementCount: 0 })).toBe('Scheduled')
-	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20', bidCount: 2, settlementCount: 1 })).toBe('Bid settlements outstanding')
+	expect(auctionLifecycle({ started: true, finalized: false, closesAt: '20', indexedTimestamp: '20' })).toBe('Awaiting finalization')
+	expect(auctionLifecycle({ started: true, finalized: false, closesAt: '20', indexedTimestamp: '19' })).toBe('Open')
+	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20' })).toBe('Finalized')
 })
 
 test('an auction with incomplete start evidence has an unavailable bidding window', () => {
-	for (const bidCount of [0, 1]) expect(auctionLifecycle({ started: false, finalized: false, indexedTimestamp: '20', bidCount, settlementCount: 0 })).toBe('Awaiting indexed evidence')
+	expect(auctionLifecycle({ started: false, finalized: false, indexedTimestamp: '20' })).toBe('Awaiting indexed evidence')
 })
 
-test('an auction finalized without opening is fully settled', () => {
-	expect(auctionLifecycle({ started: false, finalized: true, indexedTimestamp: '20', bidCount: 0, settlementCount: 0 })).toBe('Fully settled')
+test('an auction finalized without opening is finalized', () => {
+	expect(auctionLifecycle({ started: false, finalized: true, indexedTimestamp: '20' })).toBe('Finalized')
 })
 
 test('reconstructs pre-swap reserves and exact price impact from Swap evidence', () => {

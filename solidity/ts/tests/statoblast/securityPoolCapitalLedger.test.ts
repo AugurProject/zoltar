@@ -33,7 +33,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 		return writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPrice', args: [amount, Number(now) + duration] }))
 	}
 	const demand = (amount: bigint) => writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setDemand', args: [amount] }))
-	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'depositFor', args: [client.account.address, amount] }))
+	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'deposit', args: [amount] }))
 	const authorize = async (client: WriteClient, commitment: bigint) => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address: ledger, functionName: 'setCommitment', args: [commitment] }))
 		const owner = await account(client)

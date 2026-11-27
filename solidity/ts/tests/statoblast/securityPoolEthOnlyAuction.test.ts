@@ -75,7 +75,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)
-		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] })).rejects.toThrow('Bid may still win')
+		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, context.other.account.address] })).rejects.toThrow('Bid may still win')
 		const winner = await context.bid(context.owner, 5n, 10n * unit)
 		// A bid creates no contract: its receipt carries no contract creation and the bidder is recorded once.
 		for (const bid of [loser, winner]) expect((await context.owner.getTransactionReceipt({ hash: bid.hash })).contractAddress ?? undefined).toBeUndefined()
@@ -85,12 +85,11 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'bidCount' })).toBe(2n)
 		expect(await collateralBalance(context.owner, fixture.securityPool, context.engine)).toBe(7n * unit)
 		const clearing = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n, 0n] })
-		// Anyone can credit, but the credit belongs only to the original bidder.
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] }))
-		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(2n * unit)
+		// Only the original bidder takes back the excluded bid's collateral, to any recipient it chooses.
+		await expect(context.owner.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, context.owner.account.address] })).rejects.toThrow('Auction bid belongs to another bidder')
 		const recipient = context.owner.account.address
 		const before = await collateralBalance(context.owner, fixture.securityPool, recipient)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [recipient] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, recipient] }))
 		expect((await collateralBalance(context.owner, fixture.securityPool, recipient)) - before).toBe(2n * unit)
 
 		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n, 0n] })).toEqual(clearing)
@@ -100,37 +99,36 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.finalize()
 		expect((await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [loser.id] })).filledLots).toBe(0n)
 		expect((await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [replacement.id] })).filledLots).toBe(2n)
-		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] })).rejects.toThrow('already been settled')
+		await expect(context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, context.other.account.address] })).rejects.toThrow('already been settled')
 	})
 
-	test('a bidder credits and withdraws in one transaction, before and after closing, even when a keeper credited first', async () => {
+	test('a bidder refunds each bid once, before and after closing', async () => {
 		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [1n, context.other.account.address] })).rejects.toThrow('Collateral repair auction has not opened')
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [1n, context.other.account.address] })).rejects.toThrow('Collateral repair auction has not opened')
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)
 		// Equal limits fill in submission order: the owner's earlier bid fills first, leaving the tied bid a partial fill.
-		await context.bid(context.owner, 3n)
+		const full = await context.bid(context.owner, 3n)
 		const tied = await context.bid(context.other, 5n)
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, zeroAddress] })).rejects.toThrow('Collateral repair auction refund recipient missing')
-		await expect(context.owner.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, context.owner.account.address] })).rejects.toThrow('Auction bid belongs to another bidder')
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tied.id, context.other.account.address] })).rejects.toThrow('Bid may still win')
-		// Permissionless settlement first, then the bidder's combined transaction only withdraws.
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [loser.id] }))
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, zeroAddress] })).rejects.toThrow('Auction refund recipient is required')
+		await expect(context.owner.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, context.owner.account.address] })).rejects.toThrow('Auction bid belongs to another bidder')
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [tied.id, context.other.account.address] })).rejects.toThrow('Bid may still win')
 		const recipient = context.owner.account.address
 		const before = await collateralBalance(context.owner, fixture.securityPool, recipient)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, recipient] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, recipient] }))
 		expect((await collateralBalance(context.owner, fixture.securityPool, recipient)) - before).toBe(2n * unit)
-		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(0n)
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, recipient] })).rejects.toThrow('Auction has no refund credit for this bidder')
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [loser.id, recipient] })).rejects.toThrow('Auction bid has already been settled')
 		await context.closingQuote()
 		await context.finalize()
 		const fill = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [tied.id] })
 		expect(fill.refundAttoEth).toBeGreaterThan(0n)
 		const afterClose = await collateralBalance(context.owner, fixture.securityPool, recipient)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tied.id, recipient] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [tied.id, recipient] }))
 		expect((await collateralBalance(context.owner, fixture.securityPool, recipient)) - afterClose).toBe(fill.refundAttoEth)
-		expect((await repairAuctionPositionOf(context.owner, context.capital, tied.id)).materialized).toBe(false)
+		// A fully filled bid has nothing to refund.
+		await expect(context.owner.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [full.id, recipient] })).rejects.toThrow('Auction bid has no refund')
+		expect((await repairAuctionPositionOf(context.owner, context.capital, tied.id)).claimed).toBe(false)
 	})
 
 	test('purchased collateral backs each lot at the protocol floor without selling unsold inventory', async () => {
@@ -212,7 +210,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		const required = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'requiredRep', args: [lot, 10_000n] })
 		expect(fill.principalAttoRep / fill.filledLots).toBeGreaterThanOrEqual(required)
 		// No collateral is owed back, and the bidder paid no REP.
-		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(0n)
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [bid.id, context.other.account.address] })).rejects.toThrow('Auction bid has no refund')
 		expect(await context.balance(context.other.account.address)).toBe(0n)
 	})
 })
