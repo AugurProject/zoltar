@@ -32,24 +32,6 @@ function hashCarryParentForTest(left: Hex, right: Hex) {
 	return keccak256(concatHex([left, right]))
 }
 
-function computeEmptyNullifierRootForTest() {
-	let currentHash = ('0x' + '00'.repeat(32)) as Hex
-	for (let depth = 0; depth < 64; depth += 1) currentHash = hashCarryParentForTest(currentHash, currentHash)
-	return currentHash
-}
-
-function computeSingleConsumedNullifierRootForTest(parentDepositIndex: bigint) {
-	let path = parentDepositIndex
-	let currentHash = ('0x' + '00'.repeat(31) + '01') as Hex
-	let zeroHash = ('0x' + '00'.repeat(32)) as Hex
-	for (let depth = 0; depth < 64; depth += 1) {
-		currentHash = (path & 1n) === 0n ? hashCarryParentForTest(currentHash, zeroHash) : hashCarryParentForTest(zeroHash, currentHash)
-		zeroHash = hashCarryParentForTest(zeroHash, zeroHash)
-		path >>= 1n
-	}
-	return currentHash
-}
-
 function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 	const zeroHash = ('0x' + '00'.repeat(32)) as Hex
 	const peaks = Array.from({ length: 64 }, () => zeroHash)
@@ -84,7 +66,6 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 			throw new Error(`Unexpected multicall contract: ${functionName}`)
 		}),
 		readContract: createReadContractStub(async request => {
-			if (request.functionName === 'appendOnlyCarry') return false
 			if (request.functionName === 'startBondAttoRep') return 7n
 			if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 			if (request.functionName === 'activationTime') return 12n
@@ -151,7 +132,6 @@ describe('reporting protocol client', () => {
 				return [questionTuple, 10n]
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'isEscalationResolved') return true
@@ -174,7 +154,6 @@ describe('reporting protocol client', () => {
 			const client = {
 				...base,
 				readContract: createReadContractStub(async request => {
-					if (request.functionName === 'appendOnlyCarry') return false
 					if (request.functionName === 'getForkTime') return forkTime
 					if (request.functionName === 'hasReachedNonDecision') return false
 					return base.readContract(request)
@@ -190,7 +169,6 @@ describe('reporting protocol client', () => {
 		const client = {
 			...base,
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 61n
 				return base.readContract(request)
 			}),
@@ -203,7 +181,6 @@ describe('reporting protocol client', () => {
 		const client = {
 			...base,
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkTime') return 200n
 				return base.readContract(request)
 			}),
@@ -571,7 +548,6 @@ describe('reporting protocol client', () => {
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'securityPoolOf') return vaultAddress
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -645,7 +621,6 @@ describe('reporting protocol client', () => {
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'securityPoolOf') return vaultAddress
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -720,7 +695,6 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -768,7 +742,6 @@ describe('reporting protocol client', () => {
 			}),
 			readContract: createReadContractStub(async request => {
 				if (request.functionName === 'securityPoolOf') return vaultAddress
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -830,7 +803,6 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 9n
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
@@ -873,7 +845,6 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') {
@@ -903,7 +874,6 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
@@ -927,7 +897,6 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -966,13 +935,11 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.functionName === 'getOutcomeState')
 					return {
 						currentCarryRoot: zeroHash,
 						currentLeafCount: 0n,
-						currentNullifierRoot: zeroHash,
 						localHeadNodeId: request.address === parentEscalationGameAddress ? 1n : 0n,
 						snapshotLeafCount: 0n,
 						snapshotCarryRoot: zeroHash,
@@ -1001,13 +968,11 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.functionName === 'getOutcomeState')
 					return {
 						currentCarryRoot: zeroHash,
 						currentLeafCount: 0n,
-						currentNullifierRoot: zeroHash,
 					}
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
 				if (request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
@@ -1019,13 +984,12 @@ describe('reporting protocol client', () => {
 		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
-	test.each([false, true])('#1539 historical membership remains authenticated (append-only=%s)', async appendOnly => {
+	test('#1539 historical membership remains authenticated', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const firstDepositor = getAddress('0x00000000000000000000000000000000000000f2')
 		const secondDepositor = getAddress('0x00000000000000000000000000000000000000f3')
 		const questionForkerAddress = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
-		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const firstLeaf = {
 			amountAttoRep: 3n,
 			cumulativeAmountAttoRep: 3n,
@@ -1055,13 +1019,11 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return appendOnly
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return {
 						currentCarryRoot: secondLeafHash,
 						currentLeafCount: 2n,
-						currentNullifierRoot: emptyNullifierRoot,
 						localHeadNodeId: 2n,
 						snapshotLeafCount: 0n,
 					}
@@ -1070,7 +1032,6 @@ describe('reporting protocol client', () => {
 					return {
 						currentCarryRoot: frozenRoot,
 						currentLeafCount: 2n,
-						currentNullifierRoot: emptyNullifierRoot,
 						snapshotLeafCount: 2n,
 						snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks),
 					}
@@ -1092,8 +1053,6 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const proofs = await buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])
-		expect(proofs[0]?.nullifierSiblings).toHaveLength(appendOnly ? 0 : 64)
 		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
 				depositor: secondDepositor,
@@ -1110,7 +1069,6 @@ describe('reporting protocol client', () => {
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
-		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const inheritedLeaf = {
 			amountAttoRep: 3n,
 			cumulativeAmountAttoRep: 3n,
@@ -1140,14 +1098,12 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return {
 						currentCarryRoot: parentCarryRoot,
 						currentLeafCount: 2n,
-						currentNullifierRoot: zeroHash,
 						localHeadNodeId: 2n,
 						snapshotLeafCount: 1n,
 					}
@@ -1156,7 +1112,6 @@ describe('reporting protocol client', () => {
 					return {
 						currentCarryRoot: zeroHash,
 						currentLeafCount: 0n,
-						currentNullifierRoot: emptyNullifierRoot,
 						snapshotLeafCount: 2n,
 						snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks),
 					}
@@ -1165,7 +1120,6 @@ describe('reporting protocol client', () => {
 					return {
 						currentCarryRoot: inheritedLeafHash,
 						currentLeafCount: 1n,
-						currentNullifierRoot: zeroHash,
 						localHeadNodeId: 1n,
 						snapshotLeafCount: 0n,
 					}
@@ -1199,14 +1153,13 @@ describe('reporting protocol client', () => {
 		])
 	})
 
-	test('buildForkCarriedEscalationProofs preserves a zeroed local position in a recursive frozen snapshot', async () => {
+	test('buildForkCarriedEscalationProofs keeps a settled local leaf hash in a recursive frozen snapshot', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const grandparentQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
 		const questionForkerAddress = getAddress('0x00000000000000000000000000000000000000f5')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
-		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const inheritedLeaf = {
 			amountAttoRep: 3n,
 			cumulativeAmountAttoRep: 3n,
@@ -1222,7 +1175,8 @@ describe('reporting protocol client', () => {
 			sourceNodeId: 2n,
 		}
 		const inheritedLeafHash = hashCarryLeafForTest(inheritedLeaf.depositor, 1n, inheritedLeaf.amountAttoRep, inheritedLeaf.parentDepositIndex, inheritedLeaf.cumulativeAmountAttoRep, inheritedLeaf.sourceNodeId)
-		const frozenRoot = hashCarryParentForTest(inheritedLeafHash, zeroHash)
+		const settledLocalLeafHash = hashCarryLeafForTest(settledLocalLeaf.depositor, 1n, settledLocalLeaf.amountAttoRep, settledLocalLeaf.parentDepositIndex, settledLocalLeaf.cumulativeAmountAttoRep, settledLocalLeaf.sourceNodeId)
+		const frozenRoot = hashCarryParentForTest(inheritedLeafHash, settledLocalLeafHash)
 		const snapshotPeaks: Hex[] = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
@@ -1235,17 +1189,16 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: emptyNullifierRoot, localHeadNodeId: 2n, snapshotLeafCount: 1n }
+					return { localHeadNodeId: 2n, snapshotLeafCount: 1n }
 				}
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: emptyNullifierRoot, localHeadNodeId: 1n, snapshotLeafCount: 0n }
+					return { localHeadNodeId: 1n, snapshotLeafCount: 0n }
 				}
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: emptyNullifierRoot, snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
+					return { snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
@@ -1271,13 +1224,13 @@ describe('reporting protocol client', () => {
 		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [inheritedLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
 				leafIndex: 0n,
-				merkleMountainRangeSiblings: [zeroHash],
+				merkleMountainRangeSiblings: [settledLocalLeafHash],
 				parentDepositIndex: inheritedLeaf.parentDepositIndex,
 			},
 		])
 	})
 
-	test('buildForkCarriedEscalationProofs inherits recursive proof consumption and rejects the consumed leaf', async () => {
+	test('buildForkCarriedEscalationProofs rejects a leaf the parent game already consumed by proof', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const grandparentQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
@@ -1290,7 +1243,6 @@ describe('reporting protocol client', () => {
 		const frozenRoot = hashCarryParentForTest(firstLeafHash, secondLeafHash)
 		const snapshotPeaks: Hex[] = Array.from({ length: 64 }, () => zeroHash)
 		snapshotPeaks[1] = frozenRoot
-		const inheritedNullifierRoot = computeSingleConsumedNullifierRootForTest(0n)
 		const client = testDouble<Parameters<typeof buildForkCarriedEscalationProofs>[0]>({
 			getBlockNumber: async () => 1n,
 			getBlock: async () => ({ number: 1n, hash: keccak256('0x01') }),
@@ -1301,17 +1253,16 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: inheritedNullifierRoot, snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
+					return { snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: inheritedNullifierRoot, localHeadNodeId: 0n, snapshotLeafCount: 2n }
+					return { localHeadNodeId: 0n, snapshotLeafCount: 2n }
 				}
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'getOutcomeState') {
-					return { currentNullifierRoot: computeEmptyNullifierRootForTest(), localHeadNodeId: 2n, snapshotLeafCount: 0n }
+					return { localHeadNodeId: 2n, snapshotLeafCount: 0n }
 				}
 				if (request.address === escalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
@@ -1369,13 +1320,12 @@ describe('reporting protocol client', () => {
 					throw new Error(`Unexpected multicall contract: ${functionName}`)
 				}),
 				readContract: createReadContractStub(async request => {
-					if (request.functionName === 'appendOnlyCarry') return false
 					if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 					if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
-						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), snapshotLeafCount: BigInt(leafCount), snapshotCarryRoot: getCarrySnapshotRoot(BigInt(leafCount), snapshotPeaks) }
+						return { snapshotLeafCount: BigInt(leafCount), snapshotCarryRoot: getCarrySnapshotRoot(BigInt(leafCount), snapshotPeaks) }
 					}
 					if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
-						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), localHeadNodeId: BigInt(leafCount), snapshotLeafCount: 0n }
+						return { localHeadNodeId: BigInt(leafCount), snapshotLeafCount: 0n }
 					}
 					if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return false
 					if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
@@ -1400,7 +1350,6 @@ describe('reporting protocol client', () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const merkleMountainRangeSibling = ('0x' + '11'.repeat(32)) as Hex
-		const nullifierSibling = ('0x' + '22'.repeat(32)) as Hex
 		const client = createMockWriteClient(
 			request => {
 				capturedData = request.data
@@ -1422,7 +1371,6 @@ describe('reporting protocol client', () => {
 				leafIndex: 1n,
 				merkleMountainRangeSiblings: [merkleMountainRangeSibling],
 				merkleMountainRangePeakIndex: 1n,
-				nullifierSiblings: [nullifierSibling],
 			},
 		])
 
@@ -1444,7 +1392,6 @@ describe('reporting protocol client', () => {
 				leafIndex: 1n,
 				merkleMountainRangeSiblings: [merkleMountainRangeSibling],
 				merkleMountainRangePeakIndex: 1n,
-				nullifierSiblings: [nullifierSibling],
 			},
 		])
 		expect(result).toEqual({

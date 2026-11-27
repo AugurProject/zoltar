@@ -3,7 +3,6 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -148,13 +147,12 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 			// New reports are impossible in a child whose outcome the fork fixed.
 			await expect(r2.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, N / 10n] })).rejects.toThrow()
 			const leaves = parentLeaves[outcome] ?? []
-			const tree = new SparseNullifierTree()
 			const firstLeaf = leaves[0]
 			// The response period runs for three days from the fixed anchor: nothing is claimable at its last second.
 			if ((await base.mockWindow.getTime()) < resumedAt + 3n * DAY) {
 				await base.mockWindow.setTime(resumedAt + 3n * DAY)
 				expect(await owner.readContract({ ...g, functionName: 'getFinalQuestionResolution' })).toBe(NONE)
-				if (firstLeaf !== undefined) await expect(e2e.simulateInheritedClaim(owner, pool, outcome, leaves, firstLeaf, tree)).rejects.toThrow('Question not final')
+				if (firstLeaf !== undefined) await expect(e2e.simulateInheritedClaim(owner, pool, outcome, leaves, firstLeaf)).rejects.toThrow('Question not final')
 				await base.mockWindow.setTime(resumedAt + 3n * DAY + 1n)
 			}
 			expect(await owner.readContract({ ...g, functionName: 'getFinalQuestionResolution' })).toBe(BigInt(outcome))
@@ -162,11 +160,11 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 			for (const losing of OUTCOMES) {
 				const loser = parentLeaves[losing]?.[0]
 				if (losing === outcome || loser === undefined) continue
-				await expect(e2e.simulateInheritedClaim(owner, pool, losing, parentLeaves[losing] ?? [], loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
+				await expect(e2e.simulateInheritedClaim(owner, pool, losing, parentLeaves[losing] ?? [], loser)).rejects.toThrow('Not winning outcome')
 			}
 			const supplyChild = await e2e.supply(child)
 			const winning = balances[outcome] ?? 0n
-			const { paid, burn } = await e2e.claimEveryWinner(thirdParty, pool, outcome, leaves, binding, winning, tree)
+			const { paid, burn } = await e2e.claimEveryWinner(thirdParty, pool, outcome, leaves, binding, winning)
 			claimedTotal += paid
 			const burnedByClaims = supplyChild - (await e2e.supply(child))
 			expect(burnedByClaims).toBe(variant === 'own-fork' ? 0n : burn)

@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { initializeForkCarrySnapshotFromSourceAbi } from './carrySnapshotAbis'
-import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../testSupport/deployContract'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -13,7 +13,7 @@ import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/s
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as proofTestPoolArtifact } from '../types/contractArtifact'
-import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent, readCarryLeafHash, SparseNullifierTree } from './carryProofHelpers'
+import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent, readCarryLeafHash } from './carryProofHelpers'
 
 const REPORT_BOND = 10n ** 18n
 const NON_DECISION_THRESHOLD = 1000n * REPORT_BOND
@@ -40,7 +40,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 	const depositYes = async (questionLedger: Address, depositor: Address, amountAttoRep: bigint) => await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'depositOnOutcome', args: [depositor, QuestionOutcome.Yes, amountAttoRep] }))
 
 	const deployGame = async (): Promise<Game> => {
-		const questionLedger = await deployContract(client, encodeDeployData({ abi: proofTestPoolArtifact.abi, bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n, zeroAddress] }))
+		const questionLedger = await deployContract(client, encodeDeployData({ abi: proofTestPoolArtifact.abi, bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'approve', args: [questionLedger, MAX_UINT256] }))
 		const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
 		const escalationGame = await deployContract(
@@ -59,8 +59,11 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 
 	const deployContinuation = async (source: Address) => {
 		const continuation = await deployGame()
-		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: continuation.escalationGame, functionName: 'startFromFork', args: [REPORT_BOND, NON_DECISION_THRESHOLD, -FRESH_FORK_RESPONSE_PERIOD, QuestionOutcome.None, false, 0n] }))
 		const sourceYes = await readYesState(source)
+		// The inherited backing is the source's reporter escrow, here exactly its Yes carry.
+		await writeContractAndWait(client, () =>
+			client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: continuation.escalationGame, functionName: 'startFromFork', args: [REPORT_BOND, NON_DECISION_THRESHOLD, -FRESH_FORK_RESPONSE_PERIOD, QuestionOutcome.None, false, sourceYes.currentCarryTotalAttoRep] }),
+		)
 		const yesPeaks = [...sourceYes.currentPeaks]
 		for (let outcome = 0; outcome < 3; outcome++) {
 			await writeContractAndWait(client, () =>
@@ -68,7 +71,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 					abi: initializeForkCarrySnapshotFromSourceAbi,
 					address: continuation.questionLedger,
 					functionName: 'initializeForkCarrySnapshotFromSource',
-					args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n], [zeroHash, sourceYes.currentNullifierRoot, zeroHash]],
+					args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n]],
 				}),
 			)
 		}
@@ -110,7 +113,6 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		const childLeafA = await readCarryLeafHash(client, child.escalationGame, 1n)
 		const childLeafB = await readCarryLeafHash(client, child.escalationGame, 2n)
 		const childLocalParentDepositIndex = computeForkContinuationParentDepositIndex(child.escalationGame, QuestionOutcome.Yes, 1n)
-		const nullifiers = new SparseNullifierTree()
 		const lowerPeakProof = await createCarryProof(client, child.escalationGame, {
 			expectedOutcome: QuestionOutcome.Yes,
 			parentDepositIndex: childLocalParentDepositIndex,
@@ -118,7 +120,6 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			leafIndex: 2n,
 			merkleMountainRangePeakIndex: 0n,
 			merkleMountainRangeSiblings: [hashParent(rootLeaf, childLeafA)],
-			nullifierSiblings: nullifiers.getProof(2n),
 		})
 		// The offset inside the height-0 peak (0) would alias global leaf 0, which the
 		// child inherited from the root. It must not verify.
@@ -127,7 +128,6 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, lowerPeakProof] }))
 		const payout = (await getERC20Balance(client, repToken, childDepositorB)) - balanceBefore
 		assert.strictEqual(payout, 2n * REPORT_BOND, 'the authenticated child-local depositor receives its complete original stake')
-		nullifiers.consume(2n)
 
 		// Settle the remaining leaves; the inherited aggregate must reconcile exactly.
 		const rootProof = await createCarryProof(client, root.escalationGame, {
@@ -137,10 +137,8 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			leafIndex: 0n,
 			merkleMountainRangePeakIndex: 1n,
 			merkleMountainRangeSiblings: [childLeafA, childLeafB],
-			nullifierSiblings: nullifiers.getProof(0n),
 		})
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, rootProof] }))
-		nullifiers.consume(0n)
 		const firstChildParentDepositIndex = computeForkContinuationParentDepositIndex(child.escalationGame, QuestionOutcome.Yes, 0n)
 		const firstChildProof = await createCarryProof(client, child.escalationGame, {
 			expectedOutcome: QuestionOutcome.Yes,
@@ -149,7 +147,6 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			leafIndex: 1n,
 			merkleMountainRangePeakIndex: 1n,
 			merkleMountainRangeSiblings: [rootLeaf, childLeafB],
-			nullifierSiblings: nullifiers.getProof(1n),
 		})
 		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, firstChildProof] }))
 		assert.strictEqual((await readYesState(grandchild.escalationGame)).currentCarryTotalAttoRep, 0n, 'every inherited leaf settled, so no inherited principal may remain')

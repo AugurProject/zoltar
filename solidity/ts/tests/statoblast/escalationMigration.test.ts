@@ -17,7 +17,7 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
+import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent, readCarryLeafHash } from '../carryProofHelpers'
 import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: security pool reporting carry and atomic claims', () => {
@@ -76,8 +76,8 @@ describe('Statoblast: security pool reporting carry and atomic claims', () => {
 		const deadline = await fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'getEscalationGameEndDate' })
 		await fixture.base.mockWindow.setTime(deadline + DAY)
 	}
-	const rootProof = async (source: Address, index: bigint, tree: SparseNullifierTree) =>
-		createCarryProof(fixture.owner(), source, { expectedOutcome: 1, parentDepositIndex: index, leafIndex: index, sourceNodeId: index + 1n, merkleMountainRangePeakIndex: 1n, merkleMountainRangeSiblings: [await readCarryLeafHash(fixture.owner(), source, 2n - index)], nullifierSiblings: tree.getProof(index) })
+	const rootProof = async (source: Address, index: bigint) =>
+		createCarryProof(fixture.owner(), source, { expectedOutcome: 1, parentDepositIndex: index, leafIndex: index, sourceNodeId: index + 1n, merkleMountainRangePeakIndex: 1n, merkleMountainRangeSiblings: [await readCarryLeafHash(fixture.owner(), source, 2n - index)] })
 
 	test('parent preview closes when an unrelated question forks the universe (#1411)', async () => {
 		const owner = fixture.owner()
@@ -133,10 +133,8 @@ describe('Statoblast: security pool reporting carry and atomic claims', () => {
 		const child = await activate(sourcePool())
 		await finalize(child.game)
 		const before = await state(child.pool, child.universe)
-		const tree = new SparseNullifierTree()
-		const first = await rootProof(source, 0n, tree)
-		tree.consume(0n)
-		const second = await rootProof(source, 1n, tree)
+		const first = await rootProof(source, 0n)
+		const second = await rootProof(source, 1n)
 		const bad = differentOwners ? second : { ...second, amountAttoRep: second.amountAttoRep + 1n }
 		await expect(owner.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [first, bad]] })).rejects.toThrow(differentOwners ? 'One depositor' : 'Bad carry proof')
 		expect(await state(child.pool, child.universe)).toEqual(before)
@@ -171,12 +169,10 @@ describe('Statoblast: security pool reporting carry and atomic claims', () => {
 		expect(snapshot[1][1]).toBe(3n)
 		await finalize(grandchild.game)
 		const before = await state(grandchild.pool, grandchild.universe)
-		const tree = new SparseNullifierTree()
 		for (const index of [0n, 1n]) {
-			const root = await rootProof(source, index, tree)
+			const root = await rootProof(source, index)
 			const proof = { ...root, merkleMountainRangeSiblings: [...root.merkleMountainRangeSiblings, await readCarryLeafHash(owner, child.game, 1n)] }
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: grandchild.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] }))
-			tree.consume(index)
 		}
 		const localId = computeForkContinuationParentDepositIndex(child.game, 1, 0n)
 		const local = await createCarryProof(owner, child.game, {
@@ -186,7 +182,6 @@ describe('Statoblast: security pool reporting carry and atomic claims', () => {
 			leafIndex: 2n,
 			merkleMountainRangePeakIndex: 0n,
 			merkleMountainRangeSiblings: [hashParent(await readCarryLeafHash(owner, source, 1n), await readCarryLeafHash(owner, source, 2n))],
-			nullifierSiblings: tree.getProof(2n),
 		})
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: grandchild.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [local]] }))
 		const after = await state(grandchild.pool, grandchild.universe)

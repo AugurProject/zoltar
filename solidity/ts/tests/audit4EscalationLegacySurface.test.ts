@@ -12,6 +12,16 @@ const claimDelegateArtifact = {
 		{ type: 'function', name: 'initializeForkClaimCheckpoint', stateMutability: 'nonpayable', inputs: [{ name: 'source', type: 'address' }], outputs: [] },
 		{
 			type: 'function',
+			name: 'claimDepositForWinning',
+			stateMutability: 'nonpayable',
+			inputs: [
+				{ name: 'depositIndex', type: 'uint256' },
+				{ name: 'outcome', type: 'uint8' },
+			],
+			outputs: [],
+		},
+		{
+			type: 'function',
 			name: 'processClaimCheckpoint',
 			stateMutability: 'nonpayable',
 			inputs: [
@@ -92,17 +102,17 @@ describe('audit4: privileged and claim-checkpoint entry points are inert', () =>
 				const viaClaim = { abi: claimDelegateArtifact.abi, address: game }
 				const viaDeposit = { abi: depositDelegateArtifact.abi, address: game }
 				const attempts: readonly (readonly [string, () => Promise<unknown>])[] = [
-					['claimDepositForWinning', () => caller.simulateContract({ ...g, functionName: 'claimDepositForWinning', args: [0n, YES] })],
+					['removed claimDepositForWinning', () => caller.simulateContract({ ...viaClaim, functionName: 'claimDepositForWinning', args: [0n, YES] })],
 					['start', () => caller.simulateContract({ ...g, functionName: 'start', args: [1n, 2n] })],
 					['startFromFork', () => caller.simulateContract({ ...g, functionName: 'startFromFork', args: [1n, 2n, 0n, YES, false, 0n] })],
 					['resumeFromFork', () => caller.simulateContract({ ...g, functionName: 'resumeFromFork' })],
-					['initializeForkCarryOutcome', () => caller.simulateContract({ ...g, functionName: 'initializeForkCarryOutcome', args: [game0, zeroHash, peaks, 0n, 0n, 0n, zeroHash] })],
+					['initializeForkCarryOutcome', () => caller.simulateContract({ ...g, functionName: 'initializeForkCarryOutcome', args: [game0, zeroHash, peaks, 0n, 0n, 0n] })],
 					['recordDepositFromQuestionLedger', () => caller.simulateContract({ ...g, functionName: 'recordDepositFromQuestionLedger', args: [caller.account.address, YES, K, 1_000n * K] })],
 					// Selectors that exist only on the deposit delegate never reach it through the game's fallback.
 					['fallback transferReporterRep', () => caller.simulateContract({ ...viaDeposit, functionName: 'transferReporterRep', args: [caller.account.address, K] })],
 					['fallback creditClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'creditClaimOwners', args: [caller.account.address, K] })],
-					['fallback creditExternalClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'creditExternalClaimOwners', args: [game0, caller.account.address, 0n, K, 0n] })],
-					['fallback consumeCarriedDeposit', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeCarriedDeposit', args: [YES, firstLeaf.parentDepositIndex, firstLeaf.amount, 1_000n * K] })],
+					['fallback creditExternalClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'creditExternalClaimOwners', args: [caller.account.address, K, 0n] })],
+					['fallback consumeCarriedDeposit', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeCarriedDeposit', args: [YES, firstLeaf.parentDepositIndex, firstLeaf.amount] })],
 					['fallback consumeUnresolvedRepForClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'consumeUnresolvedRepForClaimOwners', args: [r2.account.address, YES, K] })],
 					['fallback recordDeposit', () => caller.simulateContract({ ...viaDeposit, functionName: 'recordDeposit', args: [caller.account.address, YES, K, 1_000n * K] })],
 					['fallback settleOrdinaryGame', () => caller.simulateContract({ ...viaDeposit, functionName: 'settleOrdinaryGame', args: [verifier, true] })],

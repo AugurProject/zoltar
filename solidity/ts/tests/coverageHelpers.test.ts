@@ -200,19 +200,6 @@ test('coverage classifier keeps known untraceable source-map lines from manifest
 			sourcePath: '/tmp/solidity/contracts/statoblast/EscalationGameSettlement.sol',
 			source: ['contract EscalationGameSettlement {', '    function withdrawDeposit(', '        uint256 claimIndex,', '        BinaryOutcomes.BinaryOutcome selectedOutcome', '    ) public {', "        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');", '    }', '}'],
 		},
-		{
-			sourcePath: '/tmp/solidity/contracts/statoblast/EscalationGameCarry.sol',
-			source: [
-				'contract EscalationGameCarry {',
-				'    function verify(bytes32[] calldata proofSiblings, uint8 selectedOutcome, uint256 parentDepositIndex, uint256 amount) internal {',
-				'        if (currentRoot != bytes32(0)) return currentRoot;',
-				"        require(proofSiblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');",
-				'        bytes32 observedRoot = _getCurrentNullifierRoot(selectedOutcome);',
-				"        require(emptyRoot == observedRoot, 'Bad nullifier proof');",
-				'    }',
-				'}',
-			],
-		},
 	]
 
 	for (const { sourcePath, source } of cases) {
@@ -1330,7 +1317,6 @@ describe('Solidity bytecode coverage helpers', () => {
 	test('traces pure production libraries through transaction-backed harness calls', async () => {
 		const helperAddress = await deployCoverageHelper()
 		const helperAbi = test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi
-		const siblingHashes = Array.from({ length: 64 }, (_, index) => bytes32(BigInt(index + 1)))
 
 		assert.strictEqual(
 			await client.readContract({
@@ -1403,29 +1389,6 @@ describe('Solidity bytecode coverage helpers', () => {
 			helperAddress,
 			encodeFunctionData({
 				abi: helperAbi,
-				functionName: 'computeEmptyNullifierRoot',
-			}),
-		)
-		await transact(
-			helperAddress,
-			encodeFunctionData({
-				abi: helperAbi,
-				functionName: 'getCurrentCarryPeakForLeaf',
-				args: [3n, 0n],
-			}),
-		)
-		await transact(
-			helperAddress,
-			encodeFunctionData({
-				abi: helperAbi,
-				functionName: 'getCurrentCarryPeakForLeaf',
-				args: [3n, 2n],
-			}),
-		)
-		await transact(
-			helperAddress,
-			encodeFunctionData({
-				abi: helperAbi,
 				functionName: 'bagCarryPeakSamples',
 				args: [ZERO_BYTES32, bytes32(2n), 0n],
 			}),
@@ -1452,14 +1415,6 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: helperAbi,
 				functionName: 'computeMerkleMountainRangeRootFromProof',
 				args: [bytes32(10n), 3n, 1n, 1n, [bytes32(11n), bytes32(12n)]],
-			}),
-		)
-		await transact(
-			helperAddress,
-			encodeFunctionData({
-				abi: helperAbi,
-				functionName: 'computeNullifierRoot',
-				args: [5n, siblingHashes, bytes32(99n)],
 			}),
 		)
 		await transact(

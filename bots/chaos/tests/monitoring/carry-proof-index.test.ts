@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { buildCarryMerkleMountainRangeProof, computeCarryNullifierRootFromProof, createSparseNullifier, hashCarryParent } from '@zoltar/core-shared/evm/carryProof'
-import { carryCommitment, computeNullifierRootFromProof, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeaf, type CarryOutcome } from '../../src/monitoring/carry-proof-index.ts'
-import { computeMerkleMountainRangeRootFromProof, consumeSparseNullifier, emptySparseNullifierState, verifyMerkleMountainRangeProof, verifySparseNullifierAbsence } from '../support/carry-proof-verification.ts'
+import { buildCarryMerkleMountainRangeProof, hashCarryParent } from '@zoltar/core-shared/evm/carryProof'
+import { carryCommitment, createMerkleMountainRangeProof, hashCarryLeaf, type CarryLeaf, type CarryOutcome } from '../../src/monitoring/carry-proof-index.ts'
+import { computeMerkleMountainRangeRootFromProof, verifyMerkleMountainRangeProof } from '../support/carry-proof-verification.ts'
 
 function address(value: number): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -88,41 +88,11 @@ describe('fork-carry proof index', () => {
 		expect(largePeakProof.merkleMountainRangeSiblings.at(-1)).toBe(hashes[4])
 	})
 
-	test('builds sequential 64-depth sparse nullifier proofs and rejects stale proofs', () => {
-		const empty = emptySparseNullifierState()
-		const firstProof = createSparseNullifierProof(empty, '0')
-		expect(firstProof).toHaveLength(64)
-		expect(verifySparseNullifierAbsence(empty, '0', firstProof)).toBe(sparseNullifierRoot(empty))
-
-		const staleSecondProof = createSparseNullifierProof(empty, '1')
-		const afterFirst = consumeSparseNullifier(empty, '0')
-		const firstConsumedRoot = computeNullifierRootFromProof('0', firstProof, `0x${'0'.repeat(63)}1`)
-		expect(firstConsumedRoot).toBe(sparseNullifierRoot(afterFirst))
-		expect(() => verifySparseNullifierAbsence(afterFirst, '1', staleSecondProof)).toThrow('does not match')
-
-		const currentSecondProof = createSparseNullifierProof(afterFirst, '1')
-		expect(verifySparseNullifierAbsence(afterFirst, '1', currentSecondProof)).toBe(sparseNullifierRoot(afterFirst))
-		const afterSecond = consumeSparseNullifier(afterFirst, '1')
-		expect(sparseNullifierRoot(afterSecond)).not.toBe(sparseNullifierRoot(afterFirst))
-	})
-
-	test('detects explicit low-64-bit nullifier path collisions', () => {
-		expect(() =>
-			sparseNullifierRoot({
-				consumed: [
-					{ parentDepositIndex: '1', path: '9' },
-					{ parentDepositIndex: '2', path: '9' },
-				],
-			}),
-		).toThrow('path collision')
-		expect(nullifierPath('1')).toBeLessThan(1n << 64n)
-	})
-
 	test('adapts the shared carry-proof math without changing commitments or proofs', () => {
 		for (const leafCount of [1, 2, 3, 5, 7, 8]) {
 			const slots = Array.from({ length: leafCount }, (_, index) => {
 				const value = leaf({ amount: BigInt(index + 1), cumulative: BigInt(index + 3), depositor: address(index + 1), outcome: 2, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1) })
-				return { consumedLocally: false, hash: hashCarryLeaf(value), leaf: value, originGame: address(100) }
+				return { hash: hashCarryLeaf(value), leaf: value, originGame: address(100) }
 			})
 			const hashes = slots.map(slot => slot.hash)
 			const independent = independentMerkleMountainRangeRoot(hashes)
@@ -139,16 +109,6 @@ describe('fork-carry proof index', () => {
 					merkleMountainRangeSiblings: shared.merkleMountainRangeSiblings,
 				})
 			}
-
-			let state = emptySparseNullifierState()
-			for (let index = 0; index < leafCount; index += 1) state = consumeSparseNullifier(state, index.toString())
-			const sharedNullifier = createSparseNullifier(Array.from({ length: leafCount }, (_, index) => BigInt(index)))
-			expect(sparseNullifierRoot(state)).toBe(sharedNullifier.getRoot())
-			const absentParent = BigInt(leafCount)
-			const proof = createSparseNullifierProof(state, absentParent.toString())
-			expect(proof).toEqual(sharedNullifier.getProof(absentParent))
-			expect(computeNullifierRootFromProof(absentParent.toString(), proof, zeroHash)).toBe(computeCarryNullifierRootFromProof(absentParent, proof, zeroHash))
-			expect(computeNullifierRootFromProof(absentParent.toString(), proof, zeroHash)).toBe(sharedNullifier.getRoot())
 		}
 	})
 
@@ -157,19 +117,7 @@ describe('fork-carry proof index', () => {
 		expect(() => createMerkleMountainRangeProof(hashes, 3)).toThrow('outside the MMR')
 		expect(() => createMerkleMountainRangeProof(hashes, 0.5)).toThrow('outside the MMR')
 		expect(() => createMerkleMountainRangeProof([hash('a'), hash('b'), '0x1234'], 0)).toThrow('Carry leaf slot hash must be a 32-byte hash')
-		expect(() => nullifierPath('-1')).toThrow('unsigned decimal integer')
-		expect(() => computeNullifierRootFromProof('0', [zeroHash], zeroHash)).toThrow('Nullifier proof has 1 siblings instead of 64')
-		const proof = createSparseNullifierProof(emptySparseNullifierState(), '0')
-		expect(() => computeNullifierRootFromProof('0', [...proof.slice(0, 5), '0x1234', ...proof.slice(6)], zeroHash)).toThrow('Nullifier sibling 5 must be a 32-byte hash')
-		expect(() =>
-			sparseNullifierRoot({
-				consumed: [
-					{ parentDepositIndex: '1', path: nullifierPath('1').toString() },
-					{ parentDepositIndex: '0', path: nullifierPath('0').toString() },
-				],
-			}),
-		).toThrow('canonical parent-deposit order')
-		const consumed = leaf({ parentDepositIndex: 0n, sourceNodeId: 1n })
-		expect(() => carryCommitment([{ consumedLocally: true, hash: hashCarryLeaf(consumed), leaf: consumed, originGame: address(100) }])).toThrow('locally consumed slot is not the literal zero hash')
+		const value = leaf({ parentDepositIndex: 0n, sourceNodeId: 1n })
+		expect(() => carryCommitment([{ hash: zeroHash, leaf: value, originGame: address(100) }])).toThrow('hash does not match its carry leaf')
 	})
 })

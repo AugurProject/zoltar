@@ -51,21 +51,25 @@ function writeOutput(name: string, value: string): void {
 	if (output instanceof HTMLOutputElement) output.value = value
 }
 
-function setProofLengthMeter(name: string, value: number, maximum: number): void {
-	const output = plannerElement.querySelector(`[data-mmr-output="${name}"]`)
-	const card = output?.parentElement
-	if (card === null || card === undefined) return
-	card.dataset['widgetMeter'] = 'true'
-	card.style.setProperty('--widget-meter', `${Math.min(100, Math.max(0, (value / maximum) * 100))}%`)
+// The longest proof has 63 in-peak siblings plus the other 63 occupied peaks.
+const MAXIMUM_MMR_SIBLINGS = 126
+
+function mmrSiblingsCard(): HTMLElement | undefined {
+	return plannerElement.querySelector('[data-mmr-output="mmrSiblings"]')?.parentElement ?? undefined
 }
 
-function clearProofLengthMeters(): void {
-	for (const name of ['mmrSiblings', 'nullifierSiblings']) {
-		const card = plannerElement.querySelector(`[data-mmr-output="${name}"]`)?.parentElement
-		if (card === null || card === undefined) continue
-		delete card.dataset['widgetMeter']
-		card.style.removeProperty('--widget-meter')
-	}
+function setProofLengthMeter(value: number): void {
+	const card = mmrSiblingsCard()
+	if (card === undefined) return
+	card.dataset['widgetMeter'] = 'true'
+	card.style.setProperty('--widget-meter', `${Math.min(100, Math.max(0, (value / MAXIMUM_MMR_SIBLINGS) * 100))}%`)
+}
+
+function clearProofLengthMeter(): void {
+	const card = mmrSiblingsCard()
+	if (card === undefined) return
+	delete card.dataset['widgetMeter']
+	card.style.removeProperty('--widget-meter')
 }
 
 function unsignedInteger(value: string): bigint | undefined {
@@ -186,7 +190,7 @@ function updatePlanner(): void {
 		for (const name of ['binary', 'peaks', 'capacity', 'mmrSiblings', 'selection']) {
 			writeOutput(name, '—')
 		}
-		clearProofLengthMeters()
+		clearProofLengthMeter()
 		plannerElement.dataset['widgetState'] = 'unsafe'
 		return
 	}
@@ -207,11 +211,8 @@ function updatePlanner(): void {
 	writeOutput('peaks', formatHeightRanges(peaks))
 	writeOutput('capacity', `${capacity.toLocaleString()} ${capacity === 1n ? 'leaf' : 'leaves'}; leafIndex ${peakStart.toLocaleString()}…${(peakStart + capacity - 1n).toLocaleString()}`)
 	const mmrSiblings = peakHeight + peaks.length - 1
-	const proofLengthMaximum = Math.max(mmrSiblings, 64)
 	writeOutput('mmrSiblings', String(mmrSiblings))
-	writeOutput('nullifierSiblings', '64')
-	setProofLengthMeter('mmrSiblings', mmrSiblings, proofLengthMaximum)
-	setProofLengthMeter('nullifierSiblings', 64, proofLengthMaximum)
+	setProofLengthMeter(mmrSiblings)
 	writeOutput('selection', validIndex ? 'Valid in-peak offset' : `Offset must be between 0 and ${capacity - 1n}`)
 	plannerElement.dataset['widgetState'] = validIndex ? 'safe' : 'unsafe'
 }

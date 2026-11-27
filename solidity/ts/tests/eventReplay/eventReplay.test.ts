@@ -23,7 +23,7 @@ import {
 	Zoltar_Zoltar,
 } from '../../types/contractArtifact'
 import { getMigrationRepBalanceAttoRep, getUniverseData, getUniverseTheoreticalSupplyAttoRep } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
+import { hashCarryLeaf } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { unit, useSecurityPoolFixture } from '../statoblast/securityPoolFixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -476,83 +476,6 @@ describe('event-only replay', () => {
 		expect(postResumeBundle.claimRepUnits).toBe(1n)
 	})
 
-	test('local carry consumption updates peaks before a recursive fork checkpoint', () => {
-		const parentGame = '0x1111111111111111111111111111111111111111'
-		const childGame = '0x2222222222222222222222222222222222222222'
-		const grandchildGame = '0x3333333333333333333333333333333333333333'
-		const depositor = '0x4444444444444444444444444444444444444444'
-		const zeroHash = `0x${'0'.repeat(64)}` as Hex
-		const parentLeaf = hashCarryLeaf(depositor, 1n, 10n, 0n, 10n, 1n)
-		const childLeaf = hashCarryLeaf(depositor, 1n, 5n, 7n, 15n, 1n)
-		const consumedChildRoot = hashParent(parentLeaf, zeroHash)
-		const logs = [
-			createReplayLog({ emitter: parentGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
-			createReplayLog({
-				emitter: parentGame,
-				eventName: 'LocalDepositAppended',
-				logIndex: 1,
-				args: { nodeId: 1n, outcome: 1n, depositor, amountAttoRep: 10n, parentDepositIndex: 0n, cumulativeRepAmountAttoRep: 10n },
-			}),
-			createReplayLog({ emitter: childGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
-			createReplayLog({
-				emitter: childGame,
-				eventName: 'ForkCarryCheckpoint',
-				logIndex: 3,
-				args: {
-					sourceGame: parentGame,
-					snapshotId: zeroHash,
-					carryRoots: [zeroHash, parentLeaf, zeroHash],
-					nullifierRoots: [zeroHash, zeroHash, zeroHash],
-					leafCounts: [0n, 1n, 0n],
-					unresolvedTotalsAttoRep: [0n, 10n, 0n],
-					resolutionBalancesAttoRep: [0n, 10n, 0n],
-				},
-			}),
-			createReplayLog({
-				emitter: childGame,
-				eventName: 'LocalDepositAppended',
-				logIndex: 4,
-				args: { nodeId: 1n, outcome: 1n, depositor, amountAttoRep: 5n, parentDepositIndex: 7n, cumulativeRepAmountAttoRep: 15n },
-			}),
-			createReplayLog({
-				emitter: childGame,
-				eventName: 'CarryDepositConsumed',
-				logIndex: 5,
-				args: {
-					parentDepositIndex: 7n,
-					sourceNodeId: 1n,
-					depositor,
-					outcome: 1n,
-					amountAttoRep: 5n,
-					reason: 0n,
-					resultingUnresolvedTotalAttoRep: 10n,
-					resultingNullifierRoot: zeroHash,
-					resultingCarryRoot: consumedChildRoot,
-				},
-			}),
-			createReplayLog({ emitter: grandchildGame, eventName: 'GameContinuedFromFork', logIndex: 6, args: { startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n, elapsedAtFork: 0n } }),
-			createReplayLog({
-				emitter: grandchildGame,
-				eventName: 'ForkCarryCheckpoint',
-				logIndex: 7,
-				args: {
-					sourceGame: childGame,
-					snapshotId: zeroHash,
-					carryRoots: [zeroHash, consumedChildRoot, zeroHash],
-					nullifierRoots: [zeroHash, zeroHash, zeroHash],
-					leafCounts: [0n, 2n, 0n],
-					unresolvedTotalsAttoRep: [0n, 10n, 0n],
-					resolutionBalancesAttoRep: [0n, 15n, 0n],
-				},
-			}),
-		]
-
-		const replayed = replayZoltarEvents(logs)
-		if (replayed.escalationCarryRoots.get(grandchildGame)?.[1] !== consumedChildRoot) throw new Error('recursive carry root mismatch')
-		if (replayed.escalationCarryPeaks.get(grandchildGame)?.[1]?.[1] !== consumedChildRoot) throw new Error('recursive carry peak mismatch')
-		if (hashParent(parentLeaf, childLeaf) === consumedChildRoot) throw new Error('test setup did not distinguish live and consumed child roots')
-	})
-
 	test('explicit local and inherited non-decision states replay independently from timestamps', () => {
 		const localGame = '0x1111111111111111111111111111111111111111'
 		const continuationGame = '0x2222222222222222222222222222222222222222'
@@ -569,7 +492,6 @@ describe('event-only replay', () => {
 					sourceGame: localGame,
 					snapshotId: zeroHash,
 					carryRoots: [zeroHash, zeroHash, zeroHash],
-					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 0n, 0n],
 					unresolvedTotalsAttoRep: [0n, 0n, 0n],
 					resolutionBalancesAttoRep: [100n, 100n, 0n],
@@ -621,7 +543,6 @@ describe('event-only replay', () => {
 					sourceGame: otherGame,
 					snapshotId: zeroHash,
 					carryRoots: [zeroHash, zeroHash, zeroHash],
-					nullifierRoots: [zeroHash, zeroHash, zeroHash],
 					leafCounts: [0n, 0n, 0n],
 					unresolvedTotalsAttoRep: [0n, 0n, 0n],
 					resolutionBalancesAttoRep: [100n, 100n, 0n],
@@ -713,8 +634,8 @@ describe('event-only replay', () => {
 		const game = '0x1111111111111111111111111111111111111111'
 		const vault = '0x2222222222222222222222222222222222222222'
 		const secondVault = '0x3333333333333333333333333333333333333333'
-		const rootA = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-		const rootB = `0x${'0'.repeat(64)}` as Hex
+		// Consumption is append-only: the single-leaf root keeps the consumed leaf.
+		const rootB = hashCarryLeaf(vault, 1n, 10n, 5n, 10n, 1n)
 		const logs = [
 			createReplayLog({ emitter: game, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 10n, startBondAttoRep: 1n, nonDecisionThresholdAttoRep: 100n } }),
 			createReplayLog({
@@ -749,7 +670,6 @@ describe('event-only replay', () => {
 					amountAttoRep: 10n,
 					reason: 0n,
 					resultingUnresolvedTotalAttoRep: 0n,
-					resultingNullifierRoot: rootA,
 					resultingCarryRoot: rootB,
 				},
 			}),
@@ -813,8 +733,8 @@ describe('event-only replay', () => {
 		const auction = '0x6666666666666666666666666666666666666666'
 		const coordinator = '0x7777777777777777777777777777777777777777'
 		const game = '0x8888888888888888888888888888888888888888'
-		const rootA = `0x${'0'.repeat(64)}` as Hex
-		const rootC = '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+		// Append-only consumption keeps the single consumed leaf as the root.
+		const rootA = hashCarryLeaf(migrator, 1n, 10n, 0n, 10n, 1n)
 		const logs = [
 			createReplayLog({
 				emitter: zoltar,
@@ -921,7 +841,6 @@ describe('event-only replay', () => {
 					amountAttoRep: 10n,
 					reason: 0n,
 					resultingUnresolvedTotalAttoRep: 0n,
-					resultingNullifierRoot: rootC,
 					resultingCarryRoot: rootA,
 				},
 			}),
@@ -951,7 +870,6 @@ describe('event-only replay', () => {
 		if (replayed.poolDeployments.get(pool)?.parent !== zeroAddress) throw new Error('pool relationship mismatch')
 		if (replayed.completeSetSupplies.get(pool) !== 5n) throw new Error('complete-set supply mismatch')
 		if (replayed.escalationUnresolvedTotals.get(game)?.[1] !== 0n) throw new Error('carry total mismatch')
-		if (replayed.escalationNullifierRoots.get(game)?.[1] !== rootC) throw new Error('nullifier root mismatch')
 		if (replayed.escalationDeposits.get(game)?.get('1:0')?.consumed !== true) throw new Error('deposit consumption mismatch')
 		if (replayed.auctions.get(auction)?.soldAttoRep !== 8n) throw new Error('auction lifecycle mismatch')
 		if (replayed.coordinators.get(coordinator)?.reports.get(3n)?.status !== 'Reported') throw new Error('coordinator terminal state mismatch')
@@ -1189,7 +1107,6 @@ describe('event-only replay', () => {
 		expect(replayed.escalationCarryRoots.get(game)).toEqual([...(await client.readContract({ abi, address: game, functionName: 'getForkCarryRoots' }))])
 		expect(replayed.escalationLeafCounts.get(game)).toEqual([...snapshot[1]])
 		expect(replayed.escalationUnresolvedTotals.get(game)).toEqual([...snapshot[2]])
-		expect(replayed.escalationNullifierRoots.get(game)).toEqual([...snapshot[3]])
 		expect(replayed.escalationLifecycles.get(game)?.ordinarySettlementOutcome).toBe(BigInt(QuestionOutcome.Yes))
 		expect(replayed.escalationLifecycles.get(game)?.ordinaryWinningReserveAttoRep).toBe(await client.readContract({ abi, address: game, functionName: 'ordinaryWinningReserveAttoRep' }))
 		expect(replayed.escalationConsumptions.get(game)?.size ?? 0).toBe(0)
@@ -1277,8 +1194,7 @@ describe('event-only replay', () => {
 		const replayedCarryPeaks = replayed.escalationCarryPeaks.get(child.escalationGame)
 		const replayedLeafCounts = replayed.escalationLeafCounts.get(child.escalationGame)
 		const replayedCarryTotals = replayed.escalationUnresolvedTotals.get(child.escalationGame)
-		const replayedNullifierRoots = replayed.escalationNullifierRoots.get(child.escalationGame)
-		if (replayedCarryRoots === undefined || replayedCarryPeaks === undefined || replayedLeafCounts === undefined || replayedCarryTotals === undefined || replayedNullifierRoots === undefined) {
+		if (replayedCarryRoots === undefined || replayedCarryPeaks === undefined || replayedLeafCounts === undefined || replayedCarryTotals === undefined) {
 			throw new Error('child carry replay state is incomplete')
 		}
 		const emptyHash = `0x${'0'.repeat(64)}` as Hex
@@ -1286,7 +1202,6 @@ describe('event-only replay', () => {
 			strictEqualTypeSafe(replayedCarryRoots[outcomeIndex], storedCarryRoots[outcomeIndex], `child carry root replay mismatch for outcome ${outcomeIndex.toString()}`)
 			strictEqualTypeSafe(replayedLeafCounts[outcomeIndex], storedCarrySnapshot[1][outcomeIndex], `child carry leaf-count replay mismatch for outcome ${outcomeIndex.toString()}`)
 			strictEqualTypeSafe(replayedCarryTotals[outcomeIndex], storedCarrySnapshot[2][outcomeIndex], `child carry total replay mismatch for outcome ${outcomeIndex.toString()}`)
-			strictEqualTypeSafe(replayedNullifierRoots[outcomeIndex], storedCarrySnapshot[3][outcomeIndex], `child carry nullifier replay mismatch for outcome ${outcomeIndex.toString()}`)
 			const storedOutcomeState = storedOutcomeStates[outcomeIndex]
 			if (storedOutcomeState === undefined) throw new Error(`child carry storage outcome ${outcomeIndex.toString()} is missing`)
 			const storedOutcomePeaks = storedOutcomeState.currentPeaks

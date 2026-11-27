@@ -161,7 +161,7 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			['0', null, '3'],
 			['1', '2', null],
 		])
-		const claimEvidence = { status: 'available', truncated: false, positions: [{ depositor: owner, kind: 'inherited', status: 'claimable', payout_atto_rep: '123', proof: { leafIndex: '2', nullifierSiblings: [] } }] }
+		const claimEvidence = { status: 'available', truncated: false, positions: [{ depositor: owner, kind: 'inherited', status: 'claimable', payout_atto_rep: '123', proof: { leafIndex: '2' } }] }
 		await connection`UPDATE entity_state_snapshots SET read_result = read_result || jsonb_build_object('claimEvidence', ${JSON.stringify(claimEvidence)}::text::jsonb) WHERE entity_type = 'escalation'`
 		const payouts = await escalationPayouts(connection, 1, '1', owner)
 		expect(payouts.items).toEqual([expect.objectContaining({ game_address: token, snapshot_block: '1', position: expect.objectContaining({ kind: 'inherited', payout_atto_rep: '123' }) })])

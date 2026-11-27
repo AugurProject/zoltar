@@ -68,6 +68,11 @@ contract EscalationGameFactoryCoverageQuestionLedger {
 		return address(0);
 	}
 
+	/// @dev An unbound ledger reports no security pool custody.
+	function securityPoolCustody() external pure returns (address) {
+		return address(0);
+	}
+
 	function deployStartedGame(EscalationGameFactory factory, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep) external returns (EscalationGame) {
 		return factory.deployEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep);
 	}

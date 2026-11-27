@@ -87,7 +87,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		// Exercise the largest fixed-width carry representation, independent of the
 		// number of historical questions, deposits and prior native forks.
 		for (const outcome of outcomes) {
-			const outcomeSlot = 8n + 76n * BigInt(outcome)
+			const outcomeSlot = 8n + 74n * BigInt(outcome)
 			stateDiff[formatStorageSlot(outcomeSlot + 4n)] = leafCount
 			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 5n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
 		}

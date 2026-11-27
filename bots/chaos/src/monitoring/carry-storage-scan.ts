@@ -1,7 +1,6 @@
 import type { ForkedCarryWithdrawalSnapshot } from '../operations/carry-types.ts'
 import { keccak256, toHex, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { escalationGameAbi, questionLedgerAbi, questionForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
-import { computeNullifierRootFromProof } from './carry-proof-index.ts'
 import { loadCarryStorageCandidates, type CarryStorageRoute } from './carry-proof-storage.ts'
 import { computeWinningEconomics } from './carry-withdrawal-economics.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency, type ChaosReadClient } from './discovery-client.ts'
@@ -51,7 +50,6 @@ export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 
 			leafIndex: BigInt(proof.leafIndex),
 			merkleMountainRangePeakIndex: BigInt(proof.merkleMountainRangePeakIndex),
 			merkleMountainRangeSiblings: proof.merkleMountainRangeSiblings,
-			nullifierSiblings: proof.nullifierSiblings,
 		}
 		const key = `${candidate.game.toLowerCase()}:${candidate.pool.toLowerCase()}`
 		let gameEconomics = economicsByGame.get(key)
@@ -71,7 +69,6 @@ export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 
 			bindingCapitalAttoRep: bindingCapital,
 			cumulativeAmountAttoRep: argument.cumulativeAmountAttoRep,
 			depositAmountAttoRep: argument.amountAttoRep,
-			principalAttoRep: argument.amountAttoRep,
 			nonDecisionThresholdAttoRep: nonDecisionThreshold,
 			winningOutcomeBalanceAttoRep: candidate.state.balanceAttoRep,
 		})
@@ -90,7 +87,6 @@ export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 
 			sourceNodeId: candidate.sourceNodeId,
 			proof,
 			resultingCarryRoot: candidate.state.currentCarryRoot,
-			resultingNullifierRoot: candidate.appendOnly ? candidate.state.currentNullifierRoot : computeNullifierRootFromProof(proof.leafIndex, proof.nullifierSiblings, toHex(1n, { size: 32 })),
 			amountToWithdrawAttoRep: economics.amountToWithdrawAttoRep.toString(),
 			burnAmountAttoRep: economics.burnAmountAttoRep.toString(),
 			preflightExpectedResult: '0x',

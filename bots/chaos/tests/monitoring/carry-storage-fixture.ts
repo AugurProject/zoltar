@@ -2,8 +2,7 @@ import { createPublicClient, decodeFunctionData, defineChain, encodeAbiParameter
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { carryStorageAbi } from '../../src/contracts/carry-storage-abi.ts'
 import { escalationGameAbi, multicall3Abi, questionLedgerAbi, questionForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
-import { carryCommitment, hashCarryLeaf, sparseNullifierRoot, type CarryLeafSlot } from '../../src/monitoring/carry-proof-index.ts'
-import { consumeSparseNullifier, emptySparseNullifierState } from '../support/carry-proof-verification.ts'
+import { carryCommitment, hashCarryLeaf, type CarryLeafSlot } from '../../src/monitoring/carry-proof-index.ts'
 
 export const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 export const wallet = address(1)
@@ -17,11 +16,11 @@ const abi = [...carryStorageAbi, ...multicall3Abi, ...escalationGameAbi, ...ques
 
 export function slot(game: Address, index: number, depositor = wallet): CarryLeafSlot {
 	const leaf = { depositor, outcome: 0 as const, amountAttoRep: 10n.toString(), parentDepositIndex: ((BigInt(game) << 96n) + BigInt(index)).toString(), cumulativeAmountAttoRep: ((index + 1) * 10).toString(), sourceNodeId: (index + 1).toString() }
-	return { leaf, originGame: game, hash: hashCarryLeaf(leaf), consumedLocally: false }
+	return { leaf, originGame: game, hash: hashCarryLeaf(leaf) }
 }
 
 type Game = { game: Address; parent: Address; inherited: CarryLeafSlot[]; local: CarryLeafSlot[]; consumed: string[] }
-export function storageFixture(appendOnly = false) {
+export function storageFixture() {
 	const leaf = slot(source, 0)
 	const games: Game[] = [
 		{ game: source, parent: zeroAddress, inherited: [], local: [leaf], consumed: [] },
@@ -29,7 +28,6 @@ export function storageFixture(appendOnly = false) {
 	]
 	const calls: { method: string; functionName?: string; block?: unknown }[] = []
 	let badSnapshot = false
-	let badNullifier = false
 	let cycle = false
 	let badAnchor = false
 	let badEconomics = false
@@ -40,25 +38,16 @@ export function storageFixture(appendOnly = false) {
 	function resolve(target: Address) {
 		return games.find(game => game.game.toLowerCase() === target.toLowerCase() || pool(game.game).toLowerCase() === target.toLowerCase())
 	}
-	function allConsumed(game: Game, visited = new Set<Address>()): string[] {
-		if (visited.has(game.game)) return []
-		visited.add(game.game)
-		const parent = games.find(value => value.game === game.parent)
-		return [...(parent === undefined ? [] : allConsumed(parent, visited)), ...game.consumed]
-	}
 	function state(game: Game, outcome: bigint) {
 		const inherited = outcome === 0n ? game.inherited : []
 		const local = outcome === 0n ? game.local : []
 		const snapshot = carryCommitment(inherited)
 		const current = carryCommitment([...inherited, ...local])
-		let nullifier = emptySparseNullifierState()
-		if (!appendOnly && outcome === 0n) for (const index of new Set(allConsumed(game))) nullifier = consumeSparseNullifier(nullifier, index, [...inherited, ...local].findIndex(slot => slot.leaf.parentDepositIndex === index).toString())
 		return {
 			balanceAttoRep: 10n,
 			snapshotLeafCount: BigInt(snapshot.leafCount),
 			snapshotCarryRoot: badSnapshot && game.game === child ? zeroHash : snapshot.root,
 			inheritedUnresolvedTotalAttoRep: 10n,
-			currentNullifierRoot: badNullifier ? zeroHash : sparseNullifierRoot(nullifier),
 			localHeadNodeId: BigInt(local.length),
 			currentLeafCount: BigInt(current.leafCount),
 			currentPeaks: current.peaks,
@@ -82,8 +71,6 @@ export function storageFixture(appendOnly = false) {
 				return [game.game]
 			case 'questionForker':
 				return [forker]
-			case 'appendOnlyCarry':
-				return [appendOnly]
 			case 'forkContinuation':
 				return [game?.parent !== zeroAddress]
 			case 'getOutcomeState':
@@ -91,16 +78,6 @@ export function storageFixture(appendOnly = false) {
 				return [state(game, outcome)]
 			case 'getProofConsumedCarriedDepositIndexesByOutcome':
 				return [outcome === 0n ? (game?.consumed ?? []).slice(Number(args[1]), Number(args[1]) + Number(args[2])).map(BigInt) : []]
-			case 'getCarryLeafPageByOutcome': {
-				const available = outcome === 0n ? (game?.local ?? []).filter(slot => args[1] === 0n || BigInt(slot.leaf.sourceNodeId) <= BigInt(String(args[1]))).reverse() : []
-				const visited = available.slice(0, Number(args[2]))
-				const page = visited.filter(slot => slot.hash !== zeroHash)
-				const last = visited.at(-1)
-				return [
-					page.map(slot => ({ depositor: slot.leaf.depositor, amountAttoRep: BigInt(slot.leaf.amountAttoRep), parentDepositIndex: BigInt(slot.leaf.parentDepositIndex), cumulativeAmountAttoRep: BigInt(slot.leaf.cumulativeAmountAttoRep), sourceNodeId: BigInt(slot.leaf.sourceNodeId) })),
-					available.length > visited.length && last !== undefined ? BigInt(last.leaf.sourceNodeId) - 1n : 0n,
-				]
-			}
 			case 'nodes': {
 				const node = game?.local[Number(args[0]) - 1]
 				if (node === undefined || game === undefined) break
@@ -179,9 +156,6 @@ export function storageFixture(appendOnly = false) {
 		},
 		setBadSnapshot: () => {
 			badSnapshot = true
-		},
-		setBadNullifier: () => {
-			badNullifier = true
 		},
 		setCycle: () => {
 			cycle = true

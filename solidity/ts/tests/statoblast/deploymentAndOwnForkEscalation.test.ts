@@ -20,7 +20,7 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, deployChild, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCarryProof, hashCarryLeaf, SparseNullifierTree } from '../carryProofHelpers'
+import { createCarryProof, hashCarryLeaf } from '../carryProofHelpers'
 import { securityPoolEconomics, unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: security pool namespaces and own-fork claims', () => {
@@ -249,13 +249,11 @@ describe('Statoblast: security pool namespaces and own-fork claims', () => {
 		for (const sender of [owner, other]) balances.set(sender.account.address, await getERC20Balance(owner, getRepTokenAddress(child), sender.account.address))
 		const nodes = await Promise.all([1n, 2n].map(id => owner.readContract({ abi: gameArtifact.abi, address: source, functionName: 'nodes', args: [id] })))
 		const leaves = nodes.map((node, index) => hashCarryLeaf(node[1], 1, node[3], BigInt(index), node[5], BigInt(index + 1)))
-		const tree = new SparseNullifierTree()
 		for (const index of reverse ? [1, 0] : [0, 1]) {
 			const sibling = leaves[1 - index]
 			if (sibling === undefined) throw new Error('Missing sibling leaf')
-			const proof = await createCarryProof(owner, source, { expectedOutcome: 1, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1), leafIndex: BigInt(index), merkleMountainRangePeakIndex: 1n, merkleMountainRangeSiblings: [sibling], nullifierSiblings: tree.getProof(BigInt(index)) })
+			const proof = await createCarryProof(owner, source, { expectedOutcome: 1, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1), leafIndex: BigInt(index), merkleMountainRangePeakIndex: 1n, merkleMountainRangeSiblings: [sibling] })
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] }))
-			tree.consume(BigInt(index))
 			await expect(owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] })).rejects.toThrow()
 		}
 		let paid = 0n

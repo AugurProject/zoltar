@@ -1,8 +1,6 @@
 import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, type Address, type Hex } from './ethereum.js'
 
-export const CARRY_NULLIFIER_DEPTH = 64
 const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
-const NULLIFIER_CONSUMED_LEAF: Hex = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeAmountAttoRep, uint256 sourceNodeId')
 
 export type CarryLeaf = {
@@ -95,71 +93,4 @@ export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], t
 	const root = bagCarryPeaks(ascendingPeaks.map(peak => peak.root))
 	// The verifier takes the global leaf position and derives the in-peak offset itself.
 	return { leafIndex: BigInt(targetLeafIndex), merkleMountainRangePeakIndex: BigInt(targetPeak.height), merkleMountainRangeSiblings, root }
-}
-
-function buildZeroHashes() {
-	const zeroHashes: Hex[] = [ZERO_HASH]
-	let currentHash = ZERO_HASH
-	for (let depth = 0; depth < CARRY_NULLIFIER_DEPTH; depth += 1) {
-		currentHash = hashCarryParent(currentHash, currentHash)
-		zeroHashes.push(currentHash)
-	}
-	return zeroHashes
-}
-
-export function createSparseNullifier(consumedLeafIndexes: readonly bigint[]) {
-	const nodes = new Map<string, Hex>()
-	const zeroHashes = buildZeroHashes()
-	const getNode = (level: number, index: bigint) => nodes.get(`${level}:${index.toString()}`) ?? zeroHashes[level]
-
-	const getProof = (leafIndex: bigint) => {
-		const siblings: Hex[] = []
-		let index = getCarryNullifierPath(leafIndex)
-		for (let level = 0; level < CARRY_NULLIFIER_DEPTH; level += 1) {
-			const siblingHash = getNode(level, index ^ 1n)
-			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
-			siblings.push(siblingHash)
-			index >>= 1n
-		}
-		return siblings
-	}
-
-	const consume = (leafIndex: bigint) => {
-		let index = getCarryNullifierPath(leafIndex)
-		let currentHash = NULLIFIER_CONSUMED_LEAF
-		for (let level = 0; level < CARRY_NULLIFIER_DEPTH; level += 1) {
-			nodes.set(`${level}:${index.toString()}`, currentHash)
-			const siblingHash = getNode(level, index ^ 1n)
-			if (siblingHash === undefined) throw new Error('Missing nullifier sibling hash')
-			currentHash = (index & 1n) === 0n ? hashCarryParent(currentHash, siblingHash) : hashCarryParent(siblingHash, currentHash)
-			index >>= 1n
-		}
-		nodes.set(`${CARRY_NULLIFIER_DEPTH}:0`, currentHash)
-	}
-
-	const getRoot = () => {
-		const fallbackRoot = zeroHashes[CARRY_NULLIFIER_DEPTH]
-		if (fallbackRoot === undefined) throw new Error('Missing empty nullifier root')
-		return nodes.get(`${CARRY_NULLIFIER_DEPTH}:0`) ?? fallbackRoot
-	}
-
-	for (const leafIndex of consumedLeafIndexes) consume(leafIndex)
-	return { consume, getProof, getRoot }
-}
-
-/** A carry leaf keeps its unique 64-bit MMR position through every descendant snapshot. */
-export function getCarryNullifierPath(leafIndex: bigint) {
-	if (leafIndex < 0n || leafIndex >= 1n << BigInt(CARRY_NULLIFIER_DEPTH)) throw new Error('The deposit position is outside the supported range')
-	return leafIndex
-}
-
-export function computeCarryNullifierRootFromProof(leafIndex: bigint, siblings: readonly Hex[], leafValue: Hex) {
-	if (siblings.length !== CARRY_NULLIFIER_DEPTH) throw new Error(`Nullifier proof has ${siblings.length.toString()} siblings instead of ${CARRY_NULLIFIER_DEPTH.toString()}`)
-	let path = getCarryNullifierPath(leafIndex)
-	let root = leafValue
-	for (const sibling of siblings) {
-		root = (path & 1n) === 0n ? hashCarryParent(root, sibling) : hashCarryParent(sibling, root)
-		path >>= 1n
-	}
-	return root
 }

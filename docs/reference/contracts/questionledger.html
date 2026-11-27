@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>The <a href="../contracts.html#table-columns">contract index</a> defines the columns. See the <a href="../contract-inventory.html#security-pool-boundary">security pool module boundaries</a> for capital, settlement, and reporter custody.</p>
 				<!-- Validated read ABI fingerprint: 5fa6edd85169b799786d8411da7312ce2945b82e1984edca945be970ced6e3b7 -->
-				<!-- Validated complete compiled ABI fingerprint: 8e994bcada473de1176cf54eab6f96fde29e682ca4a96ad057b32ae152ce3a57 -->
+				<!-- Validated complete compiled ABI fingerprint: 11777949c808be8d698a0375c32376e58761be30fe9a147a17705e6173380f1a -->
 				<table>
 					<thead>
 						<tr>
@@ -140,10 +140,10 @@
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
-							<td><code>initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)</code><wbr /></td>
+							<td><code>initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep)</code><wbr /></td>
 							<td><code>QuestionForker</code> only</td>
 							<td>A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.</td>
-							<td>Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Canonical live sources require empty nullifier roots and cannot export finalized claims.</td>
+							<td>Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Sources export only live carry, which never contains spent deposits.</td>
 							<td><code>ForkCarryCheckpoint</code> on completion of the third outcome</td>
 						</tr>
 						<tr>

@@ -12,7 +12,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'OrdinarySettlementInitialized',
 		parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
+		sourcePath: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	},
 	{
 		name: 'Transfer',
@@ -115,20 +115,15 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	},
 ]
-export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
-	{
-		name: 'OrdinarySettlementInitialized',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol',
-	},
-]
+export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = []
 export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArguments: string; name: string; signature: string; signatureConstant: string; sourcePath: string }> = [
 	{
-		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
+		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, carryRoot',
 		indexedArguments: 'parentDepositIndex, sourceNodeId, depositor',
 		name: 'CarryDepositConsumed',
-		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)',
+		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)',
 		signatureConstant: 'CARRY_DEPOSIT_CONSUMED_SIGNATURE',
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '6b78ba61089a422f04c2e340c9a1b75037927c5f79cba99387fdbabc8851adc7'
+export const referencedEventAbiFingerprint = '36f8de3c7d16eedee11e09f129d1376a41b220cf1a2ddb1f86d9b5fb7ede5459'

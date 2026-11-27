@@ -2,11 +2,11 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { DAY, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
+import { MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution, readHasReachedNonDecision, readNonDecisionState, readCanTriggerOwnFork, readEscalationGameEndDate, readFinalQuestionResolution, readNonDecisionTimestamp } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
-import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroHash, zeroPeakArray } from './carryHelpers'
+import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: deposits and entry-point guards', () => {
@@ -21,7 +21,8 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		resumeEscalationFromFork,
 		initializeSnapshotViaTestQuestionLedger,
 		depositOnOutcomeViaProofTestQuestionLedger,
-		claimDepositForWinningViaTestQuestionLedger,
+		withdrawLocalDepositViaTestQuestionLedger,
+		startEscalation,
 		depositOnOutcomeViaTestQuestionLedger,
 	} = fixture
 	let mockWindow: AnvilWindowEthereum
@@ -56,7 +57,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		const emptyFinal = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(emptyFinal.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
 		await assert.rejects(resumeEscalationFromFork(emptyFinal.escalationGameAddress), /Fork snapshot incomplete/)
-		await initializeSnapshotViaTestQuestionLedger(emptyFinal.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(emptyFinal.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n])
 		await resumeEscalationFromFork(emptyFinal.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
@@ -189,33 +190,29 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	test.each([
 		{ name: 'None', outcome: QuestionOutcome.None, depositFirst: true },
 		{ name: 'out of enum range', outcome: 4, depositFirst: false },
-	])('claimDepositForWinning reverts when outcome is $name', async ({ outcome, depositFirst }) => {
+	])('local withdrawDeposit reverts when outcome is $name', async ({ outcome, depositFirst }) => {
 		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		if (depositFirst) await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await assert.rejects(
-			writeContractAndWait(
-				client,
-				async () =>
-					await client.writeContract({
-						abi: statoblast_EscalationGame_EscalationGame.abi,
-						address: escalationGame,
-						functionName: 'claimDepositForWinning',
-						args: [0n, outcome],
-					}),
-			),
-		)
+		await mockWindow.setTime((await getActivationTime(client, escalationGame)) + ESCALATION_TIME_LENGTH + 1n)
+		await assert.rejects(withdrawLocalDepositViaTestQuestionLedger(testQuestionLedgerAddress, 0n, outcome))
 	})
 
-	test('claimDepositForWinning rejects false-returning REP transfers', async () => {
+	test('both withdrawDeposit entry points accept only the question ledger', async () => {
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await mockWindow.setTime((await getActivationTime(client, escalationGame)) + ESCALATION_TIME_LENGTH + 1n)
+		const proof = { depositor: client.account.address, amountAttoRep: reportBond, parentDepositIndex: 0n, cumulativeAmountAttoRep: reportBond, sourceNodeId: 1n, leafIndex: 0n, merkleMountainRangeSiblings: [], merkleMountainRangePeakIndex: 0n }
+		await assert.rejects(client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'withdrawDeposit', args: [0n, QuestionOutcome.Yes] }), /Only pool/)
+		await assert.rejects(client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'withdrawDeposit', args: [proof, QuestionOutcome.Yes] }), /Only pool/)
+		await assert.rejects(withdrawLocalDepositViaTestQuestionLedger(testQuestionLedgerAddress, 0n, QuestionOutcome.None), /No outcome/)
+		await withdrawLocalDepositViaTestQuestionLedger(testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
+		await assert.rejects(withdrawLocalDepositViaTestQuestionLedger(testQuestionLedgerAddress, 0n, QuestionOutcome.Yes), /Deposit settled/)
+	})
+
+	test('reporter custody deposits reject false-returning REP transfers', async () => {
 		const falseReturningRepToken = await deployFalseReturningToken()
 		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
-		// Preserve remaining activation time so this empty continuation is still open.
-		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, -DAY)
-		await initializeSnapshotViaTestQuestionLedger(testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await resumeEscalationFromFork(escalationGameAddress)
-		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n)
-		await mockWindow.advanceTime(4n * DAY)
-
-		await assert.rejects(claimDepositForWinningViaTestQuestionLedger(testQuestionLedgerAddress, 0n, QuestionOutcome.Yes), /SafeERC20Ops token returned false from ERC20 call/)
+		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		await assert.rejects(depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond * 2n), /SafeERC20Ops token returned false from ERC20 call/)
 	})
 })

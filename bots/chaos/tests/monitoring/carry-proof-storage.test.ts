@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { loadCarryStorageCandidates } from '../../src/monitoring/carry-proof-storage.ts'
 
 test('an empty discovered graph needs no historical logs or journal', async () => {
@@ -12,7 +12,7 @@ test('an empty discovered graph needs no historical logs or journal', async () =
 	expect(result).toEqual([])
 })
 
-import { zeroHash, toHex } from '@zoltar/bot-shared/ethereum'
+import { toHex } from '@zoltar/bot-shared/ethereum'
 import { carryCommitment, hashCarryLeaf } from '../../src/monitoring/carry-proof-index.ts'
 import { verifyMerkleMountainRangeProof } from '../support/carry-proof-verification.ts'
 import { scanCarryStorage } from '../../src/monitoring/carry-storage-scan.ts'
@@ -44,7 +44,7 @@ test('uses authenticated principal and preserves the reward interval', async () 
 	expect(fixture.calls.some(call => call.functionName === 'getInheritedClaimAllocation')).toBeFalse()
 })
 
-test('reconstructs repeated forks and skips consumed inherited identities', async () => {
+test('reconstructs repeated forks and skips inherited identities consumed by the claiming game', async () => {
 	const fixture = storageFixture()
 	const second = slot(source, 1)
 	const origin = fixture.games[0]
@@ -52,8 +52,7 @@ test('reconstructs repeated forks and skips consumed inherited identities', asyn
 	if (origin === undefined || middle === undefined) throw new Error('Missing fixture games')
 	origin.local.push(second)
 	middle.inherited.push(second)
-	middle.consumed.push(fixture.leaf.leaf.parentDepositIndex)
-	fixture.games.push({ game: grandchild, parent: child, inherited: [...middle.inherited], local: [], consumed: [] })
+	fixture.games.push({ game: grandchild, parent: child, inherited: [...middle.inherited], local: [], consumed: [fixture.leaf.leaf.parentDepositIndex] })
 	const candidates = await load(fixture, grandchild)
 	expect(candidates.map(candidate => candidate.parentDepositIndex)).toEqual([second.leaf.parentDepositIndex])
 	const candidate = candidates[0]
@@ -62,39 +61,23 @@ test('reconstructs repeated forks and skips consumed inherited identities', asyn
 	verifyMerkleMountainRangeProof(second.hash, '2', carryCommitment(middle.inherited).root, candidate.proof)
 })
 
-test('preserves zero slots for locally consumed leaves', async () => {
+test('keeps consumed source leaves in the append-only history', async () => {
 	const fixture = storageFixture()
 	const origin = fixture.games[0]
 	const target = fixture.games[1]
 	if (origin === undefined || target === undefined) throw new Error('Missing fixture games')
-	const removed = { ...fixture.leaf, hash: zeroHash, consumedLocally: true }
 	const second = slot(source, 1)
-	origin.local = [removed, second]
-	target.inherited = [removed, second]
+	origin.local = [fixture.leaf, second]
+	origin.consumed = [fixture.leaf.leaf.parentDepositIndex]
+	target.inherited = [fixture.leaf, second]
 	const candidates = await load(fixture)
-	expect(candidates).toHaveLength(1)
-	expect(candidates[0]?.proof?.leafIndex).toBe('1')
-	expect(candidates[0]?.proof?.merkleMountainRangeSiblings).toEqual([zeroHash])
-})
-
-test('continues through an empty consumed-node page to the oldest live claim', async () => {
-	const fixture = storageFixture()
-	const origin = fixture.games[0]
-	const target = fixture.games[1]
-	if (origin === undefined || target === undefined) throw new Error('Missing fixture games')
-	const consumed = Array.from({ length: 30 }, (_, index) => ({ ...slot(source, index + 1), hash: zeroHash, consumedLocally: true }))
-	origin.local = [fixture.leaf, ...consumed]
-	target.inherited = [...origin.local]
-	const candidates = await load(fixture)
-	expect(candidates).toHaveLength(1)
-	expect(candidates[0]?.parentDepositIndex).toBe(fixture.leaf.leaf.parentDepositIndex)
-	expect(candidates[0]?.proof?.leafIndex).toBe('0')
-	expect(fixture.calls.filter(call => call.functionName === 'getCarryLeafPageByOutcome')).toHaveLength(2)
+	expect(candidates.map(candidate => candidate.parentDepositIndex)).toEqual([fixture.leaf.leaf.parentDepositIndex, second.leaf.parentDepositIndex])
+	expect(candidates[1]?.proof?.leafIndex).toBe('1')
+	expect(candidates[1]?.proof?.merkleMountainRangeSiblings).toEqual([fixture.leaf.hash])
 })
 
 for (const [name, corrupt, error] of [
 	['snapshot root', (fixture: ReturnType<typeof storageFixture>) => fixture.setBadSnapshot(), 'snapshot root'],
-	['nullifier root', (fixture: ReturnType<typeof storageFixture>) => fixture.setBadNullifier(), 'nullifier root'],
 	['node cycle', (fixture: ReturnType<typeof storageFixture>) => fixture.setCycle(), 'cycle'],
 ] as const)
 	test(`rejects an inconsistent ${name}`, async () => {
@@ -123,7 +106,7 @@ test('matches Statoblast UI reference vectors for multiple MMR peaks and consume
 	target.consumed.push(fixture.leaf.leaf.parentDepositIndex)
 	const candidates = await load(fixture)
 	// Reference vectors from ui/statoblastShared/ts/protocol/reportingCarryProof.ts at 707342ba5, with leafIndex as the global MMR slot.
-	// Three slot(source, index) leaves, index 0 consumed; hash ABI-encoded bytes32[] nullifier siblings.
+	// Three slot(source, index) leaves, index 0 consumed.
 	// Keep these fixed so the isolated bot package does not require a UI build.
 	expect(
 		candidates.map(candidate => {
@@ -133,7 +116,6 @@ test('matches Statoblast UI reference vectors for multiple MMR peaks and consume
 				leafIndex: candidate.proof.leafIndex,
 				merkleMountainRangePeakIndex: candidate.proof.merkleMountainRangePeakIndex,
 				merkleMountainRangeSiblings: candidate.proof.merkleMountainRangeSiblings,
-				nullifierSiblingsHash: keccak256(encodeAbiParameters([{ type: 'bytes32[]' }], [candidate.proof.nullifierSiblings])),
 			}
 		}),
 	).toEqual([
@@ -142,14 +124,12 @@ test('matches Statoblast UI reference vectors for multiple MMR peaks and consume
 			leafIndex: '1',
 			merkleMountainRangePeakIndex: '1',
 			merkleMountainRangeSiblings: ['0xa0ebcd7d728cddad423416b7e319cf69a5e7af4d5702891f3f7b55282b9bb242', '0xe1eea733fcdf27da77be796af99d98288d5a9966e69b65bfb26705f0d1b677b8'],
-			nullifierSiblingsHash: '0xb0e1f666b1199eb49ddd0e67c05d510598159fd4061ccd7e8b157edc2278c237',
 		},
 		{
 			parentDepositIndex: '7922816251426433759354395033602',
 			leafIndex: '2',
 			merkleMountainRangePeakIndex: '0',
 			merkleMountainRangeSiblings: ['0xc408daae22afc1ac502346d55051a1afca1778a34b4b4df97771c07e856b453d'],
-			nullifierSiblingsHash: '0x31e5eb081fec5b85fbb9b9a49b083569d8ac2f6965285b2352c0f74391bcaf39',
 		},
 	])
 })
@@ -167,7 +147,6 @@ test('pages stored leaves without losing known identities', async () => {
 	expect(candidates).toHaveLength(35)
 	expect(candidates.filter(candidate => candidate.proof !== undefined)).toHaveLength(32)
 	expect(new Set(candidates.map(candidate => candidate.parentDepositIndex)).size).toBe(35)
-	expect(fixture.calls.filter(call => call.functionName === 'getCarryLeafPageByOutcome')).toHaveLength(2)
 	const next = await loadCarryStorageCandidates(fixture.client, [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchor + 1n, 1000)
 	expect(next.filter(candidate => candidate.proof !== undefined).map(candidate => candidate.parentDepositIndex)).not.toEqual(candidates.filter(candidate => candidate.proof !== undefined).map(candidate => candidate.parentDepositIndex))
 })
@@ -209,10 +188,9 @@ test('derives the payout from the threshold frozen at the first winning claim', 
 	await expect(scan(fixture)).rejects.toThrow('economics')
 })
 
-test('#1539 canonical carry builds an empty witness and retains game-local replay filtering', async () => {
-	const fixture = storageFixture(true)
-	const result = await scan(fixture)
-	expect(result.withdrawals[0]?.proof.nullifierSiblings).toEqual([])
+test('#1539 canonical carry retains game-local replay filtering', async () => {
+	const fixture = storageFixture()
+	expect((await scan(fixture)).withdrawals).toHaveLength(1)
 	const target = fixture.games.find(game => game.game === child)
 	if (target === undefined) throw new Error('Missing child fixture')
 	target.consumed.push(fixture.leaf.leaf.parentDepositIndex)

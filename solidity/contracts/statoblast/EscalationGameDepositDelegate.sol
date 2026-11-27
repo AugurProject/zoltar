@@ -52,8 +52,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			emit OrdinarySettlementInitialized(outcome, winningPrincipal, ordinaryWinningReserveAttoRep);
 		}
 		if (!releaseSurplus) return 0;
-		uint256 amount =
-			EscalationGameRepCustody.balance(game.questionLedger()) - ordinaryWinningReserveAttoRep;
+		uint256 amount = EscalationGameRepCustody.balance(game.questionLedger()) - ordinaryWinningReserveAttoRep;
 		if (amount == 0) return 0;
 		EscalationGameRepCustody.transfer(game.questionLedger(), game.questionLedger(), amount);
 		IEscalationGameQuestionLedgerContext(game.questionLedger()).burnEscalationWinnerHaircut(amount);

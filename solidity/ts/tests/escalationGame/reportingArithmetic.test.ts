@@ -59,15 +59,23 @@ test('ordinary payout and burn split exactly at any boundary, including reward-c
 			}
 })
 test('MMR peak geometry partitions every leaf without overlap across small and extreme counts', async () => {
+	const zero = `0x${'0'.repeat(64)}` as const
 	const ns = [...Array.from({ length: 35 }, (_, i) => BigInt(i + 1)), 2n ** 40n - 1n, 2n ** 40n, 2n ** 40n + 1n, 2n ** 63n - 1n, 2n ** 63n, 2n ** 63n + 1n, 2n ** 64n - 1n]
 	for (const n of ns) {
+		const peakCount = n
+			.toString(2)
+			.split('')
+			.filter(bit => bit === '1').length
+		// The verifier derives the peak from the global leaf position and accepts only that peak's height.
+		const rootFromPeak = (leafIndex: bigint, height: number) => client.readContract({ abi: artifact.abi, address, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zero, n, leafIndex, BigInt(height), Array.from({ length: height + peakCount - 1 }, () => zero)] })
 		let offset = 0n
 		for (let height = 63; height >= 0; --height) {
 			const size = 1n << BigInt(height)
 			if (!(n & size)) continue
 			const points = n <= 35n ? Array.from({ length: Number(size) }, (_, i) => offset + BigInt(i)) : [offset, offset + size / 2n, offset + size - 1n]
 			for (const i of new Set(points)) {
-				expect([...(await client.readContract({ abi: artifact.abi, address, functionName: 'getCurrentCarryPeakForLeaf', args: [n, i] }))]).toEqual([BigInt(height), offset])
+				await rootFromPeak(i, height)
+				await expect(rootFromPeak(i, height === 0 ? 1 : height - 1)).rejects.toThrow('Bad carry peak')
 			}
 			offset += size
 		}

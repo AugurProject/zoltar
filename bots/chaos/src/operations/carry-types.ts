@@ -11,7 +11,6 @@ interface ForkedCarryDepositProofSnapshot {
 	leafIndex: string
 	merkleMountainRangeSiblings: Hash[]
 	merkleMountainRangePeakIndex: string
-	nullifierSiblings: Hash[]
 }
 
 /** One independently executable inherited escalation withdrawal. */
@@ -28,7 +27,6 @@ export interface ForkedCarryWithdrawalSnapshot {
 	sourceNodeId: string
 	proof: ForkedCarryDepositProofSnapshot
 	resultingCarryRoot: Hash
-	resultingNullifierRoot: Hash
 	amountToWithdrawAttoRep: CanonicalUintString
 	burnAmountAttoRep: CanonicalUintString
 	preflightExpectedResult: Hex

@@ -49,7 +49,6 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 				binary: output('binary'),
 				capacity: output('capacity'),
 				mmrSiblings: output('mmrSiblings'),
-				nullifierSiblings: output('nullifierSiblings'),
 				peaks: output('peaks'),
 				selection: output('selection'),
 			},
@@ -57,7 +56,6 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 				binary: '1101₂',
 				capacity: '4 leaves; leafIndex 8…11',
 				mmrSiblings: '4',
-				nullifierSiblings: '64',
 				peaks: '0, 2, 3',
 				selection: 'Valid in-peak offset',
 			},
@@ -116,16 +114,13 @@ async function checkMmrProofPlannerStates(): Promise<void> {
 		assert.equal(peakHeight.classList.contains('visually-hidden-control'), false, 'large occupied-peak sets must use the compact native select')
 		assert.equal(peakHeight.tabIndex, 0, 'the large occupied-peak select must remain keyboard accessible')
 		assert.equal(window.document.querySelectorAll('.peak-choice-control button').length, 0, 'large occupied-peak sets must not render a button for every height')
-		assert.equal(meter('mmrSiblings').style.getPropertyValue('--widget-meter'), '100%', 'the longer 126-sibling MMR proof must fill its comparison meter')
-		assert.ok(Math.abs(Number.parseFloat(meter('nullifierSiblings').style.getPropertyValue('--widget-meter')) - (64 / 126) * 100) < 1e-9, 'the fixed 64-sibling nullifier proof must stay proportional to a longer MMR proof')
+		assert.equal(meter('mmrSiblings').style.getPropertyValue('--widget-meter'), '100%', 'the longest 126-sibling MMR proof must fill its meter')
 
 		for (const invalidLeafCount of ['0', String(1n << 64n)]) {
 			setInput(leafCount, invalidLeafCount)
 			assert.equal(output('binary'), '—', `${invalidLeafCount} must mark calculated output unavailable without repeating the validation message`)
 			assert.equal(output('selection'), '—', `${invalidLeafCount} must clear the prior selection result`)
-			assert.equal(output('nullifierSiblings'), '64', 'invalid MMR input must not change the protocol-fixed nullifier depth')
 			assert.equal(meter('mmrSiblings').style.getPropertyValue('--widget-meter'), '', `${invalidLeafCount} must clear the stale MMR proof meter`)
-			assert.equal(meter('nullifierSiblings').style.getPropertyValue('--widget-meter'), '', `${invalidLeafCount} must clear the comparison meter when the MMR proof is unavailable`)
 			assert.equal(leafCount.getAttribute('aria-invalid'), 'true', `${invalidLeafCount} must expose the invalid leaf-count state`)
 			assert.equal(peakHeight.disabled, true, `${invalidLeafCount} must disable the occupied-peak selector`)
 			assert.equal(peakHeight.options.length, 64, `${invalidLeafCount} must retain the dependent peak choices for layout stability`)

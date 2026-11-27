@@ -125,7 +125,6 @@ export type EscalationConsumptionReplay = {
 	amountAttoRep: bigint
 	reason: bigint
 	resultingUnresolvedTotalAttoRep: bigint
-	resultingNullifierRoot: Hex
 	resultingCarryRoot: Hex
 }
 
@@ -193,7 +192,6 @@ export type ReplayState = {
 	escalationCarryRoots: Map<Address, HexTriple>
 	escalationCarryPeaks: Map<Address, HexPeaksTriple>
 	escalationCarryLeaves: Map<Address, HexPeaksTriple>
-	escalationNullifierRoots: Map<Address, HexTriple>
 	escalationLeafCounts: Map<Address, BigIntTriple>
 	escalationUnresolvedTotals: Map<Address, BigIntTriple>
 	escalationResolutionBalances: Map<Address, BigIntTriple>
@@ -237,7 +235,6 @@ export function createReplayState(): ReplayState {
 		escalationCarryRoots: new Map(),
 		escalationCarryPeaks: new Map(),
 		escalationCarryLeaves: new Map(),
-		escalationNullifierRoots: new Map(),
 		escalationLeafCounts: new Map(),
 		escalationUnresolvedTotals: new Map(),
 		escalationResolutionBalances: new Map(),
@@ -411,12 +408,6 @@ function hashParent(left: Hex, right: Hex) {
 	return keccak256(concatHex([left, right]))
 }
 
-function getEmptyNullifierRoot() {
-	let root = ZERO_HASH
-	for (let depth = 0; depth < 64; depth += 1) root = hashParent(root, root)
-	return root
-}
-
 function hashCarryLeaf(deposit: DisputeStakedRepDepositReplay) {
 	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [deposit.depositor, deposit.outcome, deposit.amountAttoRep, deposit.parentDepositIndex, deposit.cumulativeRepAmountAttoRep, deposit.nodeId]))
 }
@@ -445,16 +436,6 @@ function appendCarryHash(peaks: Hex[], leafCount: bigint, leafHash: Hex) {
 		peakHeight += 1
 	}
 	peaks[peakHeight] = carryHash
-}
-
-function rebuildCarryPeaks(leaves: readonly Hex[]) {
-	const peaks: Hex[] = []
-	for (let leafIndex = 0; leafIndex < leaves.length; leafIndex += 1) {
-		const leaf = leaves[leafIndex]
-		if (leaf === undefined) throw new Error(`carry leaf ${leafIndex.toString()} is missing`)
-		appendCarryHash(peaks, BigInt(leafIndex), leaf)
-	}
-	return peaks
 }
 
 function cloneHexTriple(values: HexTriple): HexTriple {
@@ -776,13 +757,11 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			const leaves = state.escalationCarryLeaves.get(log.emitter)
 			const counts = state.escalationLeafCounts.get(log.emitter)
 			const totals = state.escalationUnresolvedTotals.get(log.emitter)
-			const nullifiers = state.escalationNullifierRoots.get(log.emitter)
 			if (roots !== undefined) roots[index] = ZERO_HASH
 			if (peaks !== undefined) peaks[index] = []
 			if (leaves !== undefined) leaves[index] = []
 			if (counts !== undefined) counts[index] = 0n
 			if (totals !== undefined) totals[index] = 0n
-			if (nullifiers !== undefined) nullifiers[index] = getEmptyNullifierRoot()
 			for (const vaultTotals of state.escalationLocalUnresolvedByVault.get(log.emitter)?.values() ?? []) vaultTotals[index] = 0n
 		}
 		const escrow = getOrCreateNestedMap(state.escalationVaultEscrowedRep, log.emitter)
@@ -797,11 +776,9 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			nonDecisionState: 'none',
 			forkContinuation: false,
 		})
-		const emptyNullifierRoot = getEmptyNullifierRoot()
 		state.escalationCarryRoots.set(log.emitter, [ZERO_HASH, ZERO_HASH, ZERO_HASH])
 		state.escalationCarryPeaks.set(log.emitter, [[], [], []])
 		state.escalationCarryLeaves.set(log.emitter, [[], [], []])
-		state.escalationNullifierRoots.set(log.emitter, [emptyNullifierRoot, emptyNullifierRoot, emptyNullifierRoot])
 		state.escalationLeafCounts.set(log.emitter, [0n, 0n, 0n])
 		state.escalationUnresolvedTotals.set(log.emitter, [0n, 0n, 0n])
 		state.escalationResolutionBalances.set(log.emitter, [0n, 0n, 0n])
@@ -846,7 +823,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const carryRoots = requireHexTriple(log.args, 'carryRoots')
 		const leafCounts = requireBigIntTriple(log.args, 'leafCounts')
 		state.escalationCarryRoots.set(log.emitter, carryRoots)
-		state.escalationNullifierRoots.set(log.emitter, requireHexTriple(log.args, 'nullifierRoots'))
 		state.escalationLeafCounts.set(log.emitter, leafCounts)
 		state.escalationUnresolvedTotals.set(log.emitter, requireBigIntTriple(log.args, 'unresolvedTotalsAttoRep'))
 		state.escalationResolutionBalances.set(log.emitter, requireBigIntTriple(log.args, 'resolutionBalancesAttoRep'))
@@ -943,10 +919,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const totals = state.escalationUnresolvedTotals.get(log.emitter) ?? [0n, 0n, 0n]
 		totals[index] = requireBigInt(log.args, 'resultingUnresolvedTotalAttoRep')
 		state.escalationUnresolvedTotals.set(log.emitter, totals)
-		const nullifierRoots = state.escalationNullifierRoots.get(log.emitter)
-		if (nullifierRoots !== undefined) {
-			nullifierRoots[index] = requireHex(log.args, 'resultingNullifierRoot')
-		}
 		const resultingCarryRoot = requireHex(log.args, 'resultingCarryRoot')
 		const parentDepositIndex = requireBigInt(log.args, 'parentDepositIndex')
 		const sourceNodeId = requireBigInt(log.args, 'sourceNodeId')
@@ -961,7 +933,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			amountAttoRep,
 			reason,
 			resultingUnresolvedTotalAttoRep: totals[index],
-			resultingNullifierRoot: requireHex(log.args, 'resultingNullifierRoot'),
 			resultingCarryRoot,
 		}
 		getOrCreateNestedMap(state.escalationConsumptions, log.emitter).set(`${parentDepositIndex.toString()}:${sourceNodeId.toString()}`, consumption)
@@ -976,17 +947,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 				if (vaultOutcomeTotal === undefined) throw new Error('carry consumption outcome is out of range')
 				if (vaultOutcomeTotal < amountAttoRep) throw new Error('vault unresolved REP cannot become negative')
 				vaultTotals[index] = vaultOutcomeTotal - amountAttoRep
-			}
-			const leaves = state.escalationCarryLeaves.get(log.emitter)?.[index]
-			// Canonical consumption retains the historical membership root. Standalone
-			// mutable consumption emits the root after removing this leaf.
-			if (leaves !== undefined && state.escalationCarryRoots.get(log.emitter)?.[index] !== resultingCarryRoot) {
-				const carryLeafIndex = Number.parseInt(deposit.carryLeafIndex.toString(), 10)
-				if (!Number.isSafeInteger(carryLeafIndex) || carryLeafIndex < 0 || carryLeafIndex >= leaves.length) throw new Error('local carry leaf index is out of range')
-				leaves[carryLeafIndex] = ZERO_HASH
-				const peaksByOutcome = state.escalationCarryPeaks.get(log.emitter)
-				if (peaksByOutcome === undefined) throw new Error('local carry peaks are missing')
-				peaksByOutcome[index] = rebuildCarryPeaks(leaves)
 			}
 		}
 		const carryRoots = state.escalationCarryRoots.get(log.emitter)

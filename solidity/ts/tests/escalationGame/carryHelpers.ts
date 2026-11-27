@@ -85,12 +85,7 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		}
 	}
 
-	const initializeSnapshotViaTestQuestionLedger = async (
-		testQuestionLedgerAddress: Address,
-		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
-		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
-		inheritedCarryTotals: readonly [bigint, bigint, bigint],
-	) =>
+	const initializeSnapshotViaTestQuestionLedger = async (testQuestionLedgerAddress: Address, inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray], inheritedCarryLeafCounts: readonly [bigint, bigint, bigint], inheritedCarryTotals: readonly [bigint, bigint, bigint]) =>
 		await completeSnapshot(
 			async () =>
 				await getClient().writeContract({

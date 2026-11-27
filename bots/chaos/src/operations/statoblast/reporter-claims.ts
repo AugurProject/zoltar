@@ -25,7 +25,7 @@ function escalationWithdrawalMetadata(candidate: ReturnType<typeof escalationWit
 function buildEscalationWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof escalationWithdrawalCandidates>[number]) {
 	const indexes = escalationWithdrawalIndexes(candidate)
 	const winning = candidate.outcome === candidate.pool.questionOutcome
-	const signature = winning ? 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)' : 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'
+	const signature = winning ? 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)' : 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)'
 	return planBase({
 		definitionId: withdrawEscalation.id,
 		ecosystem: 'statoblast',
