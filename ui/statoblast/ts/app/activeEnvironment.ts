@@ -5,8 +5,8 @@ import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEn
 
 const statoblastActiveEnvironmentDependencies = {
 	appId: 'statoblast',
-	createInjectedBackend: options => withTransactionReviews(createInjectedBackend(options)),
-	createSimulationBackend: async options => withTransactionReviews(await createSimulationBackend(options)),
+	createInjectedBackend: options => withTransactionReviews(createInjectedBackend(options), true),
+	createSimulationBackend: async options => withTransactionReviews(await createSimulationBackend(options), true),
 } satisfies NonNullable<Parameters<typeof initializeActiveEnvironment>[1]>
 
 export function initializeStatoblastActiveEnvironment(location: Parameters<typeof initializeActiveEnvironment>[0] = window.location, options: Parameters<typeof initializeActiveEnvironment>[2] = {}) {

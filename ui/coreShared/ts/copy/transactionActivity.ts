@@ -2,7 +2,7 @@ import type { CopyTemplateValue } from './types.js'
 
 export const activity = 'Activity'
 export const recentTransactions = 'Recent transactions'
-export const noRecentTransactions = 'No transactions from this account yet.'
+export const noRecentTransactions = 'No transactions from this wallet yet.'
 export const connectWalletForActivity = 'Connect a wallet to see its recent transactions.'
 export const formatActivityTriggerLabel = (pendingCount: number, newResultCount = 0) => {
 	if (pendingCount > 0) return `${activity}, ${pendingCount} pending`
@@ -14,6 +14,7 @@ export const formatPendingTransactionCount = (pendingCount: number) => (pendingC
 export const rejected = 'Canceled in wallet'
 export const reverted = 'Reverted'
 export const replaced = 'Replaced'
+export const spedUpInWallet = 'Sped up in your wallet.'
 export const dropped = 'No longer tracked'
 export const stopTracking = 'Stop tracking'
 export const formatStopTracking = (title: CopyTemplateValue) => `Stop tracking ${title}`

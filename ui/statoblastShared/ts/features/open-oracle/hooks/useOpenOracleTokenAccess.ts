@@ -1,3 +1,4 @@
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import { useSignal } from '@preact/signals'
 import { zeroAddress, maxUint256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -79,7 +80,7 @@ export function useOpenOracleTokenAccess({
 				value: result.result,
 			}
 		return {
-			error: getErrorMessage(result.error, 'Failed to load token approval'),
+			error: getErrorMessage(result.error, openOracleCopy.approvalReadFailed),
 			loading: false,
 			value: undefined,
 		}
@@ -93,7 +94,7 @@ export function useOpenOracleTokenAccess({
 			}
 		return {
 			amount: undefined,
-			error: getErrorMessage(result.error, 'Failed to load token balance'),
+			error: getErrorMessage(result.error, openOracleCopy.balanceReadFailed),
 		}
 	}
 
@@ -178,12 +179,12 @@ export function useOpenOracleTokenAccess({
 						if (contract.address !== zeroAddress) return erc20Results[erc20Index++]
 						return contract.functionName === 'allowance' ? { result: maxUint256, status: 'success' as const } : nativeBalance
 					})
-					if (tokenAccessReadResults.some(result => result === undefined)) throw new Error('Unexpected token access response')
+					if (tokenAccessReadResults.some(result => result === undefined)) throw new Error(openOracleCopy.tokenAccessReadInvalid)
 					const [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult] = tokenAccessReadResults.map(result => {
-						if (result === undefined) throw new Error('Unexpected token access response')
+						if (result === undefined) throw new Error(openOracleCopy.tokenAccessReadInvalid)
 						return toTokenAccessReadResult(result)
 					})
-					if (token1ApprovalReadResult === undefined || token2ApprovalReadResult === undefined || token1BalanceReadResult === undefined || token2BalanceReadResult === undefined) throw new Error('Unexpected token access response')
+					if (token1ApprovalReadResult === undefined || token2ApprovalReadResult === undefined || token1BalanceReadResult === undefined || token2BalanceReadResult === undefined) throw new Error(openOracleCopy.tokenAccessReadInvalid)
 
 					return {
 						token1ApprovalResult: getTokenApprovalState(token1ApprovalReadResult),

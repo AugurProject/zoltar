@@ -57,13 +57,13 @@ describe('shared capital security pool deployment', () => {
 		expect(() => validateSecurityPoolEconomics({ ...economics, annualFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validateSecurityPoolEconomics({ ...economics, annualFeeBps: 0n })).not.toThrow()
 		expect(() => validateSecurityPoolEconomics({ ...economics, minimumOutcomeRate: 10n ** 18n + 1n })).toThrow('exchange rate')
-		expect(() => validateSecurityPoolEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('uint48')
+		expect(() => validateSecurityPoolEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('Fee vesting duration is out of range.')
 		expect(() => buildSecurityPoolDeploymentRequest({ ...base, maximumQuestionHorizonSeconds: 0n })).toThrow('positive')
 	})
 
 	test('validates explicit universe, security multiplier and oracle priority fee without a seed pool', () => {
 		for (const universeId of [-1n, 1n << 248n]) expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, universeId } })).toThrow('Origin universe')
-		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_499n]) expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps } })).toThrow('10500')
+		for (const securityMultiplierBps of [0n, 10_000n, 10_001n, 10_499n]) expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps } })).toThrow('Security multiplier must be at least 105%.')
 		expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps: 10_500n } })).not.toThrow()
 		expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, reportPriorityFeeAttoEthPerGas: 0n } })).toThrow('positive')
 	})
@@ -71,7 +71,7 @@ describe('shared capital security pool deployment', () => {
 	test('exports exact unsigned smart-account transactions and rejects malformed values', () => {
 		const request = { account: owner, to: factory, data: '0xabcd' as const, value: 12n }
 		expect(exportSecurityPoolTransaction({ chainId: 1, request })).toEqual({ chainId: 1, from: owner, to: factory, data: '0xabcd', value: '12' })
-		expect(() => exportSecurityPoolTransaction({ chainId: 0, request })).toThrow('chain id')
+		expect(() => exportSecurityPoolTransaction({ chainId: 0, request })).toThrow('Choose a valid chain ID.')
 		expect(() => exportSecurityPoolTransaction({ chainId: 1, request: { ...request, data: '0xabc' } })).toThrow('whole hexadecimal bytes')
 	})
 

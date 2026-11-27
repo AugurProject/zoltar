@@ -51,7 +51,7 @@ function getCoreSimulationScenarioLabel(scenario: CoreSimulationScenario) {
 function getCoreSimulationScenarioDescription(scenario: CoreSimulationScenario) {
 	switch (scenario) {
 		case 'baseline':
-			return 'Fresh walletless simulation with funded QA accounts and no app contracts deployed. Use it to test the Deploy flow from scratch.'
+			return 'Fresh walletless simulation with funded QA wallets and no app contracts deployed. Use it to test the Deploy flow from scratch.'
 		case 'deployed':
 			return 'App contracts are deployed with no user-created records. Use it to test setup flows from an empty deployment.'
 		default:

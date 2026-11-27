@@ -1,3 +1,4 @@
+import { minimumSecurityPoolHealthFactorBps } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -79,6 +80,12 @@ describe('Statoblast: owner health policy', () => {
 		await expect(withdraw(alice, 4n * E + 1n)).rejects.toThrow('Owner collateral too low')
 		await withdraw(alice, 4n * E)
 		expect((await position(id)).rep).toBe(126n * E)
+	})
+
+	test('accepts the shared minimum health target and rejects one basis point below it', async () => {
+		await target(alice, minimumSecurityPoolHealthFactorBps)
+		expect((await account(alice)).targetHealthFactorBps).toBe(minimumSecurityPoolHealthFactorBps)
+		await expect(target(alice, minimumSecurityPoolHealthFactorBps - 1n)).rejects.toThrow('Health below protocol floor')
 	})
 
 	test('a target raise requires adequate pledged principal and leaves the commitment unchanged', async () => {

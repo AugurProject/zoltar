@@ -1,3 +1,4 @@
+import { oracleErrors } from '../copy/protocolErrors.js'
 import { hasSubmissionWindow, TRANSACTION_SUBMISSION_RESERVE_SECONDS } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
 import { hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -5,7 +6,7 @@ import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getOpenOracleSettlementSafetyGuard } from './openOracleSettlementSafety.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { isFeedAuthenticatedReportEscrow } from './openOracleSettlement.js'
-import { reportAlreadySettled } from '../copy/openOracle.js'
+import { disputeWindowTooShort, reportAlreadySettled } from '../copy/openOracle.js'
 
 // Keep seconds and block clocks separate; neither reserve guarantees arbitrary inclusion delays.
 const DISPUTE_SUBMISSION_BLOCKS = 2n
@@ -15,7 +16,7 @@ export function getOpenOracleDisputeSubmissionReserve(timeType: boolean) {
 }
 
 export function getOpenOracleDisputeSubmissionTimingGuard(timing: { currentClock: bigint; reportTimestamp: bigint; settlementTime: bigint; timeType: boolean }) {
-	return hasSubmissionWindow(timing.currentClock, timing.reportTimestamp + timing.settlementTime, getOpenOracleDisputeSubmissionReserve(timing.timeType)) ? undefined : 'Dispute window ends too soon. Wait to settle this report.'
+	return hasSubmissionWindow(timing.currentClock, timing.reportTimestamp + timing.settlementTime, getOpenOracleDisputeSubmissionReserve(timing.timeType)) ? undefined : disputeWindowTooShort
 }
 
 export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<ReadClient, 'readContract' | 'getBlock' | 'multicall'>, address: Address, reportId: bigint) {
@@ -26,7 +27,7 @@ export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<Read
 	const safetyGuard = getOpenOracleSettlementSafetyGuard({ ...state.latest.game, timeType, trustedSettlementCallback })
 	if (safetyGuard !== undefined) throw new Error(safetyGuard)
 	const currentClock = timeType ? block.timestamp : block.number
-	if (currentClock === undefined) throw new Error('Could not read the current dispute clock. Retry before sending.')
+	if (currentClock === undefined) throw new Error(oracleErrors.disputeClock)
 	const guard = getOpenOracleDisputeSubmissionTimingGuard({ ...state.latest.game, currentClock, timeType })
 	if (guard !== undefined) throw new Error(guard)
 	return state

@@ -52,7 +52,7 @@ test('simulation providers reject unknown and non-canonical pinned blocks instea
 				{ blockHash: pinnedHash, requireCanonical: true },
 			],
 		}),
-	).rejects.toThrow('not canonical')
+	).rejects.toThrow('is no longer on the active chain')
 	expect(requests.filter(request => typeof request === 'object' && request !== null && 'method' in request && request.method === 'eth_call')).toEqual([])
 })
 

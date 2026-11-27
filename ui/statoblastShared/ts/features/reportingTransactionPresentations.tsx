@@ -36,7 +36,7 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
 	let title = transactionCopy.escalationDepositsSettled
-	if (result.amountAttoRep !== undefined) title = result.amountAttoRep === 0n ? reportingCopy.clearedDeposits(getReportingOutcomeLabel(result.outcome)) : reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep))
+	if (result.amountAttoRep !== undefined && result.amountAttoRep > 0n) title = reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep))
 	if (result.action === 'reportOutcome') title = reportingCopy.reportedAmount(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep ?? 0n))
 	if (result.action === 'approveReportingRep') title = reportingCopy.approvedAmount(formatCurrencyBalance(result.amountAttoRep ?? 0n))
 	let detail = transactionCopy.escalationDepositsSettledDetail
@@ -46,7 +46,7 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: transactionCopy.questionLedger, value: <AddressValue address={result.questionLedgerAddress} /> },
+			{ label: transactionCopy.questionLedger, value: <AddressValue longAbbreviation address={result.questionLedgerAddress} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title,
@@ -74,7 +74,7 @@ function getOpenOracleTransactionRows(context: OpenOracleTransactionContext | un
 	return [
 		...(context.reportId === undefined || context.reportId.trim() === '' ? [] : [{ label: openOracleCopy.reportId, value: context.reportId }]),
 		...(context.tokenPair === undefined || context.tokenPair.trim() === '' ? [] : [{ label: openOracleCopy.tokenPair, value: context.tokenPair }]),
-		...(context.openOracleAddress === undefined ? [] : [{ label: openOracleCopy.oracleAddress, value: <AddressValue address={context.openOracleAddress} /> }]),
+		...(context.openOracleAddress === undefined ? [] : [{ label: openOracleCopy.oracleAddress, value: <AddressValue longAbbreviation address={context.openOracleAddress} /> }]),
 	]
 }
 
@@ -156,18 +156,7 @@ export function createOpenOracleWarningPresentation(result: OpenOracleActionResu
 type OpenOracleAction = OpenOracleActionResult['action']
 type OpenOracleActionTitles = Readonly<{ failure: string; pending: string; success: string }>
 
-const OPEN_ORACLE_ACTION_TITLES = {
-	approveToken1: { failure: 'Base token approval failed', pending: 'Approving base token', success: 'Base token approved' },
-	approveToken2: { failure: 'Quote token approval failed', pending: 'Approving quote token', success: 'Quote token approved' },
-	createReportInstance: { failure: 'Report creation failed', pending: openOracleCopy.creatingStandaloneReportTitle, success: openOracleCopy.standaloneReportCreated },
-	dispute: { failure: 'Dispute failed', pending: 'Submitting dispute', success: 'Dispute submitted' },
-	executeStagedOperation: { failure: 'Staged operation failed', pending: 'Executing staged operation', success: 'Staged operation executed' },
-	queueOperation: { failure: 'Queue operation failed', pending: 'Queueing operation', success: 'Operation queued' },
-	requestPrice: { failure: 'Price request failed', pending: 'Requesting price', success: 'Price requested' },
-	settle: { failure: 'Settlement failed', pending: openOracleCopy.settlingReportTitle, success: openOracleCopy.reportSettled },
-	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
-	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },
-} satisfies Record<OpenOracleAction, OpenOracleActionTitles>
+const OPEN_ORACLE_ACTION_TITLES = openOracleCopy.standaloneWriteActionTitles satisfies Record<OpenOracleAction, OpenOracleActionTitles>
 
 export const getOpenOraclePendingTitle = (actionName: OpenOracleAction) => OPEN_ORACLE_ACTION_TITLES[actionName].pending
 export const getOpenOracleSuccessTitle = (actionName: OpenOracleAction) => OPEN_ORACLE_ACTION_TITLES[actionName].success

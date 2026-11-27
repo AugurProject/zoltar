@@ -208,7 +208,7 @@ describe('useZoltarMigration', () => {
 		await act(async () => {
 			await state().migrateInternalRep(10n)
 		})
-		expect(state().zoltarMigrationError).toContain('Wallet account changed')
+		expect(state().zoltarMigrationError).toContain('The connected wallet address changed')
 		expect(state().zoltarMigrationFeedback?.status.detail).toBe(state().zoltarMigrationError)
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		await act(async () => {

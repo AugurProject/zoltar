@@ -1,11 +1,12 @@
-import { depositLiquidating } from '../../../copy/securityPoolCapital.js'
-import type { SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { capital, newPriceRequired } from '../../../copy/securityPoolTransactions.js'
+import * as copy from '../../../copy/securityPoolCapital.js'
+import { minimumSecurityPoolHealthFactorBps, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 
 const ceilDivide = (value: bigint, divisor: bigint) => (value + divisor - 1n) / divisor
 
 export function requiredSecurityPoolCollateral(snapshot: Pick<SecurityPoolCapitalSnapshot, 'ownerConservativePrice' | 'securityMultiplierBps' | 'ownerAccount'>, commitment: bigint, proofPrice?: bigint, targetHealthFactorBps?: bigint) {
 	const price = proofPrice !== undefined && proofPrice > snapshot.ownerConservativePrice ? proofPrice : snapshot.ownerConservativePrice
-	const health = targetHealthFactorBps ?? (snapshot.ownerAccount.targetHealthFactorBps || 10_000n)
+	const health = targetHealthFactorBps ?? (snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps)
 	const value = ceilDivide(commitment * price, 10n ** 18n)
 	const backing = ceilDivide(value * snapshot.securityMultiplierBps, 10_000n)
 	return ceilDivide(backing * health, 10_000n)
@@ -14,7 +15,7 @@ export function requiredSecurityPoolCollateral(snapshot: Pick<SecurityPoolCapita
 /** Reverse the contract's nested upward rounding, preserving the exact maximum. */
 export function maximumSecurityPoolCommitment(snapshot: Pick<SecurityPoolCapitalSnapshot, 'ownerConservativePrice' | 'securityMultiplierBps' | 'ownerPrincipalAttoRep'>, health: bigint | undefined, proofPrice?: bigint) {
 	const price = proofPrice !== undefined && proofPrice > snapshot.ownerConservativePrice ? proofPrice : snapshot.ownerConservativePrice
-	if (health === undefined || health < 10_000n || health >= 1n << 256n || price <= 0n || snapshot.securityMultiplierBps <= 0n) return undefined
+	if (health === undefined || health < minimumSecurityPoolHealthFactorBps || health >= 1n << 256n || price <= 0n || snapshot.securityMultiplierBps <= 0n) return undefined
 	const backing = (snapshot.ownerPrincipalAttoRep * 10_000n) / health
 	const value = (backing * 10_000n) / snapshot.securityMultiplierBps
 	const capacity = (value * 10n ** 18n) / price
@@ -22,14 +23,14 @@ export function maximumSecurityPoolCommitment(snapshot: Pick<SecurityPoolCapital
 }
 
 export function capitalHealthReason(snapshot: SecurityPoolCapitalSnapshot, health: bigint | undefined, additionalRep = 0n) {
-	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to health changes.'
-	if (health === undefined || health < 10_000n) return 'Choose a health target of at least 100%.'
-	if (health >= 1n << 256n) return 'This health target is too large.'
-	const saved = snapshot.ownerAccount.targetHealthFactorBps || 10_000n
+	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return copy.healthChangesClosed
+	if (health === undefined || health < minimumSecurityPoolHealthFactorBps) return copy.healthTargetMinimum
+	if (health >= 1n << 256n) return copy.healthTargetTooLarge
+	const saved = snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps
 	if (health <= saved || snapshot.ownerCommitmentAttoEth === 0n) return undefined
-	if (!snapshot.priceValid) return 'A new accepted REP price is required before raising your target.'
+	if (!snapshot.priceValid) return copy.healthNeedsCurrentPrice
 	const pledged = snapshot.positions.find(position => position.commitment > 0n)?.rep ?? 0n
-	if (pledged + additionalRep < requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, health)) return 'Add REP or complete a commitment reduction before raising your target.'
+	if (pledged + additionalRep < requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, health)) return copy.healthNeedsMoreRep
 	return undefined
 }
 
@@ -42,47 +43,42 @@ export function coveredUnderwaterCommitment(snapshot: Pick<SecurityPoolCapitalSn
 }
 
 export function capitalRetirementReason(snapshot: SecurityPoolCapitalSnapshot, id: bigint, remaining: bigint | undefined) {
-	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to retirement requests.'
+	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return capital.reductionsClosed
 	const position = snapshot.positions.find(item => item.id === id && item.commitment > 0n)
-	if (position === undefined) return 'Position is no longer live.'
-	if (remaining === undefined || remaining < 0n) return 'Enter the commitment to keep, or zero for full retirement.'
-	if (position.batch !== 0n) return remaining === position.remainingCommitment ? undefined : 'Retirement already requested.'
-	if (remaining >= position.commitment) return 'Choose a smaller remaining commitment.'
-	if (remaining !== 0n && (remaining < snapshot.economics.minimumCommitmentAttoEth || position.commitment - remaining < snapshot.economics.minimumCommitmentAttoEth)) return 'The remaining commitment and reduction must each meet the security pool minimum.'
+	if (position === undefined) return copy.positionInactive
+	if (remaining === undefined || remaining < 0n) return copy.remainingCommitmentRequired
+	if (position.batch !== 0n) return remaining === position.remainingCommitment ? undefined : copy.retirementRequested
+	if (remaining >= position.commitment) return copy.smallerRemainingCommitmentRequired
+	if (remaining !== 0n && (remaining < snapshot.economics.minimumCommitmentAttoEth || position.commitment - remaining < snapshot.economics.minimumCommitmentAttoEth)) return copy.reductionBelowMinimum
 	return undefined
 }
 
 export function capitalAuthorizationReason(snapshot: SecurityPoolCapitalSnapshot, commitment: bigint | undefined, proofPrice?: bigint) {
-	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'This universe is closed to new commitments.'
-	if (!snapshot.priceValid) return 'A new accepted REP price is required.'
-	if (commitment === undefined || commitment === 0n) return 'Enter a positive commitment amount.'
-	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return 'Commitment is below this security pool’s minimum.'
+	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return capital.newCommitmentsClosed
+	if (!snapshot.priceValid) return newPriceRequired
+	if (commitment === undefined || commitment === 0n) return copy.positiveCommitmentRequired
+	if (commitment < snapshot.economics.minimumCommitmentAttoEth) return copy.commitmentBelowMinimum
 	const active = snapshot.positions.find(position => position.commitment > 0n)
-	if (active !== undefined && active.batch !== 0n) return 'Your commitment is locked until its retirement is released.'
-	if (active !== undefined && commitment < active.commitment) return 'Request retirement before reducing an existing commitment.'
+	if (active !== undefined && active.batch !== 0n) return copy.queuedCommitmentLock
+	if (active !== undefined && commitment < active.commitment) return copy.useReduceCommitment
 	const totalCommitment = snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment
-	if (proofPrice === undefined && (totalCommitment > snapshot.oracleExposureLimitAttoEth || snapshot.demandAttoEth > snapshot.oracleExposureLimitAttoEth)) return 'Request a price report funded for this larger commitment.'
-	if (snapshot.ownerPrincipalAttoRep < requiredSecurityPoolCollateral(snapshot, commitment, proofPrice)) return 'Collateral is below your saved health target.'
+	if (proofPrice === undefined && (totalCommitment > snapshot.oracleExposureLimitAttoEth || snapshot.demandAttoEth > snapshot.oracleExposureLimitAttoEth)) return capital.priceForLargerCommitment
+	if (snapshot.ownerPrincipalAttoRep < requiredSecurityPoolCollateral(snapshot, commitment, proofPrice)) return copy.commitmentBelowHealthTarget
 	return undefined
 }
 
-export function capitalPositionPhase(batch: bigint, currentBatch: bigint) {
-	if (batch === 0n) return 'active'
-	return batch === currentBatch ? 'current' : 'next'
-}
-
 export function capitalWithdrawalReason(snapshot: SecurityPoolCapitalSnapshot, amount: bigint | undefined) {
-	if (amount === undefined || amount === 0n) return 'Enter a positive amount.'
+	if (amount === undefined || amount === 0n) return capital.positiveAmountRequired
 	if (amount <= snapshot.withdrawableAttoRep) return undefined
 	if (snapshot.ownerCommitmentAttoEth > 0n) {
-		if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return 'Committed principal cannot be withdrawn during fork preparation.'
-		if (!snapshot.priceValid) return 'A new accepted REP price is required before withdrawing committed principal.'
+		if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return copy.forkPreventsWithdrawal
+		if (!snapshot.priceValid) return copy.withdrawalNeedsCurrentPrice
 	}
-	return 'Amount exceeds your withdrawable REP. Retire commitment to release more principal.'
+	return copy.amountAboveWithdrawable
 }
 
 /** Matches the ledger rule even while the accepted price is stale. */
 export function capitalDepositReason(snapshot: Pick<SecurityPoolCapitalSnapshot, 'ownerAccount' | 'positions' | 'liquidationPrice'>) {
 	const position = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
-	return position !== undefined && position.commitment > 0n && position.maxHealthyPrice < snapshot.liquidationPrice ? depositLiquidating : undefined
+	return position !== undefined && position.commitment > 0n && position.maxHealthyPrice < snapshot.liquidationPrice ? copy.depositLiquidating : undefined
 }

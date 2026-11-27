@@ -104,17 +104,18 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 			typeof step.value === 'string'
 				? step.value
 				: await session.evaluate(`(async () => {
-			const [{ getActiveBackend }, { loadQuestionLedgerListing }] = await Promise.all([
+			const [{ getActiveBackend }, { loadStatoblastQuestion }] = await Promise.all([
 				import('@zoltar/ui-core-shared/lib/activeEnvironment.js'),
 				import('@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'),
 			])
 			const backend = getActiveBackend()
 			if (backend.id !== 'simulation') throw new Error('Screenshot requires simulation')
 			await backend.waitUntilReady?.()
-			const { pools } = await loadQuestionLedgerListing(backend.createReadClient())
-			const pool = pools[0]
-			if (pools.length !== 1 || pool === undefined) throw new Error('Expected one seeded security pool, found ' + pools.length)
-			return pool.questionLedgerAddress
+			const seed = backend.seededSecurityPool
+			const questionId = seed?.questionIds[0]
+			if (seed === undefined || questionId === undefined || seed.questionIds.length !== 1) throw new Error('Expected one seeded Statoblast question')
+			const { question } = await loadStatoblastQuestion(backend.createReadClient(), seed.address, questionId, 0n)
+			return question.questionLedgerAddress
 		})()`)
 		if (typeof value !== 'string') throw new Error(`${context}: fill value did not resolve to text`)
 		if (typeof step.value !== 'string') simulationQuestionLedgerAddress = value
@@ -152,7 +153,7 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 		})
 		await session.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('zoltar.theme', 'light') } catch {}\n${PAGE_HELPERS}` })
 		await session.send('Page.navigate', { url: pageUrl })
-		await session.waitFor(`document.readyState === 'complete' && document.body.innerText.includes(${quote(app.title)}) && !document.body.innerText.includes('BOOTSTRAPPING') && !document.body.innerText.includes('Starting simulation')`, {
+		await session.waitFor(`document.readyState === 'complete' && document.body.innerText.includes(${quote(app.title)}) && document.querySelector('.simulation-strip-progress') === null`, {
 			attempts: APP_READY_ATTEMPTS,
 			intervalMilliseconds: 250,
 			retryFailures: true,

@@ -35,7 +35,7 @@ export async function submitPreparedDispute({ cachedReport, getSubmission, reloa
 	await refreshTokenAccess(details)
 	assertSelectedReportCurrent(details.reportId.toString())
 	const { canSubmit, blockMessage, newAmount1, newAmount2, swapTokenKey } = getSubmission(details)
-	if (!canSubmit || newAmount1 === undefined || newAmount2 === undefined || swapTokenKey === undefined) throw new Error(blockMessage?.message ?? 'Invalid dispute submission details.')
+	if (!canSubmit || newAmount1 === undefined || newAmount2 === undefined || swapTokenKey === undefined) throw new Error(blockMessage?.message ?? openOracleCopy.invalidDisputeDetails)
 	const tokenToSwap = swapTokenKey === 'token1' ? details.token1 : details.token2
 	// Begin the write in the same turn as the selection check.
 	return await submit({ details, tokenToSwap, newAmount1, newAmount2 })

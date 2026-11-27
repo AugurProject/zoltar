@@ -72,7 +72,7 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 				if (current) admission.value = { key: admissionKey, value }
 			})
 			.catch((error: unknown) => {
-				if (current) admissionError.value = getErrorMessage(error, 'Unable to load the fork admission REP.')
+				if (current) admissionError.value = getErrorMessage(error, copy.loadForkCostFailed)
 			})
 			.finally(() => {
 				if (current) admissionLoading.value = false
@@ -91,9 +91,9 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 		approvePending.value = true
 		try {
 			await runWriteAction(
-				buildWriteActionConfig(writeParameters, forkActionError, commonCopy.formatConnectWalletBefore('approving fork admission REP'), { action: 'approveForkAdmission', source: 'Question reporting', submittedTitle: copy.approveForkAdmission, universeId }),
+				buildWriteActionConfig(writeParameters, forkActionError, commonCopy.formatConnectWalletBefore(copy.approveForkCostAction), { action: 'approveForkAdmission', source: copy.questionReporting, submittedTitle: copy.approveForkAdmission, universeId }),
 				async (account, context) => ({ hash: await dependencies.approveOwnForkAdmission(account, writeCallbacks(context), poolAddress, amountAttoRep) }),
-				'Unable to approve fork admission REP.',
+				copy.approveForkCostFailed,
 				result => {
 					reloadCount.value += 1
 					parameters.onTransactionPresented({ hash: result.hash, title: copy.forkAdmissionApproved, tone: 'success', showStatusDialog: false, universeId })
@@ -109,10 +109,10 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 		forkPending.value = true
 		try {
 			await runWriteAction(
-				buildWriteActionConfig(writeParameters, forkActionError, commonCopy.formatConnectWalletBefore('triggering a universe fork'), { action: 'forkQuestion', source: 'Question reporting', submittedTitle: copy.triggerUniverseFork, universeId }),
+				buildWriteActionConfig(writeParameters, forkActionError, commonCopy.formatConnectWalletBefore(copy.triggerForkAction), { action: 'forkQuestion', source: copy.questionReporting, submittedTitle: copy.triggerUniverseFork, universeId }),
 				// The protocol call rereads the shortfall and allowance before sending, since REP supply can grow after this view loaded.
 				async (account, context) => ({ hash: await dependencies.forkWithOwnEscalationGame(account, writeCallbacks(context), poolAddress) }),
-				'Unable to trigger the universe fork.',
+				copy.triggerForkFailed,
 				async result => {
 					await onForked(result.hash)
 				},

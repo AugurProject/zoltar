@@ -109,7 +109,7 @@ describe('contract deployment internals', () => {
 				expectedRuntimeCodeHashes: { zoltarQuestionData: keccak256('0x01') },
 				runtimeCodeByStepId: { zoltarQuestionData: '0x02' },
 			}),
-		).toThrow('Local runtime code for zoltarQuestionData does not match its pinned expected hash')
+		).toThrow('Local contract code for zoltarQuestionData does not match its pinned expected hash')
 	})
 
 	test('atomic canonical-signer funding bytecode matches its pinned source and compiler settings', async () => {
@@ -363,7 +363,7 @@ describe('contract deployment internals', () => {
 				getCode: async ({ address }) => (address === oracleStep.address ? '0x1234' : undefined),
 			})
 
-			await expect(loadDeploymentStatusOracleSnapshot(readClient as ReadClient)).rejects.toThrow('Unexpected runtime code for deploymentStatusOracle')
+			await expect(loadDeploymentStatusOracleSnapshot(readClient as ReadClient)).rejects.toThrow('Unexpected contract code for deploymentStatusOracle')
 		} finally {
 			resetEnvironment()
 		}
@@ -386,7 +386,7 @@ describe('contract deployment internals', () => {
 				preparedFunctions.push(preview.functionName)
 				expect(preview.data).toBeDefined()
 				expect(preview.to).toBeDefined()
-				expect(preview.toLabel).toBe('Proxy deployer')
+				expect(preview.toLabel).toBe('Shared proxy')
 			},
 			sendTransaction: async request => {
 				if (capturedProxyDeployData === undefined) {
@@ -774,7 +774,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('rejected the proxy deployer transaction before it was funded')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('rejected the shared proxy deployment before it was funded')
 		expect(fundingCalled).toBe(false)
 	})
 
@@ -1097,7 +1097,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at canonical proxy deployer')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at the shared proxy')
 	})
 
 	test('proxy deployer successful broadcasts reject unexpected installed code immediately', async () => {
@@ -1117,7 +1117,7 @@ describe('contract deployment internals', () => {
 			},
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at canonical proxy deployer')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at the shared proxy')
 	})
 
 	test('proxy deployer step stops when the signer-funding transaction is cancelled in the wallet', async () => {

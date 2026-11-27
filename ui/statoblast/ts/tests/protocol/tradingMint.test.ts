@@ -2,13 +2,24 @@ import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnviro
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createMulticallStub, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, redeemCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
 type MockSentTransaction = Parameters<Parameters<typeof createMockWriteClient>[0]>[0]
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
+
+function mintShareQuote(shares: () => bigint) {
+	return createMulticallStub(({ contracts, blockNumber }) => {
+		expect(blockNumber).toBe(1n)
+		expect(contracts.map(contract => [contract.address, contract.functionName])).toEqual([
+			[pool, 'refreshSecurityPoolFees'],
+			[pool, 'attoEthToAttoShares'],
+		])
+		return [undefined, shares()]
+	})
+}
 
 /** A security-pool-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
 function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint, recovery = { required: 0n, balance: 10n ** 21n, allowance: 10n ** 21n }) {
@@ -22,6 +33,8 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'shareToken') return pool
+				if (request.functionName === 'balanceOfShares') return [0n, 0n, 0n]
 				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'securityPoolOf') return securityPool
@@ -37,7 +50,8 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 			}),
 		),
 		account: { address: pool, type: 'json-rpc' as const },
-		getBlock: async () => createBlockWithTimestamp(currentTimestamp),
+		getBlock: async () => ({ ...createBlockWithTimestamp(currentTimestamp), number: 1n }),
+		multicall: mintShareQuote(() => 10n ** 18n),
 	}
 }
 
@@ -67,12 +81,13 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 	const unit = 10n ** 18n
 	let review: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] = []
+	let balances: [bigint, bigint, bigint] = [unit, 2n * unit, 3n * unit]
 	let quotedCash = unit
 	let quotedRep = 2n * unit
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing redemption calldata')
-		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256,uint256)']), data: request.data })).toEqual({ functionName: 'redeemShares', args: [(unit * 9950n) / 10000n, (2n * unit * 9950n) / 10000n] })
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256 minimumCollateral,uint256 minimumRecoveryRep)']), data: request.data }).functionName).toBe('redeemShares')
 	})
 	const pinned: (bigint | undefined)[] = []
 	const client = {
@@ -88,7 +103,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				if (request.functionName === 'isSecurityPool') return true
 				if (request.functionName === 'shareToken' || request.functionName === 'questionForker') return securityPool
 				pinned.push(request.blockNumber)
-				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
+				if (request.functionName === 'balanceOfShares') return balances
 				if (request.functionName === 'getQuestionOutcome') return 2n
 				throw new Error(`Unexpected redemption read ${request.functionName}`)
 			}),
@@ -99,35 +114,78 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 			pinned.push(request.blockNumber)
 			expect(request.contracts.map(contract => ({ address: contract.address, functionName: contract.functionName, args: contract.args }))).toEqual([
 				{ address: pool, functionName: 'refreshSecurityPoolFees', args: [] },
-				{ address: pool, functionName: 'attoSharesToAttoEth', args: [3n * unit] },
-				{ address: pool, functionName: 'attoSharesToAttoRep', args: [3n * unit] },
+				{ address: pool, functionName: 'attoSharesToAttoEth', args: [balances[2]] },
+				{ address: pool, functionName: 'attoSharesToAttoRep', args: [balances[2]] },
 			])
 			return [undefined, quotedCash, quotedRep]
 		}),
-		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
-			plan = steps
-		},
 		onTransactionPrepared: (value: TransactionRequestPreview) => {
 			review = value
 		},
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			plan = steps
+		},
 	}
 	await redeemSharesInQuestionLedger(client, pool)
-	expect(plan).toHaveLength(1)
-	expect(plan[0]?.requireReview).toBe(true)
-	expect(plan[0]?.reviewDescription).toContain('Minimum payouts (0.5% tolerance):')
 	expect(pinned).toEqual([99n, 99n, 99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
-	expect(review?.reviewDescription).toContain('Minimum payouts (0.5% tolerance):')
 	expect(send).toHaveBeenCalledTimes(1)
-	const validate = plan[0]?.validateBeforeSubmit
-	if (validate === undefined) throw new Error('Expected redemption revalidation')
-	await validate()
+	expect(plan[0]?.requireReview).toBe(true)
+	const step = plan[0]
+	if (step?.validateBeforeSubmit === undefined || step.readReviewRows === undefined) throw new Error('Missing redemption review')
+	await step.validateBeforeSubmit()
+	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '3 → 0' })
 	quotedCash = 0n
-	await expect(validate()).rejects.toThrow('Redemption payout changed')
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Redemption payout changed')
 	quotedCash = unit
 	quotedRep = 0n
-	await expect(validate()).rejects.toThrow('Redemption payout changed')
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Redemption payout changed')
+	quotedRep = 2n * unit
+	balances = [unit, 2n * unit, 4n * unit]
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Changed since you reviewed')
+	if (step.refreshReviewData === undefined) throw new Error('Missing winning-share review refresh')
+	const data = await step.refreshReviewData()
+	expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256 minimumCollateral,uint256 minimumRecoveryRep)']), data }).functionName).toBe('redeemShares')
+	await step.validateBeforeSubmit()
+	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '4 → 0' })
+})
+
+test('complete-set redemption refreshes all three share balances and its payout estimate', async () => {
+	const unit = 10n ** 18n
+	const base = mintClient(() => undefined, 1n, 100n)
+	let plan: readonly TransactionPlanStep[] = []
+	let holdings = [unit, 2n * unit, 3n * unit]
+	let cash = 2n * unit
+	const client = {
+		...base,
+		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'balanceOfShares') return holdings
+			return base.readContract(request)
+		}),
+		multicall: createMulticallStub(request => {
+			expect(request.contracts.map(contract => contract.functionName)).toEqual(['refreshSecurityPoolFees', 'attoSharesToAttoEth', 'attoSharesToAttoRep'])
+			return [undefined, cash, 0n]
+		}),
+		onTransactionPlan: (next: readonly TransactionPlanStep[]) => {
+			plan = next
+		},
+	}
+	await redeemCompleteSetInQuestionLedger(client, pool, unit)
+	const step = plan[0]
+	if (step?.validateBeforeSubmit === undefined || step.readReviewRows === undefined) throw new Error('Missing redemption review')
+	cash = unit
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Redemption payout changed')
+	cash = 2n * unit
+	await step.validateBeforeSubmit()
+	expect(step.readReviewRows().map(row => [row.label, row.value])).toEqual([
+		['Yes shares', '2 → 1'],
+		['No shares', '3 → 2'],
+		['Invalid shares', '1 → 0'],
+		['Estimated collateral received', '2\u00a0WETH'],
+	])
+	holdings = [unit, 0n, 3n * unit]
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Your balance is too low')
 })
 
 test('token approval authorizes only the requested spender and amount', async () => {
@@ -193,14 +251,19 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return mode === 'insufficient backing' ? 99n : 100n
 						case 'attoEthToAttoShares':
 							return 90n
+						case 'shareToken':
+							return pool
+						case 'balanceOfShares':
+							return [0n, 0n, 0n]
 						default:
 							throw new Error(`Unexpected read ${request.functionName}`)
 					}
 				}),
 			),
 			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(timestamp),
+			getBlock: async () => ({ ...createBlockWithTimestamp(timestamp), number: 1n }),
 			getBalance: async () => walletBalance,
+			multicall: mintShareQuote(() => 90n),
 			estimateGas: async () => 100_000n,
 			onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
 				plans = steps
@@ -225,12 +288,12 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			await expect(validate()).rejects.toThrow('question ended')
 			timestamp = 1n
 			game = pool
-			await expect(validate()).rejects.toThrow('escalation starts')
+			await expect(validate()).rejects.toThrow('Minting closes once reporting starts.')
 			// A security pool the factory did not deploy is rejected before its collateral token or spender is read.
 			game = zeroAddress
 			canonicalSecurityPool = false
-			await expect(validate()).rejects.toThrow('not deployed by the canonical factory')
-			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
+			await expect(validate()).rejects.toThrow('Could not verify how this market’s security pool was created.')
+			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('Could not verify how this market’s security pool was created.')
 			expect(send).toHaveBeenCalledTimes(1)
 		} else {
 			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
@@ -274,7 +337,7 @@ test('a funded recovery purchase binds REP and rechecks funding before submissio
 test('a pool security pool is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
 	for (const scenario of [
 		{ recorded: securityPool, deployed: true, failure: undefined },
-		{ recorded: securityPool, deployed: false, failure: 'not deployed by the canonical factory' },
+		{ recorded: securityPool, deployed: false, failure: 'Could not verify how this market’s security pool was created.' },
 		{ recorded: zeroAddress, deployed: true, failure: 'Question has no security pool' },
 	]) {
 		const reads: unknown[] = []
@@ -322,6 +385,41 @@ test('mint validation requires the fresh actual fee while preserving its signed 
 	await expect(validate()).resolves.toBeUndefined()
 	fee = 12n
 	await expect(validate()).rejects.toThrow('Purchase fee changed')
+})
+
+test('mint binds chosen limits and rejects worse fees or shares before review and before sending', async () => {
+	let fee = 10n
+	let shares = 95n
+	let validate: TransactionPlanStep['validateBeforeSubmit']
+	const send = mock((request: MockSentTransaction) => {
+		if (request.data === undefined) throw new Error('Missing mint calldata')
+		expect(decodeFunctionData({ abi: securityPoolMintAbi, data: request.data }).args?.slice(4)).toEqual([90n, 20n])
+	})
+	const base = mintClient(send, 1n, 100n)
+	const client = {
+		...base,
+		multicall: mintShareQuote(() => shares),
+		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'purchaseQuote') return [fee, 0n]
+			return base.readContract(request)
+		}),
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			validate = steps[0]?.validateBeforeSubmit
+		},
+	}
+	const limits = { maximumFee: 20n, minimumShares: 90n }
+	await expect(createCompleteSetInQuestionLedger(client, pool, 100n, { ...limits, maximumFee: 9n })).rejects.toThrow('Purchase fee changed')
+	await expect(createCompleteSetInQuestionLedger(client, pool, 100n, { ...limits, minimumShares: 96n })).rejects.toThrow('The shares received changed')
+	expect(send).not.toHaveBeenCalled()
+	await createCompleteSetInQuestionLedger(client, pool, 100n, limits)
+	if (validate === undefined) throw new Error('Missing mint validation')
+	await expect(validate()).resolves.toBeUndefined()
+	fee = 21n
+	await expect(validate()).rejects.toThrow('Purchase fee changed')
+	fee = 20n
+	shares = 89n
+	await expect(validate()).rejects.toThrow('The shares received changed')
+	expect(send).toHaveBeenCalledTimes(1)
 })
 
 test('USDC share migration reviews the amount at six decimal precision', async () => {

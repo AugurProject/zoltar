@@ -6,10 +6,10 @@ describe('security pool contract value decoding', () => {
 	test('decodeUint accepts bigints and safe integers inside the bit width', () => {
 		expect(decodeUint(5n, 'Lots')).toBe(5n)
 		expect(decodeUint(7, 'Settlement time', 48)).toBe(7n)
-		expect(() => decodeUint(-1n, 'Lots')).toThrow('Lots must fit uint256.')
-		expect(() => decodeUint(1n << 48n, 'Settlement time', 48)).toThrow('Settlement time must fit uint48.')
-		expect(() => decodeUint(1.5, 'Lots')).toThrow('Lots must fit uint256.')
-		expect(() => decodeUint('1', 'Lots')).toThrow('Lots must fit uint256.')
+		expect(() => decodeUint(-1n, 'Lots')).toThrow('Lots is out of range.')
+		expect(() => decodeUint(1n << 48n, 'Settlement time', 48)).toThrow('Settlement time is out of range.')
+		expect(() => decodeUint(1.5, 'Lots')).toThrow('Lots is out of range.')
+		expect(() => decodeUint('1', 'Lots')).toThrow('Lots is out of range.')
 	})
 
 	test('decodeAddress checksums and rejects the zero address unless allowed', () => {

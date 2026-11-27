@@ -1,4 +1,5 @@
 import { useId } from 'preact/hooks'
+import type { ComponentChildren } from 'preact'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as copy from '../../../copy/securityPool.js'
@@ -12,6 +13,7 @@ export function SecurityPoolInput({
 	onChange,
 	disabled = false,
 	hint,
+	action,
 	numeric = false,
 	describedBy,
 	error,
@@ -22,6 +24,7 @@ export function SecurityPoolInput({
 	onChange: (value: string) => void
 	disabled?: boolean
 	hint?: string | undefined
+	action?: ComponentChildren
 	numeric?: boolean
 	describedBy?: string | undefined
 	error?: string | undefined
@@ -32,7 +35,7 @@ export function SecurityPoolInput({
 	return (
 		<div className='field'>
 			<label htmlFor={id}>{label}</label>
-			<FormInput id={id} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} hint={hint} inputMode={numeric ? 'decimal' : 'text'} autoComplete='off' aria-describedby={describedBy} error={error} liveError={liveError} />
+			<FormInput id={id} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} hint={hint} action={action} inputMode={numeric ? 'decimal' : 'text'} autoComplete='off' aria-describedby={describedBy} error={error} liveError={liveError} />
 		</div>
 	)
 }

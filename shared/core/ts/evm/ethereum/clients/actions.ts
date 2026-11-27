@@ -62,7 +62,7 @@ export function buildRpcTransactionRequest(parameters: SendTransactionParameters
 export function rpcBalanceOverride(parameters: { account?: Account | Address | undefined; balanceOverride?: bigint | undefined }) {
 	if (parameters.balanceOverride === undefined) return []
 	const account = normalizeAccountAddress(parameters.account)
-	if (account === undefined) throw new Error('Balance override requires a simulation account')
+	if (account === undefined) throw new Error('Choose a simulation wallet before overriding its balance')
 	return [{ [account]: { balance: hexQuantity(parameters.balanceOverride) } }]
 }
 
@@ -264,6 +264,13 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 		getBlockNumber: async () => normalizeRequiredRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_blockNumber' }), 'block number'),
 		getChainId: async () => bigintToSafeNumber(normalizeRequiredRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_chainId' }), 'chain ID'), 'Chain ID'),
 		getCode,
+		getStorageAt: async parameters =>
+			normalizeHash(
+				await requestTransportWithRateLimitRetries<string>(transport, {
+					method: 'eth_getStorageAt',
+					params: [getAddress(parameters.address), hexQuantity(BigInt(normalizeHash(parameters.slot))), resolveBlockTag(parameters)],
+				}),
+			),
 		getBytecode: getCode,
 		getGasPrice: async () => normalizeRequiredRpcBigInt(await requestTransportWithRateLimitRetries<string>(transport, { method: 'eth_gasPrice' }), 'gas price'),
 		getTransactionCount: async parameters =>

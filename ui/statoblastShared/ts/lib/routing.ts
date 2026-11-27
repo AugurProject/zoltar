@@ -1,58 +1,94 @@
-import { buildRouteHref, createRouting, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
-import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
-import type { StatoblastRoute } from '../types/app.js'
-import { buildPoolsRouteHash, parsePoolsRouteHash, POOLS_ROUTE_HASH, STATOBLAST_CONTEXT_QUERY_PARAMS } from './statoblastLocation.js'
+import { getAddress, isAddress } from '@zoltar/core-shared/evm/ethereum'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { buildRouteHref, getTopLevelRouteSearch, installRouting, parseRouteHash, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import type { PoolTab, StatoblastPage } from '../types/app.js'
+export type { PoolTab, StatoblastPage, StatoblastPoolPage, StatoblastQuestionPage } from '../types/app.js'
 
-type NavigableStatoblastRoute = Exclude<StatoblastRoute, 'not-found'>
+export const poolTabs = ['capital', 'questions', 'price', 'liquidations', 'fork'] as const satisfies readonly PoolTab[]
+export const questionTabs = ['shares', 'reporting', 'claims'] as const
 
-const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
-	defaultRoute: 'pools',
-	buildNavigationHref: (route, routeHash, search) => {
-		const current = parsePoolsRouteHash(getCurrentRouteHash())
-		const params = new URLSearchParams(getRouteHashSearch())
-		const rememberedAddress = current === undefined ? (params.get('questionLedger') ?? '') : ''
-		const address = current?.view === 'operate' ? current.questionLedgerAddress : rememberedAddress
+export function designQuestionId(value: string) {
+	if (!/^(?:0x[0-9a-f]{1,64}|[0-9]{1,78})$/iu.test(value)) return undefined
+	const id = BigInt(value)
+	return id < 1n << 256n ? id : undefined
+}
 
-		const nextSearch = updateSearchParams(search, next => next.delete('poolsView'))
-		if (route === 'pools') {
-			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ questionLedgerAddress: address, view: 'operate' }), nextSearch)
-			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'universes', 'migrate'])
-			const view = current !== undefined && current.view !== 'operate' ? current.view : rememberedView
-			return buildRouteHref(buildPoolsRouteHash({ view }), nextSearch)
+export function parseStatoblastPage(hash: string): StatoblastPage {
+	const { routeHash, search } = parseRouteHash(hash)
+	switch (routeHash) {
+		case '':
+		case '#/':
+			return { kind: 'choose-universe' }
+		case '#/watchlist':
+			return { kind: 'watchlist' }
+		case '#/migrate-rep':
+			return { kind: 'migrate-rep' }
+		case '#/deploy-pool':
+			return { kind: 'deploy-pool' }
+		default:
+			break
+	}
+	const [root, kind, address, path, id, view, ...rest] = routeHash.split('/')
+	if (root !== '#' || kind !== 'pool' || address === undefined || !isAddress(address) || rest.length !== 0) return { kind: 'not-found' }
+	const pool = getAddress(address)
+	if (path === 'question' && id !== undefined) {
+		const questionId = designQuestionId(id)
+		const tab = questionTabs.find(candidate => candidate === view)
+		if (questionId !== undefined && tab !== undefined) {
+			const action = new URLSearchParams(search).get('action')
+			return { kind: 'question', pool, questionId, tab, ...(tab === 'shares' && (action === 'mint' || action === 'redeem') ? { sharesAction: action } : {}) }
 		}
-		return buildRouteHref(
-			routeHash,
-			updateSearchParams(nextSearch, next => {
-				if (isHexAddressInput(address)) {
-					next.set('questionLedger', address)
-				} else if (current !== undefined && current.view !== 'operate') {
-					next.set('poolsView', current.view)
-				} else {
-					const view = params.get('poolsView')
-					if (view !== null) next.set('poolsView', view)
-				}
-			}),
-		)
-	},
+	} else if (id === undefined) {
+		const tab = path === undefined ? 'capital' : poolTabs.find(candidate => candidate === path)
+		if (tab !== undefined) {
+			const position = tab === 'liquidations' ? designQuestionId(new URLSearchParams(search).get('position') ?? '') : undefined
+			return { kind: 'pool', pool, tab, ...(position !== undefined && position > 0n && position < 1n << 96n ? { positionId: position } : {}) }
+		}
+	}
+	return { kind: 'not-found' }
+}
+
+type RouteName = Exclude<StatoblastPage['kind'], 'not-found'>
+const routing: RoutingConfig<RouteName> = {
+	defaultRoute: 'choose-universe',
 	routes: [
-		{ hash: '#/deploy', name: 'deploy', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
-		// The questions route lands on Browse questions.
-		{ hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
-		{ match: routeHash => (parsePoolsRouteHash(routeHash) === undefined ? undefined : 'pools') },
-		{ hash: '#/security-pools', name: 'security-pools', queryParameters: new Set(['securityPool', 'owner', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
-		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
+		{ name: 'choose-universe', hash: '#/' },
+		{ name: 'watchlist', hash: '#/watchlist' },
+		{ name: 'migrate-rep', hash: '#/migrate-rep' },
+		{ name: 'deploy-pool', hash: '#/deploy-pool' },
+		{
+			match: hash => {
+				const page = parseStatoblastPage(hash)
+				return page.kind === 'pool' || page.kind === 'question' ? page.kind : undefined
+			},
+		},
 	],
 }
 
-export const statoblastRouting = createRouting(STATOBLAST_ROUTING_CONFIG)
-
 export function installStatoblastRouting() {
-	installRouting(STATOBLAST_ROUTING_CONFIG)
+	installRouting(routing)
 }
 
-/** A question pool page that keeps the shared context (simulation, genesis, network, universe) of the current page. */
-export function buildQuestionPoolHref(questionLedgerAddress: string) {
-	return buildRouteHref(buildPoolsRouteHash({ questionLedgerAddress, view: 'operate' }), getTopLevelRouteSearch('pools'))
+export function statoblastPageHash(page: Exclude<StatoblastPage, { kind: 'not-found' }>) {
+	if (page.kind === 'choose-universe') return '#/'
+	if (page.kind === 'pool') return `#/pool/${page.pool}${page.tab === 'capital' ? '' : `/${page.tab}`}`
+	if (page.kind === 'question') return `#/pool/${page.pool}/question/${formatQuestionIdHex(page.questionId)}/${page.tab}`
+	return `#/${page.kind}`
+}
+
+export function statoblastPageHref(page: Parameters<typeof statoblastPageHash>[0], universeId?: bigint) {
+	let search = getTopLevelRouteSearch(page.kind)
+	if (universeId !== undefined) search = writeUniverseQueryParam(search, universeId)
+	if (page.kind === 'question' && page.tab === 'shares' && page.sharesAction !== undefined) {
+		const params = new URLSearchParams(search)
+		params.set('action', page.sharesAction)
+		search = `?${params}`
+	}
+	if (page.kind === 'pool' && page.tab === 'liquidations' && page.positionId !== undefined) {
+		const params = new URLSearchParams(search)
+		params.set('position', page.positionId.toString())
+		search = `?${params}`
+	}
+	return buildRouteHref(statoblastPageHash(page), search)
 }

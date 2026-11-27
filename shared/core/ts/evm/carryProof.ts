@@ -25,10 +25,10 @@ export function hashCarryParent(left: Hex, right: Hex): Hex {
 export function bagCarryPeaks(peaks: readonly Hex[]): Hex {
 	if (peaks.length === 0) return ZERO_HASH
 	let root = peaks[peaks.length - 1]
-	if (root === undefined) throw new Error('Missing carry peak root')
+	if (root === undefined) throw new Error('Missing deposit proof checkpoint')
 	for (let index = peaks.length - 1; index > 0; index -= 1) {
 		const previousPeak = peaks[index - 1]
-		if (previousPeak === undefined) throw new Error('Missing carry peak root')
+		if (previousPeak === undefined) throw new Error('Missing deposit proof checkpoint')
 		root = hashCarryParent(previousPeak, root)
 	}
 	return root
@@ -51,7 +51,7 @@ function hashCarryLevel(levelHashes: readonly Hex[]) {
 	for (let index = 0; index < levelHashes.length; index += 2) {
 		const left = levelHashes[index]
 		const right = levelHashes[index + 1]
-		if (left === undefined || right === undefined) throw new Error('Invalid carry Merkle Mountain Range level')
+		if (left === undefined || right === undefined) throw new Error('Invalid deposit proof level')
 		nextLevelHashes.push(hashCarryParent(left, right))
 	}
 	return nextLevelHashes
@@ -66,7 +66,7 @@ export function buildCarryPeakRoots(leafHashes: readonly Hex[]) {
 		let levelHashes = leafHashes.slice(leafOffset, leafOffset + peakSize)
 		while (levelHashes.length > 1) levelHashes = hashCarryLevel(levelHashes)
 		const root = levelHashes[0]
-		if (root === undefined) throw new Error('Missing carry Merkle Mountain Range peak root')
+		if (root === undefined) throw new Error('Missing deposit proof checkpoint')
 		peaks.push({ height, leafOffset, root })
 		leafOffset += peakSize
 	}
@@ -76,14 +76,14 @@ export function buildCarryPeakRoots(leafHashes: readonly Hex[]) {
 export function buildCarryMerkleMountainRangeProof(leafHashes: readonly Hex[], targetLeafIndex: number) {
 	const peaks = buildCarryPeakRoots(leafHashes)
 	const targetPeak = peaks.find(peak => targetLeafIndex >= peak.leafOffset && targetLeafIndex < peak.leafOffset + 2 ** peak.height)
-	if (targetPeak === undefined) throw new Error('Target carry leaf is not inside the Merkle Mountain Range')
+	if (targetPeak === undefined) throw new Error('The selected deposit is missing from the proof')
 
 	let relativeLeafIndex = targetLeafIndex - targetPeak.leafOffset
 	let levelHashes = leafHashes.slice(targetPeak.leafOffset, targetPeak.leafOffset + 2 ** targetPeak.height)
 	const merkleMountainRangeSiblings: Hex[] = []
 	while (levelHashes.length > 1) {
 		const siblingHash = levelHashes[relativeLeafIndex ^ 1]
-		if (siblingHash === undefined) throw new Error('Missing carry Merkle Mountain Range sibling')
+		if (siblingHash === undefined) throw new Error('Missing deposit proof entry')
 		merkleMountainRangeSiblings.push(siblingHash)
 		levelHashes = hashCarryLevel(levelHashes)
 		relativeLeafIndex = Math.floor(relativeLeafIndex / 2)
@@ -149,7 +149,7 @@ export function createSparseNullifier(consumedLeafIndexes: readonly bigint[]) {
 
 /** A carry leaf keeps its unique 64-bit MMR position through every descendant snapshot. */
 export function getCarryNullifierPath(leafIndex: bigint) {
-	if (leafIndex < 0n || leafIndex >= 1n << BigInt(CARRY_NULLIFIER_DEPTH)) throw new Error('Nullifier leaf index must fit the 64-bit carry tree')
+	if (leafIndex < 0n || leafIndex >= 1n << BigInt(CARRY_NULLIFIER_DEPTH)) throw new Error('The deposit position is outside the supported range')
 	return leafIndex
 }
 

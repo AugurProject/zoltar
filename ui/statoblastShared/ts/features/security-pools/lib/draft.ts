@@ -1,8 +1,9 @@
+import { nonnegativeAmountRequired } from '../../../copy/securityPool.js'
 import { tryParseDecimalInput, type DecimalSeparator } from '@zoltar/ui-core-shared/forms/decimal.js'
 
 export function parseSecurityPoolAmount(value: string) {
 	const amount = securityPoolAmountOrUndefined(value)
-	if (amount === undefined) throw new Error('Enter a nonnegative amount with up to 18 decimal places.')
+	if (amount === undefined) throw new Error(nonnegativeAmountRequired)
 	return amount
 }
 

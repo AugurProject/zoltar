@@ -1,3 +1,4 @@
+import { poolFork } from '../copy/simulation.js'
 import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar as zoltarArtifact } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -10,7 +11,7 @@ import { sendSecurityPoolTransaction } from '../protocol/securityPool.js'
 /** Keep the wallet's parent shares and prepare their shared Yes-branch settlement. */
 export async function forkSeededSecurityPool(parameters: BootstrapScenarioApplyParameters, securityPool: Address, parentPool: Address, questionId: bigint) {
 	const { memoryClient, profile, createWriteClient, createReadClient, onProgress } = parameters
-	const owner = requireQaAccount(parameters.accounts[0], 'Expected security pool fork simulation owner')
+	const owner = requireQaAccount(parameters.accounts[0], poolFork.ownerMissing)
 	const writer = createWriteClient(owner)
 	const reader = createReadClient()
 	const infrastructure = getInfraContractAddresses(profile)
@@ -19,16 +20,16 @@ export async function forkSeededSecurityPool(parameters: BootstrapScenarioApplyP
 	await mintSimulationGenesisRep({ accountAddress: owner, amount: threshold + 1_000n * 10n ** 18n, createWriteClient, memoryClient, repAddress: profile.genesisRepTokenAddress, zoltarAddress: zoltar })
 	const balance = await reader.readContract({ abi: ABIS.mainnet.erc20, address: profile.genesisRepTokenAddress, functionName: 'balanceOf', args: [owner] })
 	const send = (to: Address, data: `0x${string}`, title: string) => sendSecurityPoolTransaction(writer, { account: owner, to, data, value: 0n }, title)
-	await send(profile.genesisRepTokenAddress, encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [zoltar, balance] }), 'Approve fork threshold REP')
+	await send(profile.genesisRepTokenAddress, encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [zoltar, balance] }), poolFork.approveRep)
 	await advanceSimulationTime(memoryClient, 365n * 86_400n + 60n)
-	await reportBootstrapProgress(onProgress, 'Forking the security pool universe', 0.99)
-	await send(zoltar, encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId, (1n << 256n) - 1n] }), 'Fork security pool universe')
+	await reportBootstrapProgress(onProgress, poolFork.forking, 0.99)
+	await send(zoltar, encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId, (1n << 256n) - 1n] }), poolFork.fork)
 	const controller = await reader.readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'forkController' })
-	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'choose', args: [0n, 1n] }), 'Choose Yes branch')
+	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'choose', args: [0n, 1n] }), poolFork.chooseYes)
 	await advanceSimulationTime(memoryClient, 63n * 86_400n)
-	await reportBootstrapProgress(onProgress, 'Preparing shared branch settlement', 0.992)
-	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'startBranch', args: [0n, 1n] }), 'Start Yes branch')
+	await reportBootstrapProgress(onProgress, poolFork.preparing, 0.992)
+	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'startBranch', args: [0n, 1n] }), poolFork.startYes)
 	const child = await reader.readContract({ abi: zoltarArtifact.abi, address: zoltar, functionName: 'getChildUniverseId', args: [0n, 1n] })
-	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'finalizeBranch', args: [child] }), 'Activate Yes branch')
-	await send(infrastructure.questionForker, encodeFunctionData({ abi: forkerArtifact.abi, functionName: 'prepareSecurityPoolQuestion', args: [parentPool, child] }), 'Prepare child question')
+	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'finalizeBranch', args: [child] }), poolFork.activateYes)
+	await send(infrastructure.questionForker, encodeFunctionData({ abi: forkerArtifact.abi, functionName: 'prepareSecurityPoolQuestion', args: [parentPool, child] }), poolFork.prepareQuestion)
 }

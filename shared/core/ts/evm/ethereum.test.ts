@@ -2560,7 +2560,7 @@ describe('shared ethereum compatibility layer', () => {
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
 		expect(http('https://rpc.example.test').retryDelay).toBe(10_000)
 		expect(http('https://rpc.example.test').requestTimeout).toBe(30_000)
-		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('request timeout')
+		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('RPC timeout must be a positive safe integer')
 		const responses = [
 			new Response(undefined, { status: 429 }),
 			Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' }),
@@ -3113,6 +3113,6 @@ test('fee preflight balance overrides change only the sender ETH balance and rem
 		{ method: 'eth_estimateGas', params: [{ from: sender, to: TOKEN_ADDRESS, maxFeePerGas: '0xa', maxPriorityFeePerGas: '0x2' }, '0x2a', { [sender]: { balance: '0x3e8' } }] },
 		{ method: 'eth_call', params: [{ from: sender, to: TOKEN_ADDRESS }, 'latest'] },
 	])
-	await expect(createPublicClient({ transport }).estimateGas({ to: TOKEN_ADDRESS, balanceOverride: 1000n })).rejects.toThrow('Balance override requires a simulation account')
+	await expect(createPublicClient({ transport }).estimateGas({ to: TOKEN_ADDRESS, balanceOverride: 1000n })).rejects.toThrow('Choose a simulation wallet before overriding its balance')
 	expect(requests).toHaveLength(3)
 })

@@ -187,9 +187,9 @@ async function fillOpenOracleCreateForm() {
 	// The form takes the escalation multiplier as a decimal; the contract stores it scaled by 100.
 	await setInputValue('Multiplier', (openOracleCreateParameters.multiplier / 100).toString())
 	await setInputValue('Settlement delay (seconds)', openOracleCreateParameters.settlementTime.toString())
-	await setInputValue('Escalation halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
+	await setInputValue('Dispute limit', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
 	await setInputValue('Dispute delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
-	await setInputValue('Protocol fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
+	await setInputValue('OpenOracle fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
 }
 
 async function loadSelectedReportInUi() {
@@ -270,7 +270,7 @@ describe.serial('OpenOracleSection integration', () => {
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).getByText('Standalone only. Start security-pool-managed requests from the security pool price panel.')).not.toBeNull()
+		expect(within(document.body).getByText('Standalone only. To report a security pool price, use its REP price tab.')).not.toBeNull()
 		expect(within(document.body).getByLabelText('Base token address')).not.toBeNull()
 		expect(within(document.body).queryByText('Transaction review')).toBeNull()
 

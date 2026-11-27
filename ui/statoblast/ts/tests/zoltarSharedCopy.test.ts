@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
+import { questionContractAddress } from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as reportingCopy from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 import * as simulationCopy from '@zoltar/ui-core-shared/copy/simulation.js'
@@ -27,10 +28,20 @@ test('transaction actions and pending labels use sentence case independently of 
 	expect(marketCopy.universeAlreadyForked).toBe('Universe already forked')
 	expect(reportingCopy.reportOnSelectedSide).toBe('Report on selected side')
 	expect(reportingCopy.triggerZoltarFork).toBe('Trigger universe fork')
-	expect(reportingCopy.formatSettleSelectedDepositsLabel('Yes')).toBe('Settle selected Yes deposits')
 	expect(reportingCopy.claimDeposits('Yes', '2')).toBe('Claim 2\u00a0REP from Yes')
-	expect(reportingCopy.clearDeposits('No')).toBe('Clear No deposits (worth 0 REP)')
-	expect(tradingCopy.redeemResolvedShares).toBe('Redeem resolved shares')
+	expect(tradingCopy.redeemResolvedShares).toBe('Redeem winning shares')
 	expect(simulationCopy.removeCorruptedSaves).toBe('Remove corrupted saved states')
 	expect(zoltarCopy.migratingRepPending).toBe('Migrating REP…')
+})
+
+test('the Statoblast question address label uses the glossary', () => {
+	expect(questionContractAddress).toBe('Question contract address')
+	expect(commonCopy.questionLedgerAddress).toBe('Question ledger address')
+})
+
+test('shared OpenOracle labels describe what the price report changes', () => {
+	expect(openOracleCopy.callbackContract).toBe('Settlement contract')
+	expect(openOracleCopy.callbackGasLimit).toBe('Settlement contract gas limit')
+	expect(openOracleCopy.proposedPrice).toBe('New price')
+	expect(openOracleCopy.staleSettledReportWarning).toBe('Report a new price.')
 })

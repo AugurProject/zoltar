@@ -1,4 +1,5 @@
 import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE, DEFAULT_SIMULATION_USDC_PER_REP_PRICE } from './repPrices.js'
+import * as simulationCopy from '../copy/simulation.js'
 import type { SimulationEngine } from './simulationEngineTypes.js'
 import { parseScenarioSnapshot } from './preparedScenarioSnapshot.js'
 import {
@@ -25,7 +26,7 @@ import { advanceSimulationTime, advanceNextSimulationBlock } from './clock.js'
 import { exportSimulationSnapshot, restoreSimulationSnapshot } from './simulationSnapshotState.js'
 import { createSimulationChain, type SimulationTransactionParameters } from './simulationChain.js'
 import type { SimulationScenario } from './scenarios.js'
-import { getSimulationSource, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
+import { getSimulationSource, type SavedSimulationStateEnvelopeV1, type SeededSecurityPool, type SimulationInitialization } from './savedStates.js'
 import { getBundledSimulationSnapshotKey } from './scenarioSnapshots.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationBootstrapParameters, SimulationWorkerState } from './tevmWorkerProtocol.js'
@@ -46,7 +47,7 @@ export type SimulationEngineDependencies = {
 
 export async function createSimulationEngine({ initialization, dependencies, genesisOutcome = 'yes' }: { initialization: SimulationInitialization; dependencies: SimulationEngineDependencies; genesisOutcome?: GenesisOutcome }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
-	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
+	if (primaryAccount === undefined) throw new Error('No simulation QA wallets configured')
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount, genesisOutcome)
 	const profile = createSimulationProfile({ ...predictedTokenAddresses, genesisOutcome })
 	const baseScenario = getInitializationScenario(initialization)
@@ -67,6 +68,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 	let repPerUsdcPrice = DEFAULT_SIMULATION_USDC_PER_REP_PRICE
 	/** The prepared state a scenario bootstrap restored, so a reset restores it again instead of seeding. */
 	let scenarioSnapshot: SavedSimulationStateEnvelopeV1 | undefined
+	let seededSecurityPool: SeededSecurityPool | undefined
 	let selectedAccount = primaryAccount
 	const simulationSource = getSimulationSource(initialization)
 	let transactionCountSinceReset = 0n
@@ -127,13 +129,14 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		await initializeSimulationAccounts(restored)
 		await restoreSimulationSnapshot(restored, envelope.state, () => initializeSimulationAccounts(restored))
 		chain = restored
+		seededSecurityPool = envelope.state.seededSecurityPool
 		queryDelayMilliseconds = clampDelayMilliseconds(envelope.state.queryDelayMilliseconds)
 		repPerEthPrice = envelope.state.repPerEthPrice
 		repPerUsdcPrice = envelope.state.repPerUsdcPrice
 		transactionDelayMilliseconds = clampDelayMilliseconds(envelope.state.transactionDelayMilliseconds)
 		transactionCountSinceReset = envelope.state.transactionCountSinceReset
 		const nextSelectedAccount = QA_ACCOUNTS.find(account => account.toLowerCase() === envelope.state.selectedAccount.toLowerCase())
-		if (nextSelectedAccount === undefined) throw new Error(`Unknown saved simulation account: ${envelope.state.selectedAccount}`)
+		if (nextSelectedAccount === undefined) throw new Error(`Unknown saved simulation wallet: ${envelope.state.selectedAccount}`)
 		selectedAccount = nextSelectedAccount
 		await ensureImpersonated(selectedAccount)
 		await refreshSimulationState()
@@ -319,7 +322,11 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			waitsForSeeding: false,
 		})
 	const bootstrapBuiltInScenario = async (scenario: SimulationScenario) => {
+		seededSecurityPool = undefined
 		await bootstrapSimulationChain({
+			onSeededSecurityPool: pool => {
+				seededSecurityPool = pool
+			},
 			accounts: QA_ACCOUNTS,
 			...(dependencies.applyScenario === undefined ? {} : { applyScenario: dependencies.applyScenario }),
 			createReadClient: createBootstrapReadClient,
@@ -360,7 +367,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		if (bootstrapPromise !== undefined) return await bootstrapPromise
 		bootstrapping = true
 		bootstrapError = undefined
-		bootstrapLabel = initialization.kind === 'scenario' ? 'Starting simulation bootstrap' : 'Loading saved simulation state'
+		bootstrapLabel = initialization.kind === 'scenario' ? simulationCopy.startingSimulation : simulationCopy.loadingSavedSimulationState
 		bootstrapProgress = 0
 		emitState()
 		bootstrapPromise = (async () => {
@@ -372,7 +379,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 					await restoreSavedStateEnvelope(initialization.envelope, 'Loading saved simulation state')
 				}
 			} catch (error) {
-				bootstrapError = error instanceof Error ? error.message : 'Failed to bootstrap simulation scenario'
+				bootstrapError = error instanceof Error ? error.message : simulationCopy.scenarioSetupFailed
 				throw error
 			} finally {
 				bootstrapping = false
@@ -399,6 +406,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		queryDelayMilliseconds,
 		repPerEthPrice,
 		repPerUsdcPrice,
+		seededSecurityPool,
 		selectedAccount,
 		transactionCountSinceReset,
 		transactionDelayMilliseconds,
@@ -414,13 +422,14 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		bootstrap,
 		exportState: async name => {
 			await awaitSeeding()
-			if (!bootstrapped) throw new Error('Simulation scenario must be bootstrapped before exporting state')
+			if (!bootstrapped) throw new Error(simulationCopy.exportBeforeScenarioReady)
 			return exportSimulationSnapshot(chain, { baseScenario, genesisOutcome, name }, () => ({
 				blockCountSinceReset,
 				currentTimestamp,
 				queryDelayMilliseconds,
 				repPerEthPrice,
 				repPerUsdcPrice,
+				seededSecurityPool,
 				selectedAccount,
 				transactionCountSinceReset,
 				transactionDelayMilliseconds,
@@ -434,7 +443,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		mintRep: async amount => {
 			await awaitSeeding()
 			if (!bootstrapped) {
-				throw new Error('Simulation scenario must be bootstrapped before minting REP')
+				throw new Error(simulationCopy.mintBeforeScenarioReady)
 			}
 			const activeChain = chain
 			const repCode = await activeChain.memoryClient.getCode({
@@ -511,7 +520,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			}
 		},
 		selectAccount: async address => {
-			if (!QA_ACCOUNTS.includes(address)) throw new Error(`Unknown simulation account: ${address}`)
+			if (!QA_ACCOUNTS.includes(address)) throw new Error(`Unknown simulation wallet: ${address}`)
 			selectedAccount = address
 			await ensureImpersonated(address)
 			emitState()
