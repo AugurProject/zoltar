@@ -233,7 +233,8 @@ contract SecurityPoolSettlement {
 
 	/// @notice Fund one child's claim basket with assigned collateral and forfeited child REP.
 	/// @dev Pull repairAuctionCash collateral tokens from the fork authority. Only assigned source
-	/// cash consumes the parent's balance; unsold and old recovery REP stay claims.
+	/// cash consumes the parent's balance; old recovery REP, and unsold auction REP when the
+	/// sale did not raise the whole shortfall, stay claims.
 	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep, uint256 repairAuctionCash) external onlyForkAuthority nonReentrant returns (uint64 bookId) {
 		require(universes[childUniverseId].bookId == 0, 'Settlement universe registered');
 		uint256 available = universes[sourceUniverseId].availableForkCashAttoEth;
