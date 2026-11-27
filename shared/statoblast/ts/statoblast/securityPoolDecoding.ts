@@ -3,7 +3,7 @@ import { getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-s
 /** Reads an unsigned integer contract value, accepting a safe JavaScript integer as well as a bigint. */
 export function decodeUint(value: unknown, label: string, bits = 256): bigint {
 	const integer = typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : value
-	if (typeof integer !== 'bigint' || integer < 0n || integer >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
+	if (typeof integer !== 'bigint' || integer < 0n || integer >= 1n << BigInt(bits)) throw new Error(`${label} is out of range.`)
 	return integer
 }
 

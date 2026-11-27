@@ -321,7 +321,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No vault has an active commitment.')
+		).toBe('No mint capacity. No position has an active commitment.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -412,20 +412,17 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isOnActiveAppChain: true,
 				loadingTradingDetails: true,
 				redeemAmountInput: '1',
 				shareBalances: undefined,
-				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Loading wallet share balances…')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
@@ -435,46 +432,39 @@ void describe('trading helpers', () => {
 					noAttoShares: 2n * 10n ** 18n,
 					yesAttoShares: 2n * 10n ** 18n,
 				},
-				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('You need matching Yes, No, and Invalid shares to redeem complete sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: 'abc',
 				shareBalances,
-				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Enter a valid redeem amount.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '2.1',
 				shareBalances,
-				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBe('Max redeemable amount is 2\u00a0sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
 				redeemAmountInput: '2',
 				shareBalances,
-				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
 		).toBeUndefined()
 	})
@@ -485,7 +475,6 @@ void describe('trading helpers', () => {
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: TOKEN_PRECISION,
 				hasSelectedPool: true,
 				isOnActiveAppChain: true,
 				loadingTradingDetails: false,
@@ -495,7 +484,6 @@ void describe('trading helpers', () => {
 					noAttoShares: firstMintShareAmount,
 					yesAttoShares: firstMintShareAmount,
 				},
-				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
 		).toBe('Max redeemable amount is 1\u00a0sets.')
 	})
@@ -836,8 +824,6 @@ test('complete-set redemption accepts share amounts when the claim pays only REP
 			isOnActiveAppChain: true,
 			loadingTradingDetails: false,
 			redeemAmountInput: '1',
-			settlementCollateralAttoEth: 0n,
-			shareTokenSupplyAttoShares: 2n * TOKEN_PRECISION,
 			shareBalances: { invalidAttoShares: TOKEN_PRECISION, yesAttoShares: TOKEN_PRECISION, noAttoShares: TOKEN_PRECISION },
 		}),
 	).toBeUndefined()

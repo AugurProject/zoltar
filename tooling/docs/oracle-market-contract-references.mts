@@ -123,12 +123,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '790ccaf0f17571515aaf5603b08550689b1deab361af6af68b9cf4c024534db3',
+		compiledAbiFingerprint: '913e1936a15d157fde1f5629cc95450bc0aded99ec851df3ae3f4956da551de2',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '7579ee9d868a9c4ed0ce13e35d1286a34804e1dca9789be15dc5aaf7a2aa41d2',
+		readAbiFingerprint: 'f7f1edb395b7c497cfef048cc63fd7cad93b456e7e7e99fa7e079a665b9a881f',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible. See the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights) for eligibility and complete-set recovery. Received rights are included independently of the holder\u2019s source-token balances.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isSourceBalanceLocked`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible. `isSourceBalanceLocked(id, holder)` reads the actual transfer lock, including locks from migration or spending source-backed recovery rights; spending only received credits does not set it. See the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights) for eligibility and complete-set recovery. Received rights are included independently of the holder\u2019s source-token balances.',
 		readDeclarations: [
 			{
 				name: 'supportsInterface',
@@ -174,6 +174,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				name: 'getMigratedShareAmountAttoShares',
 			},
+			{ name: 'isSourceBalanceLocked' },
 			{
 				name: 'getTokenId',
 			},

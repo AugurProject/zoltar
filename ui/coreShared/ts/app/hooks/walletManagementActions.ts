@@ -18,7 +18,7 @@ export function createWalletManagementActions(run: RunWalletManagementAction) {
 			await run(async backend => {
 				if (backend.requestAccountSelection === undefined) throw new Error(unsupportedWalletActionMessages.accountSelection)
 				await backend.requestAccountSelection()
-			}, 'Wallet account change failed'),
+			}, 'Could not change the wallet address'),
 		disconnectWallet: async () =>
 			await run(async backend => {
 				if (backend.disconnectWallet === undefined) throw new Error(unsupportedWalletActionMessages.disconnect)

@@ -13,15 +13,15 @@
 			<header>
 				<p class="kicker">Tutorial</p>
 				<h1>Back a shared security pool and mint shares</h1>
-				<p>Use the browser simulator to add 1 REP to a shared <a href="../reference/glossary.html#security-pool">security pool</a>, then purchase complete sets for one of its questions. A complete set contains one share of every outcome. You will see your principal rise from 5,000 to 5,001 REP and receive shares in your simulated wallet.</p>
+				<p>Use the browser simulator to add 1 REP to a shared <a href="../reference/glossary.html#security-pool">security pool</a>, then mint complete sets for one of its questions. A complete set contains one share of every outcome. You will see your deposited REP rise from 5,000 to 5,001 REP and receive shares in your simulated wallet.</p>
 			</header>
 			<section id="before-you-start">
 				<h2>Open the prepared security pool</h2>
-				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/security-pools?simulate=1&amp;genesis=yes&amp;simScenario=securitypoolx2</code>. No wallet extension or live funds are needed. Wait for <strong>Price current</strong> in the Shared backing section.</p>
-				<p>The prepared security pool has two questions. Your starting principal is 5,000 REP and your commitment is 10 WETH.</p>
+				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/watchlist?simulate=1&amp;genesis=yes&amp;simScenario=securitypoolx2</code>. No wallet extension or live funds are needed. Under <strong>Saved security pools</strong>, select <strong>Open</strong>. Open <strong>REP price</strong> to check the accepted price, then return to <strong>Capital</strong>.</p>
+				<p>The fixture supplies two registered questions, 5,000 REP deposited in your position, a 10 WETH commitment and a 120% health target. The security pool shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
 				<figure class="screenshot">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-capital.png"><img width="800" height="312" src="../assets/screenshots/statoblast/security-pool-capital.png" alt="The prepared security pool's Your capital section shows principal, commitment and saved health target." loading="lazy" /></a>
-					<figcaption><span class="figure-label">Your starting account.</span> The fixture has already authorized backing.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-capital.png"><img width="800" height="352" src="../assets/screenshots/statoblast/security-pool-capital.png" alt="The prepared security pool's Your position section shows deposited REP, commitment and health target." loading="lazy" /></a>
+					<figcaption><span class="figure-label">Your starting position.</span> The fixture has already authorized backing.</figcaption>
 				</figure>
 			</section>
 			<section id="deposit">
@@ -29,20 +29,20 @@
 				<ol>
 					<li>In <strong>Deposit REP</strong>, enter <code>1</code> in <strong>REP amount</strong>. If an approval is requested, approve the displayed amount and confirm its review.</li>
 					<li>Select <strong>Deposit REP</strong>, review the transaction, and confirm it.</li>
-					<li>Wait for <strong>Transaction confirmed</strong>. Under <strong>Your capital</strong>, check that <strong>Your total principal</strong> is now 5,001 REP. Your commitment remains 10 WETH: depositing does not automatically increase it.</li>
+					<li>Wait for <strong>Transaction confirmed</strong>. Under <strong>Your position</strong>, check that <strong>Your REP deposited</strong> is now 5,001 REP. Your commitment remains 10 WETH: depositing does not automatically increase it.</li>
 				</ol>
 			</section>
 			<section id="mint">
-				<h2>Purchase complete sets</h2>
+				<h2>Mint complete sets</h2>
 				<ol>
-					<li>In <strong>Mint security pool complete sets</strong>, choose a title under <strong>Question</strong>. Read the question details and verify its full ID. Use <strong>Find by question ID</strong> to enter an exact identifier instead.</li>
-					<li>Enter <code>0.01</code> for <strong>Collateral (WETH)</strong>, <code>0.1</code> for <strong>Maximum purchase charge (WETH)</strong>, and <code>0</code> for <strong>Minimum complete sets</strong>. The zero minimum is suitable for this controlled simulation; a live purchase should set a minimum from its quote.</li>
-					<li>Check <strong>Purchase charge (fee + premium)</strong>. If needed, approve the displayed WETH amount, which covers collateral plus the quoted charge, and wait for confirmation. Then select <strong>Mint security pool complete sets</strong> and confirm the review.</li>
-					<li>Wait for <strong>Transaction confirmed</strong>. Select <strong>Open question shares</strong> to open the question's page in the same simulation, and inspect your outcome balances under <strong>Shares</strong>. Each outcome has the same newly minted quantity.</li>
+					<li>Select <strong>Augur Statoblast</strong> in the header to return to the Watchlist. Under <strong>Saved questions</strong>, open either saved question. Read <strong>Resolution rules and details</strong> to verify its full ID and security pool.</li>
+					<li>On <strong>Shares</strong>, select <strong>Mint sets</strong> and enter <code>0.01</code> as the <strong>Collateral amount</strong>.</li>
+					<li>Check <strong>You pay</strong> and the changes to your shares and wallet. Open <strong>Limits</strong> to adjust the maximum fee or minimum number of sets. If WETH approval is required, approve it and wait for confirmation. Select <strong>Mint complete sets</strong>, review the fee and how your balances will change, then select <strong>Continue in wallet</strong>.</li>
+					<li>When the review shows <strong>Confirmed</strong>, select <strong>Close</strong> and inspect your outcome balances under <strong>Your holdings</strong>. Each outcome has the same newly minted quantity.</li>
 				</ol>
 				<figure class="screenshot">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-purchase.png"><img width="800" height="998" src="../assets/screenshots/statoblast/security-pool-purchase.png" alt="The security pool purchase form selects a registered question and bounds collateral, purchase charge and shares received." loading="lazy" /></a>
-					<figcaption><span class="figure-label">Purchase controls.</span> The fee budget is separate from collateral.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-purchase.png"><img width="800" height="809" src="../assets/screenshots/statoblast/security-pool-purchase.png" alt="The mint form shows the collateral and fee, the total paid, and how the wallet and shares will change." loading="lazy" /></a>
+					<figcaption><span class="figure-label">Mint controls.</span> Review the collateral and fee before continuing.</figcaption>
 				</figure>
 				<p>See <a href="../explanation/fees.html">Fees</a> for purchase costs and the <a href="../reference/operator-guardrails.html#security-pool-guardrails">capital guardrails</a> for withdrawal rules.</p>
 			</section>

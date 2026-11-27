@@ -6,6 +6,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SecurityPoolTakeover } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolTakeover.js'
+import { changedSinceReview } from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { loadSecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { useSecurityPoolFixture, unit } from '../../../../../../solidity/ts/tests/statoblast/securityPoolFixture'
@@ -59,7 +60,7 @@ describe('manual takeover against native security pool contracts', () => {
 					}
 				},
 			}
-			const view = await renderIntoDocument(<SecurityPoolTakeover model={{ snapshot }} actions={actions} />)
+			const view = await renderIntoDocument(<SecurityPoolTakeover positionId={source.id} model={{ snapshot }} actions={actions} />)
 			lifecycle.trackRendered(view)
 			const fields = view.container.querySelectorAll('input')
 			for (const [index, value] of [source.id.toString(), '200', '1000', scenario === 'rejected-bounds' ? '999' : '2000', '200'].entries()) {
@@ -70,10 +71,10 @@ describe('manual takeover against native security pool contracts', () => {
 					field.dispatchEvent(new Event('input', { bubbles: true }))
 				})
 			}
-			const button = view.container.querySelector('button')
-			if (button === null) throw new Error('Missing takeover action')
+			const button = [...view.container.querySelectorAll('button')].find(candidate => candidate.textContent === 'Take over position')
+			if (button === undefined) throw new Error('Missing takeover action')
 			if (scenario === 'rejected-bounds') {
-				await waitFor(() => expect(view.container.textContent).toContain('Your resulting principal exceeds the maximum total principal.'))
+				await waitFor(() => expect(view.container.textContent).toContain('The resulting pledged REP exceeds your limit.'))
 				expect(button.disabled).toBe(true)
 			} else await waitFor(() => expect(button.disabled).toBe(false))
 			expect(snapshot.ownerCommitmentAttoEth).toBe(0n)
@@ -83,7 +84,7 @@ describe('manual takeover against native security pool contracts', () => {
 			if (scenario !== 'success') {
 				if (scenario === 'changed-price') {
 					await waitFor(() => expect(failure).toBeDefined(), { timeout: 30_000 })
-					expect(String(failure)).toContain('changed')
+					expect(String(failure)).toContain(changedSinceReview)
 				} else expect(failure).toBeUndefined()
 				expect(submitted).toBe(false)
 				const after = await loadSecurityPoolCapitalSnapshot({ client: keeper, owner: keeper.account.address, securityPool: fixture.securityPool })

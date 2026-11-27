@@ -167,7 +167,7 @@ describe('useZoltarFork', () => {
 			else await state().forkZoltar()
 		})
 
-		expect(state().zoltarForkError).toContain('Wallet account changed')
+		expect(state().zoltarForkError).toContain('The connected wallet address changed')
 		expect(state().zoltarForkFeedback?.status.detail).toBe(state().zoltarForkError)
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
@@ -441,10 +441,12 @@ describe('useZoltarFork', () => {
 		})
 		expect(state().hasLoadedZoltarForkAccess).toBe(true)
 		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
+		expect(state().migrationBalancesReadAt).toBeNumber()
 
 		rerender(createForkParameters({ accountAddress: NEXT_WALLET_ADDRESS, zoltarUniverse: universe }))
 		expect(state().hasLoadedZoltarForkAccess).toBe(false)
 		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({})
+		expect(state().migrationBalancesReadAt).toBeUndefined()
 		await act(async () => {
 			await state().loadZoltarForkAccess()
 		})

@@ -68,7 +68,7 @@ describe('reporting guards', () => {
 	})
 
 	test.each<{ expected: string | undefined; name: string; input: WithdrawGuardInput }>([
-		{ expected: 'Connect a wallet before settling escalation deposits.', name: 'blocks withdrawal without a connected wallet', input: { accountAddress: undefined, isOnActiveAppChain: true, reportingStatus: 'active' } },
+		{ expected: 'Connect a wallet before claiming reporting deposits.', name: 'blocks withdrawal without a connected wallet', input: { accountAddress: undefined, isOnActiveAppChain: true, reportingStatus: 'active' } },
 		{ expected: 'Switch to Sepolia.', name: 'blocks withdrawal off the active chain', input: { accountAddress: zeroAddress, isOnActiveAppChain: false, reportingStatus: 'active' } },
 		{ expected: 'Loading reporting details…', name: 'blocks withdrawal while reporting details are missing', input: { accountAddress: zeroAddress, isOnActiveAppChain: true, reportingStatus: 'missing' } },
 		{ expected: undefined, name: 'leaves withdrawal lifecycle handling to the shared action matrix', input: { accountAddress: zeroAddress, isOnActiveAppChain: true, reportingStatus: 'active' } },

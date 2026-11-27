@@ -26,8 +26,8 @@ export function securityPoolRecoveryMintBudget(required: bigint) {
 
 /** Complete sets remain question-specific; recovery-bearing claims require an explicitly bounded proportional REP contribution. */
 export function buildSecurityPoolMintRequest(parameters: { trader: Address; securityPool: Address; universeId: bigint; questionId: bigint; recipient: Address; minimumShares: bigint; mintAttoEth: bigint; maximumPurchaseFeeAttoEth: bigint; maximumRecoveryAttoRep?: bigint }) {
-	const universeId = decodeUint(parameters.universeId, 'Universe id', 248)
-	const questionId = decodeUint(parameters.questionId, 'Question id')
+	const universeId = decodeUint(parameters.universeId, 'Universe ID', 248)
+	const questionId = decodeUint(parameters.questionId, 'Question ID')
 	const cash = decodeUint(parameters.mintAttoEth, 'Mint collateral')
 	if (cash === 0n) throw new Error('Enter a positive collateral amount.')
 	const fee = decodeUint(parameters.maximumPurchaseFeeAttoEth, 'Maximum purchase fee')
@@ -44,7 +44,7 @@ export function buildSecurityPoolMintRequest(parameters: { trader: Address; secu
 
 /** @public Register a question without purchasing shares; the pool's admission policy still decides eligibility. */
 export function buildSecurityPoolAddQuestionRequest(parameters: { caller: Address; securityPool: Address; questionId: bigint }) {
-	return { account: decodeAddress(parameters.caller, 'Caller'), to: decodeAddress(parameters.securityPool, 'Security pool'), value: 0n, data: encodeFunctionData({ abi, functionName: 'addQuestion', args: [decodeUint(parameters.questionId, 'Question id')] }) }
+	return { account: decodeAddress(parameters.caller, 'Caller'), to: decodeAddress(parameters.securityPool, 'Security pool'), value: 0n, data: encodeFunctionData({ abi, functionName: 'addQuestion', args: [decodeUint(parameters.questionId, 'Question ID')] }) }
 }
 
 export type SecurityPoolMintQuote = {
@@ -65,8 +65,8 @@ export type SecurityPoolMintQuote = {
 /** Quotes units and fees at one block. The atomic purchase still checks available mint capacity, excluding queued retirement reductions. */
 export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPoolReadClient & Pick<PublicClient, 'multicall'>; multicallAddress: Address; securityPool: Address; universeId: bigint; questionId: bigint; mintAttoEth: bigint; blockNumber?: bigint }): Promise<SecurityPoolMintQuote> {
 	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
-	const universeId = decodeUint(parameters.universeId, 'Universe id', 248)
-	const questionId = decodeUint(parameters.questionId, 'Question id')
+	const universeId = decodeUint(parameters.universeId, 'Universe ID', 248)
+	const questionId = decodeUint(parameters.questionId, 'Question ID')
 	const cash = decodeUint(parameters.mintAttoEth, 'Mint collateral')
 	if (cash === 0n) throw new Error('Enter a positive collateral amount.')
 	const blockNumber = parameters.blockNumber ?? (await parameters.client.getBlock()).number
@@ -85,7 +85,7 @@ export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPo
 	if (!Array.isArray(feeQuote) || feeQuote.length !== 2) throw new Error('Invalid funded purchase fee quote.')
 	const fee = decodeUint(feeQuote[0], 'Purchase fee')
 	const pool = decodeAddress(poolValue, 'Question pool', !registered)
-	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger')
+	const capitalLedger = decodeAddress(capitalValue, 'Capital contract')
 	const [shares, valid, capacity] = await Promise.all([
 		registered
 			? parameters.client
@@ -113,7 +113,7 @@ export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPo
 		maximumPurchaseFeeAttoEth: decodeUint((fee * 10_100n + 9_999n) / 10_000n, 'Maximum purchase fee'),
 		recoveryAttoRep: decodeUint(recoveryQuote, 'Recovery REP contribution'),
 		maximumRecoveryAttoRep: securityPoolRecoveryMintBudget(decodeUint(recoveryQuote, 'Recovery REP contribution')),
-		resolutionPremiumAttoEth: decodeUint(feeQuote[1], 'Resolution premium'),
+		resolutionPremiumAttoEth: decodeUint(feeQuote[1], 'Resolution fee'),
 		availableCommitmentAttoEth: available,
 		priceValid: valid,
 		blockNumber,

@@ -6,12 +6,12 @@ export function boundCloneRuntimeCode(implementation: Address, bindings: Hex): H
 
 /** Verify the complete EIP-1167 runtime and immutable bindings. The caller authenticates the implementation. */
 export function verifyBoundCloneCode(code: Hex | undefined, expected: Hex, label: string) {
-	if (code?.toLowerCase() !== expected.toLowerCase()) throw new Error(`Unrecognized ${label} clone runtime or bindings.`)
+	if (code?.toLowerCase() !== expected.toLowerCase()) throw new Error(`Could not verify the code or linked addresses for the ${label}.`)
 }
 
 /** Extract the implementation from a verified forwarder. Authenticate its runtime separately. */
 export function boundCloneImplementation(code: Hex | undefined, bindings: Hex, label: string): Address {
-	if (code === undefined || code.length < 92) throw new Error(`Unrecognized ${label} clone runtime or bindings.`)
+	if (code === undefined || code.length < 92) throw new Error(`Could not verify the code or linked addresses for the ${label}.`)
 	const implementation = getAddress(`0x${code.slice(22, 62)}`)
 	verifyBoundCloneCode(code, boundCloneRuntimeCode(implementation, bindings), label)
 	return implementation

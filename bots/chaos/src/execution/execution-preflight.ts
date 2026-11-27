@@ -1,8 +1,15 @@
-import { type Address, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { type Address, encodeFunctionData, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { OperationPreflightCall, OperationStep } from '../operations/types.ts'
 import { unsignedQuantity } from './safety.ts'
 import { type ExecutionEnvironment, type CanonicalCallAnchor, OperationRediscoveryRequired } from './execution-context.ts'
 import { exactAttestedTokenBalance, exactAttestedOpenOracleCredit, exactAttestedErc1155Balance, agreedExactCall, agreedMaximumGasEstimate } from './execution-quorum.ts'
+
+const completeSetRedemptionSelector = encodeFunctionData({ abi: questionLedgerAbi, functionName: 'redeemCompleteSet', args: [0n] }).slice(0, 10)
+// Both RPC estimates can use the current timestamp and omit the fee checkpoint
+// paid when a full redemption lands in a later second. The reproduced checkpoint
+// raised the estimate by about 256,000 gas.
+const COMPLETE_SET_CHECKPOINT_GAS_RESERVE = 300_000n
 
 export async function assertFreshWalletAssetDebits(environment: ExecutionEnvironment, step: Pick<OperationStep, 'label' | 'walletAssetDebits'>, anchor: CanonicalCallAnchor) {
 	const erc20Debits = new Map<string, { address: Address; amount: bigint; categories: Set<string> }>()
@@ -160,7 +167,8 @@ async function agreedSimulationAndGas(environment: ExecutionEnvironment, step: O
 		value: toHex(value),
 	}
 	await agreedExactCall(environment, `${step.label} exact simulation`, rpcTransaction, anchor)
-	return await agreedMaximumGasEstimate(environment, `${step.label} gas estimate`, rpcTransaction, anchor, { includePending: true })
+	const estimate = await agreedMaximumGasEstimate(environment, `${step.label} gas estimate`, rpcTransaction, anchor, { includePending: true })
+	return step.data.slice(0, 10).toLowerCase() === completeSetRedemptionSelector ? estimate + COMPLETE_SET_CHECKPOINT_GAS_RESERVE : estimate
 }
 
 function executionRevert(error: unknown) {

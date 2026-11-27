@@ -1,12 +1,17 @@
+import { statoblastDisplayCache, statoblastPageCache } from '../../../protocol/statoblastPageCache.js'
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { getAddress, isAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { discoverSimulationSecurityPool, loadSecurityPoolAccount, loadSecurityPoolSetup, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { loadSecurityPoolAccount, loadSecurityPoolSetup, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { securityPoolUnsignedId } from '../lib/draft.js'
+import { invalidPoolUniverse, loadPoolFailed, poolReadTimeout } from '../../../copy/securityPoolTransactions.js'
 
 function securityPoolStorageKey(chainId: number) {
 	const backend = getActiveBackend()
@@ -14,9 +19,9 @@ function securityPoolStorageKey(chainId: number) {
 }
 
 /** The security pool last opened on this network in this browser. */
-export function rememberedSecurityPool(chainId = getActiveBackend().profile.chain.id) {
+function rememberedSecurityPool(chainId: number, pendingSetup = false) {
 	try {
-		const saved = window.localStorage.getItem(securityPoolStorageKey(chainId))
+		const saved = window.localStorage.getItem(securityPoolStorageKey(chainId) + (pendingSetup ? ':pending-setup' : ''))
 		return saved !== null && isAddress(saved) ? saved : undefined
 	} catch (failure) {
 		if (!(failure instanceof DOMException)) throw failure
@@ -28,10 +33,33 @@ function securityPoolBackendReady(backend: ReturnType<typeof getActiveBackend>) 
 	return backend.isBootstrapped !== false && backend.isBootstrapping !== true && backend.bootstrapError === undefined
 }
 
-export function useSecurityPool({ accountAddress, enabled, environmentKey, activeUniverseId }: { accountAddress: Address | undefined; enabled: boolean; environmentKey: number; activeUniverseId: bigint }) {
+function setupDisplayCache(profile: NetworkProfile, securityPool: Address, owner: Address, universeId: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner, page: `deploy-progress:${securityPool.toLowerCase()}` }, value => (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 4 ? value : undefined))
+}
+
+export function useSecurityPool({
+	accountAddress,
+	enabled,
+	environmentKey,
+	activeUniverseId,
+	cacheReads = false,
+	resumeSetup = false,
+	securityPoolAddress,
+}: {
+	accountAddress: Address | undefined
+	enabled: boolean
+	environmentKey: number
+	activeUniverseId: bigint
+	cacheReads?: boolean
+	resumeSetup?: boolean
+	securityPoolAddress?: Address | undefined
+}) {
+	const publicPoolRoute = securityPoolAddress !== undefined
+	const ownerDraftForRoute = (value: string) => (publicPoolRoute && value.trim().toLowerCase() === zeroAddress ? '' : value)
+	const canReadOwner = (value: string) => (publicPoolRoute && value.trim() === '') || isAddress(value.trim())
 	const initial = new URLSearchParams(window.location.hash.split('?')[1])
-	const managerInput = useSignal(initial.get('securityPool') ?? '')
-	const ownerInput = useSignal(initial.get('owner') ?? accountAddress ?? '')
+	const managerInput = useSignal(securityPoolAddress ?? initial.get('securityPool') ?? '')
+	const ownerInput = useSignal(ownerDraftForRoute(initial.get('owner') ?? accountAddress ?? ''))
 	const followsWallet = useRef(!initial.has('owner'))
 	const universeInput = useSignal(String(activeUniverseId))
 	const previousActiveUniverse = useRef(activeUniverseId)
@@ -44,12 +72,15 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 	const backendReady = securityPoolBackendReady(renderedBackend)
 	const presentationEnvironmentCurrent = presentationContext.current?.guard.isCurrent() ?? true
 	const setup = useSignal<SecurityPoolSetupSnapshot | undefined>(undefined)
+	const savedSetupStage = useSignal<number | undefined>(undefined)
+	const pageCache = useRef<{ key: string; storage: ReturnType<typeof statoblastPageCache> }>()
+	const displayedAt = useSignal<number | undefined>(undefined)
 	const loading = useSignal(false)
-	const discovering = useSignal(false)
 	const error = useSignal<string | undefined>(undefined)
 	const generation = useRef(0)
 	const active = useRef(true)
 	const inFlight = useRef<number | undefined>(undefined)
+	const lastStartedGeneration = useRef<number | undefined>(undefined)
 	const selectedNetwork = useRef<string | undefined>(undefined)
 	useEffect(
 		() => () => {
@@ -62,40 +93,70 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 		if (!securityPoolBackendReady(getActiveBackend())) return
 		const id = ++generation.current
 		inFlight.current = id
+		lastStartedGeneration.current = id
 		const environment = createActiveEnvironmentGuard()
 		const current = () => active.current && id === generation.current && environment.isCurrent() && securityPoolBackendReady(getActiveBackend())
+		const previous = snapshot.value
+		const selectedOwner = ownerDraftForRoute(ownerOverride).trim()
+		if (previous !== undefined && (previous.securityPool.toLowerCase() !== managerOverride.trim().toLowerCase() || previous.owner.toLowerCase() !== (selectedOwner.toLowerCase() || zeroAddress) || previous.universeId !== securityPoolUnsignedId(universeOverride, 248))) snapshot.value = undefined
 		loading.value = true
 		error.value = undefined
 		// Setup reads only security pool state, so a failed read of one owner's account keeps the shared setup visible.
 		let loadedSetup: SecurityPoolSetupSnapshot | undefined
 		try {
 			const securityPool = getAddress(managerOverride.trim())
-			const owner = getAddress(ownerOverride.trim())
+			const owner = publicPoolRoute && selectedOwner === '' ? undefined : getAddress(selectedOwner)
+			const cacheOwner = owner ?? zeroAddress
 			const universeId = securityPoolUnsignedId(universeOverride, 248)
-			if (universeId === undefined) throw new Error('Enter a valid universe ID.')
+			if (universeId === undefined) throw new Error(invalidPoolUniverse)
 			const client = createConnectedReadClient()
-			const preparation = await loadSecurityPoolSetup(client, securityPool, owner)
-			loadedSetup = preparation
-			const next = preparation.stage === 4 ? await loadSecurityPoolAccount(client, securityPool, owner, universeId, questionStart.value, admissionStart.value) : undefined
+			const questionPage = questionStart.value
+			const admissionPage = admissionStart.value
+			const readPage = async (readClient: typeof client) => {
+				const preparation = await loadSecurityPoolSetup(readClient, securityPool, cacheOwner, publicPoolRoute)
+				if (!cacheReads && current()) loadedSetup = preparation
+				const next = preparation.stage === 4 ? await loadSecurityPoolAccount(readClient, securityPool, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
+				return { preparation, next }
+			}
+			const read = async () => {
+				if (!cacheReads) return await readPage(withStatoblastRequestTimeout(client, poolReadTimeout))
+				const cachePage = `${owner === undefined ? 'capital-public' : 'capital'}:${questionPage}:${admissionPage}`
+				const cacheKey = `${environmentKey}:${securityPool}:${cacheOwner}:${universeId}:${cachePage}`
+				if (pageCache.current?.key !== cacheKey) {
+					pageCache.current = {
+						key: cacheKey,
+						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner: cacheOwner, universeId, page: cachePage }),
+					}
+				}
+				const cache = pageCache.current.storage
+
+				return await cache.refresh(client, getMulticall3Address(), readPage, () => inFlight.current === id && current())
+			}
+			const { preparation, next } = await read()
 			if (!current()) return
 			setup.value = preparation
 			snapshot.value = next
 			presentationSnapshot.value = next
+			displayedAt.value = Date.now()
 			presentationContext.current = { environmentKey, backend: renderedBackend, guard: environment }
 			universeInput.value = String(universeId)
 			managerInput.value = securityPool
-			ownerInput.value = owner
+			ownerInput.value = owner ?? ''
+			if (resumeSetup && owner !== undefined) setupDisplayCache(renderedBackend.profile, securityPool, owner, universeId).write(preparation.stage, { number: preparation.blockNumber, timestamp: preparation.timestamp })
 			try {
-				window.localStorage.setItem(securityPoolStorageKey(preparation.chainId), securityPool)
+				const key = securityPoolStorageKey(preparation.chainId)
+				window.localStorage.setItem(key, securityPool)
+				if (resumeSetup) {
+					if (preparation.stage < 4) window.localStorage.setItem(key + ':pending-setup', securityPool)
+					else window.localStorage.removeItem(key + ':pending-setup')
+				}
 			} catch (failure) {
 				if (!(failure instanceof DOMException)) throw failure
 			}
 		} catch (failure) {
 			if (current()) {
-				snapshot.value = undefined
-				presentationSnapshot.value = undefined
-				setup.value = loadedSetup
-				error.value = getErrorMessage(failure, 'Unable to load the security pool account.')
+				setup.value = loadedSetup ?? setup.value
+				error.value = getErrorMessage(failure, loadPoolFailed)
 			}
 		} finally {
 			if (current()) loading.value = false
@@ -103,17 +164,20 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 		}
 	}
 	const refresh = async () => {
-		if (!enabled || !securityPoolBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !isAddress(ownerInput.value)) return
+		if (!enabled || document.hidden || !securityPoolBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !canReadOwner(ownerInput.value)) return
 		await load()
 	}
 	const invalidate = (preservePresentation = false) => {
 		generation.current++
 		snapshot.value = undefined
-		if (!preservePresentation) presentationSnapshot.value = undefined
+		if (!preservePresentation) {
+			presentationSnapshot.value = undefined
+			displayedAt.value = undefined
+		}
 		setup.value = undefined
+		savedSetupStage.value = undefined
 		error.value = undefined
 		loading.value = false
-		discovering.value = false
 	}
 	useBlockRefresh(() => {
 		void refresh()
@@ -129,43 +193,66 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 			context.backend === renderedBackend &&
 			context.guard.isCurrent() &&
 			previous?.securityPool.toLowerCase() === managerInput.value.toLowerCase() &&
-			previous?.owner.toLowerCase() === ownerInput.value.toLowerCase() &&
+			previous?.owner.toLowerCase() === (ownerInput.value.toLowerCase() || zeroAddress) &&
 			previous?.universeId === securityPoolUnsignedId(universeInput.value, 248)
 		invalidate(preservePresentation)
 		questionStart.value = 0n
 		admissionStart.value = 0n
-		if (!enabled || !backendReady) return
+		if ((!enabled && !resumeSetup) || !backendReady) return
 		const backend = getActiveBackend()
 		const storageKey = securityPoolStorageKey(backend.profile.chain.id)
 		if (selectedNetwork.current !== undefined && selectedNetwork.current !== storageKey) managerInput.value = ''
 		selectedNetwork.current = storageKey
-		let current = true
-		void (async () => {
-			if (managerInput.value === '') {
-				const saved = rememberedSecurityPool(backend.profile.chain.id)
-				if (saved !== undefined) managerInput.value = saved
-			}
-			if (managerInput.value === '' && isAddress(ownerInput.value)) {
-				discovering.value = true
-				try {
-					const securityPool = await discoverSimulationSecurityPool(createConnectedReadClient(), backend.id, getAddress(ownerInput.value))
-					if (!current) return
-					if (securityPool !== undefined && managerInput.value === '') managerInput.value = securityPool
-				} finally {
-					if (current) discovering.value = false
-				}
-			}
-			if (current) await refresh()
-		})().catch(failure => {
-			if (current) error.value = getErrorMessage(failure, 'Unable to discover the security pool.')
-		})
+		if (managerInput.value === '') managerInput.value = resumeSetup ? (rememberedSecurityPool(backend.profile.chain.id, true) ?? '') : (securityPoolAddress ?? backend.seededSecurityPool?.address ?? rememberedSecurityPool(backend.profile.chain.id) ?? '')
+		if (!enabled) return
+		void refresh()
 		return () => {
-			current = false
 			generation.current++
 		}
-	}, [enabled, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
+	}, [enabled, resumeSetup, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
 	useEffect(() => {
-		const walletOwner = accountAddress ?? ''
+		if (!resumeSetup || !backendReady || setup.value !== undefined) return
+		const manager = managerInput.value.trim()
+		const owner = ownerInput.value.trim()
+		const universeId = securityPoolUnsignedId(universeInput.value, 248)
+		if (!isAddress(manager) || !isAddress(owner) || universeId === undefined) return
+		const cached = setupDisplayCache(renderedBackend.profile, getAddress(manager), getAddress(owner), universeId).read()
+		if (cached === undefined) return
+		savedSetupStage.value = cached.value
+		displayedAt.value = cached.savedAt
+	}, [resumeSetup, enabled, environmentKey, renderedBackend, backendReady, managerInput.value, ownerInput.value, universeInput.value])
+	useEffect(() => {
+		if (!cacheReads || !backendReady || presentationSnapshot.value !== undefined) return
+		const managerDraft = managerInput.value.trim()
+		const ownerDraft = ownerInput.value.trim()
+		const universeId = securityPoolUnsignedId(universeInput.value, 248)
+		if (!isAddress(managerDraft) || !canReadOwner(ownerDraft) || universeId === undefined) return
+		const manager = getAddress(managerDraft)
+		const owner = ownerDraft === '' ? undefined : getAddress(ownerDraft)
+		const cacheOwner = owner ?? zeroAddress
+		const questionPage = questionStart.value
+		const admissionPage = admissionStart.value
+		const environment = createActiveEnvironmentGuard()
+		let current = true
+		const cachePage = `${owner === undefined ? 'capital-public' : 'capital'}:${questionPage}:${admissionPage}`
+		const cache = statoblastPageCache(renderedBackend.profile, { pool: manager, owner: cacheOwner, universeId, page: cachePage })
+		void cache
+			.loadCached(renderedBackend.createReadClient(), async client => {
+				const preparation = await loadSecurityPoolSetup(client, manager, cacheOwner)
+				return preparation.stage === 4 ? await loadSecurityPoolAccount(client, manager, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
+			})
+			.then(cached => {
+				if (cached === undefined || !current || !environment.isCurrent() || !securityPoolBackendReady(renderedBackend) || presentationSnapshot.value !== undefined) return
+				presentationSnapshot.value = cached.value
+				displayedAt.value = cached.savedAt
+				presentationContext.current = { environmentKey, backend: renderedBackend, guard: environment }
+			})
+		return () => {
+			current = false
+		}
+	}, [cacheReads, backendReady, environmentKey, renderedBackend, managerInput.value, ownerInput.value, universeInput.value, questionStart.value, admissionStart.value])
+	useEffect(() => {
+		const walletOwner = ownerDraftForRoute(accountAddress ?? '')
 		if (!followsWallet.current || ownerInput.value === walletOwner) return
 		invalidate()
 		ownerInput.value = walletOwner
@@ -173,7 +260,7 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 	useEffect(() => {
 		if (!enabled) return
 		const timer = setTimeout(() => {
-			void refresh()
+			if (lastStartedGeneration.current !== generation.current) void refresh()
 		}, 250)
 		return () => clearTimeout(timer)
 	}, [enabled, managerInput.value, ownerInput.value, universeInput.value])
@@ -181,7 +268,8 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 		const update = () => {
 			const query = new URLSearchParams(window.location.hash.split('?')[1])
 			const securityPool = query.get('securityPool')
-			const owner = query.get('owner')
+			const ownerParameter = query.get('owner')
+			const owner = ownerParameter === null ? null : ownerDraftForRoute(ownerParameter)
 			if (owner !== null) followsWallet.current = false
 			if (securityPool !== null && securityPool !== managerInput.value) {
 				invalidate()
@@ -208,9 +296,10 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 	return {
 		snapshot: snapshot.value,
 		presentationSnapshot: presentationSnapshot.value,
+		displayedAt: displayedAt.value,
 		setup: setup.value,
+		savedSetupStage: savedSetupStage.value,
 		loading: loading.value,
-		discovering: discovering.value,
 		error: error.value,
 		managerInput: managerInput.value,
 		ownerInput: ownerInput.value,
@@ -224,9 +313,10 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 		},
 		setOwnerInput: (value: string) => {
 			followsWallet.current = false
-			if (value === ownerInput.value) return
+			const nextOwner = ownerDraftForRoute(value)
+			if (nextOwner === ownerInput.value) return
 			invalidate()
-			ownerInput.value = value
+			ownerInput.value = nextOwner
 		},
 		setUniverseInput: (value: string) => {
 			if (value === universeInput.value) return

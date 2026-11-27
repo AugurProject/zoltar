@@ -1,6 +1,6 @@
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState } from '../types/app.js'
-import type { MarketDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
@@ -19,21 +19,6 @@ export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 	onActiveViewChange: (view: OpenOracleView) => void
 }
 
-type ReportingRouteContentProps = {
-	accountState: AccountState
-	loadingReportingDetails: boolean
-	onApproveReportingRep: (amountAttoRep?: bigint) => void
-	onLoadReporting: () => void
-	onReportOutcome: () => void
-	onReportingFormChange: (update: Partial<ReportingFormState>) => void
-	onWithdrawEscalation: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
-	reportingActiveAction: ReportingActionResult['action'] | undefined
-	reportingDetails: ReportingDetails | undefined
-	reportingError: string | undefined
-	reportingForm: ReportingFormState
-	reportingResult: ReportingActionResult | undefined
-}
-
 /** The REP approval an own-question fork pulls from its caller; `requiredAmount` 0 means no approval is needed. */
 export type ForkAdmissionApproval = {
 	allowanceError: string | undefined
@@ -45,16 +30,26 @@ export type ForkAdmissionApproval = {
 	requiredAmount: bigint | undefined
 }
 
-export type ReportingSectionProps = ReportingRouteContentProps & {
+export type ReportingSectionProps = {
+	accountState: AccountState
+	loadingReportingDetails: boolean
+	onApproveReportingRep: (amountAttoRep?: bigint) => void
+	onLoadReporting: () => void
+	onReportOutcome: () => void
+	onReportingFormChange: (update: Partial<ReportingFormState>) => void
+	onWithdrawEscalation: (outcome: ReportingOutcomeKey, depositIndexes: bigint[]) => void
+	reportingActiveAction: ReportingActionResult['action'] | undefined
+	reportingDetails: ReportingDetails | undefined
+	reportingError: string | undefined
+	reportingForm: ReportingFormState
+	actionDataReadAt?: number | undefined
 	oracleBlocker?: import('preact').ComponentChildren
 	currentTimestamp?: bigint | undefined
 	forkAlreadyTriggered?: boolean | undefined
 	lockedReason?: string | undefined
-	mode?: 'full-reporting' | 'withdraw-only'
 	onOpenForkWorkflow?: (() => void) | undefined
 	onOpenPriceOracle?: (() => void) | undefined
 	onTriggerZoltarFork?: (() => void) | undefined
-	previewMarketDetails?: MarketDetails | undefined
 	reportActionGuardMessage?: string | undefined
 	triggerZoltarForkApproval?: ForkAdmissionApproval | undefined
 	triggerZoltarForkAvailability?: ActionAvailability | undefined

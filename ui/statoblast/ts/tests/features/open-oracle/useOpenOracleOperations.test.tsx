@@ -300,7 +300,7 @@ describe('useOpenOracleOperations', () => {
 		expect(receipt?.title).toBe('Report #7 settled')
 		expect(receipt?.rows?.slice(-2).map(({ label, value }) => [label, isValidElement(value) ? value.props.children : value])).toEqual([
 			['Candidate price', '3 REP per USDC'],
-			['Canonical price', '2 REP per USDC'],
+			['Pool price', '2 REP per USDC'],
 		])
 	})
 
@@ -1038,7 +1038,7 @@ describe('useOpenOracleOperations', () => {
 		})
 		expect(presentedTone).toBe('warning')
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('warning')
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Price expired before settlement. Request a new price.')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Price expired before settlement. Report a new price.')
 	})
 
 	test('settleReport ignores a stale post-success refresh after the selected report changes', async () => {

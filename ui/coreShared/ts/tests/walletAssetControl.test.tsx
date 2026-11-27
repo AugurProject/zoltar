@@ -32,7 +32,7 @@ const waitForButton = async (name: string) =>
 		expect(documentQueries().getByRole('button', { name })).not.toBeNull()
 	})
 const waitForPending = async () => await waitForButton('Opening wallet to add Universe 0xa REP')
-const waitForAccepted = async (tokenLabel = 'Universe 0xa REP') => await waitForButton(`${tokenLabel} wallet request accepted`)
+const waitForAccepted = async (tokenLabel = 'Universe 0xa REP') => await waitForButton(`${tokenLabel} accepted by wallet`)
 
 async function resolveAccepted(deferred: ReturnType<typeof createDeferred<WalletAssetWatchResult>>) {
 	await act(async () => {
@@ -85,12 +85,12 @@ describe('WalletAssetControl', () => {
 
 		await resolveAccepted(deferred)
 		await waitFor(() => {
-			const acceptedButton = documentQueries().getByRole('button', { name: 'Universe 0xa REP wallet request accepted' }) as HTMLButtonElement
+			const acceptedButton = documentQueries().getByRole('button', { name: 'Universe 0xa REP accepted by wallet' }) as HTMLButtonElement
 			expect(acceptedButton.disabled).toBe(true)
 			expect(acceptedButton.classList.contains('wallet-asset-action-accepted')).toBe(true)
 			expect(acceptedButton.querySelector('.wallet-asset-action-icon')?.textContent).toBe('✓')
-			expect(acceptedButton.textContent).toContain('Request accepted')
-			expect(documentQueries().getByRole('status').textContent).toBe('Universe 0xa REP wallet request accepted')
+			expect(acceptedButton.textContent).toContain('Accepted by wallet')
+			expect(documentQueries().getByRole('status').textContent).toBe('Universe 0xa REP accepted by wallet')
 		})
 	})
 
@@ -103,7 +103,7 @@ describe('WalletAssetControl', () => {
 
 		rerender({ accountAddress: CASE_VARIANT_ACCOUNT_ADDRESS, address: CASE_VARIANT_TOKEN_ADDRESS, onWatchAsset })
 
-		expect(documentQueries().getByRole('button', { name: 'Universe 0xa REP wallet request accepted' })).not.toBeNull()
+		expect(documentQueries().getByRole('button', { name: 'Universe 0xa REP accepted by wallet' })).not.toBeNull()
 	})
 
 	test('discards a pending wallet result when the token address changes', async () => {
@@ -192,7 +192,7 @@ describe('WalletAssetControl', () => {
 
 		clickAdd()
 		await waitFor(() => {
-			expect(documentQueries().getByRole('alert').textContent).toBe('Unable to send the token request to your wallet. Try again.')
+			expect(documentQueries().getByRole('alert').textContent).toBe('Couldn’t ask your wallet to show this token. Try again.')
 			expect(documentQueries().getByRole('button', { name: 'Retry adding Universe 0xa REP to wallet' })).not.toBeNull()
 		})
 	})

@@ -20,7 +20,7 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 		const disputeBlocker = baseBlocker ?? disputeMessage
 		actions.push({
 			actionLabel: openOracleCopy.disputeAndSwap,
-			description: 'Challenge the current report and provide the replacement swap amounts.',
+			description: openOracleCopy.disputeAndSwapDescription,
 			key: 'dispute-report',
 			readiness: disputeBlocker === undefined ? 'ready' : 'blocked',
 			title: openOracleCopy.disputeAndSwap,

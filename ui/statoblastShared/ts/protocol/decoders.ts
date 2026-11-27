@@ -1,26 +1,27 @@
+import { unexpectedResponse } from '../copy/protocolErrors.js'
 import { getAddress, isAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 
 export function requireArrayValue(value: unknown, context: string): readonly unknown[] {
 	if (Array.isArray(value)) return value
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 export function requireTupleValue(value: unknown, length: number, context: string): readonly unknown[] {
 	const tuple = requireArrayValue(value, context)
 	if (tuple.length === length) return tuple
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 export function requireBigintValue(value: unknown, context: string) {
 	if (typeof value === 'bigint') return value
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 export function requireBigintArray(value: unknown, context: string) {
-	if (!Array.isArray(value)) throw new Error(`Unexpected ${context} response`)
+	if (!Array.isArray(value)) throw new Error(unexpectedResponse(context))
 	const result: bigint[] = []
 	for (const item of value) {
-		if (typeof item !== 'bigint') throw new Error(`Unexpected ${context} response`)
+		if (typeof item !== 'bigint') throw new Error(unexpectedResponse(context))
 		result.push(item)
 	}
 	return result
@@ -29,20 +30,20 @@ export function requireBigintArray(value: unknown, context: string) {
 export function requireIntegerLikeValue(value: unknown, context: string) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number' && Number.isInteger(value)) return value
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 export function requireBooleanValue(value: unknown, context: string) {
 	if (typeof value === 'boolean') return value
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 export function requireAddressValue(value: unknown, context: string): Address {
 	if (typeof value === 'string' && isAddress(value)) return getAddress(value)
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 export function requireObjectValue(value: unknown, context: string): object {
 	if (typeof value === 'object' && value !== null) return value
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }

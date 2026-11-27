@@ -566,10 +566,6 @@
 			"bun": "./ts/components/PaginationControls.tsx",
 			"default": "./js/components/PaginationControls.js"
 		},
-		"./components/ProgressMeter.js": {
-			"bun": "./ts/components/ProgressMeter.tsx",
-			"default": "./js/components/ProgressMeter.js"
-		},
 		"./components/Question.js": {
 			"bun": "./ts/components/Question.tsx",
 			"default": "./js/components/Question.js"
@@ -597,10 +593,6 @@
 		"./components/RouteHeader.js": {
 			"bun": "./ts/components/RouteHeader.tsx",
 			"default": "./js/components/RouteHeader.js"
-		},
-		"./components/RouteWorkflowPanel.js": {
-			"bun": "./ts/components/RouteWorkflowPanel.tsx",
-			"default": "./js/components/RouteWorkflowPanel.js"
 		},
 		"./components/ScalarOutcomePicker.js": {
 			"bun": "./ts/components/ScalarOutcomePicker.tsx",

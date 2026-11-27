@@ -23,7 +23,7 @@ type AmountFieldProps = {
 	 * is shown below the field and describes the button. Set `showUnavailableReason: false` where the surrounding form already
 	 * presents that reason; the button then keeps it only as its tooltip.
 	 */
-	fillMax?: { amount: bigint | undefined; unavailableReason?: string | undefined; showUnavailableReason?: boolean | undefined } | undefined
+	fillMax?: { amount: bigint | undefined; onFind?: (() => void) | undefined; pending?: boolean | undefined; unavailableReason?: string | undefined; showUnavailableReason?: boolean | undefined } | undefined
 	/** Integer percentages of the Max amount offered as quick fills, such as `[25, 50]`. */
 	percentPresets?: readonly number[] | undefined
 	/** Balance the amount is drawn from. Shown as a hint and checked as an upper bound. */
@@ -67,7 +67,8 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 	}
 	const balanceHint = balance === undefined || showsBalanceError ? undefined : commonCopy.formatLabelValue(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
 	const fillMaxAmount = fillMax?.amount
-	const fillUnavailable = disabled || fillMaxAmount === undefined || fillMaxAmount <= 0n
+	const hasMaximumAmount = fillMaxAmount !== undefined && fillMaxAmount > 0n
+	const fillUnavailable = disabled || fillMax?.pending === true || (fillMax?.onFind === undefined && !hasMaximumAmount)
 	// A disabled button cannot be focused and touch devices never show a title, so the reason is visible text that describes the
 	// button. A reason the field hint already states is referenced instead of repeated, and a field disabled as a whole, or a
 	// form that presents the reason itself, keeps it only as the tooltip.
@@ -78,9 +79,13 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 	let maxReasonDescriptionId: string | undefined
 	if (maxReasonIsHint) maxReasonDescriptionId = hintId
 	else if (showsMaxReason) maxReasonDescriptionId = maxReasonId
+	const applyMax = () => {
+		if (fillMax?.onFind !== undefined) fillMax.onFind()
+		else if (fillMaxAmount !== undefined) fillAmount(fillMaxAmount)
+	}
 	const maxButton =
 		fillMax === undefined ? undefined : (
-			<button className='quiet field-inline-action' type='button' disabled={fillUnavailable} aria-describedby={maxReasonDescriptionId} title={maxReasonDescriptionId === undefined ? maxUnavailableReason : undefined} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(fillMaxAmount))}>
+			<button className='quiet field-inline-action' type='button' disabled={fillUnavailable} aria-busy={fillMax.pending || undefined} aria-describedby={maxReasonDescriptionId} title={maxReasonDescriptionId === undefined ? maxUnavailableReason : undefined} onClick={applyMax}>
 				{commonCopy.max}
 			</button>
 		)
@@ -117,7 +122,7 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 			{percentPresets.length === 0 ? undefined : (
 				<div className='amount-field-presets'>
 					{percentPresets.map(percent => (
-						<button key={percent} className='quiet' type='button' disabled={fillUnavailable} aria-describedby={maxReasonDescriptionId} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(getAmountPreset(fillMaxAmount, percent)))}>
+						<button key={percent} className='quiet' type='button' disabled={fillUnavailable || !hasMaximumAmount} aria-describedby={maxReasonDescriptionId} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(getAmountPreset(fillMaxAmount, percent)))}>
 							{commonCopy.formatAmountPresetLabel(percent)}
 						</button>
 					))}

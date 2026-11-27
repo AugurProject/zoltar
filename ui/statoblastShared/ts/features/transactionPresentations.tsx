@@ -1,7 +1,8 @@
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
-import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPreviewRows.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { questionLedgerTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { ReportingActionResult, TradingActionResult } from '../types/contracts.js'
@@ -36,7 +37,7 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
 		rows: [
-			{ identityKey: 'security-pool', label: transactionCopy.questionLedger, value: <AddressValue address={result.questionLedgerAddress} /> },
+			{ identityKey: 'security-pool', label: transactionCopy.questionLedger, value: <AddressValue longAbbreviation address={result.questionLedgerAddress} /> },
 			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],

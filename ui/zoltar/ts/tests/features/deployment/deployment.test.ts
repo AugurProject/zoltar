@@ -212,12 +212,12 @@ void describe('deployment helpers', () => {
 
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
 		let callCount = 0
-		const mockReadClient = createConnectedReadClient()
-		const multicall: ReadClient['multicall'] = async () => {
-			callCount += 1
-			return [zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 0n] as never
-		}
-		mockReadClient.multicall = multicall
+		const mockReadClient = testDouble<ReadClient>({
+			multicall: async () => {
+				callCount += 1
+				return [zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 0n, 5n, 0n]
+			},
+		})
 
 		const universe = await loadZoltarUniverseSummary(mockReadClient, 123456789n)
 

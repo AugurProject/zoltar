@@ -69,7 +69,7 @@ describe('OpenOracle create form helpers', () => {
 
 	test('keeps newly created reports inside the one-year dispute safety policy', () => {
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536000' }) }).isValid).toBe(true)
-		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536001' }) }).fieldErrors.settlementTime).toBe('Settlement delay must not exceed one year in this interface.')
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536001' }) }).fieldErrors.settlementTime).toBe('Settlement delay must not exceed 1y in this interface.')
 	})
 
 	test('sends exactly the settler reward as the ETH value', () => {
@@ -95,7 +95,7 @@ describe('OpenOracle create form helpers', () => {
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '1.5' }) }).fieldErrors.exactToken1Report).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '0' }) }).fieldErrors.exactToken1Report).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '0' }) }).isValid).toBe(false)
-		expect(getOpenOracleCreateValidation({ form: createValidForm({ escalationHalt: '-1' }) }).fieldErrors.escalationHalt).toBe('Escalation halt must be non-negative.')
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ escalationHalt: '-1' }) }).fieldErrors.escalationHalt).toBe('Dispute limit must be non-negative.')
 	})
 
 	test('derives the implied initial price from the entered amounts', () => {

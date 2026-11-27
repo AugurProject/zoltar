@@ -49,7 +49,7 @@ export function resolveRequestedLoadableValueState<TValue, TKey>({ currentKey, i
 	return 'unknown'
 }
 
-export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeoutMilliseconds?: number } = {}): LoadController {
+export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeoutMilliseconds?: number | false } = {}): LoadController {
 	const phase = signal<LoadPhase>('idle')
 	const isLoading = computed(() => phase.value === 'loading')
 	let generation = 0

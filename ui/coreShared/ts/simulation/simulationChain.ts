@@ -96,10 +96,10 @@ function parseReceiptHash(params: unknown): Hash | undefined {
 function createRpcError(error: unknown): Error {
 	const record: RpcErrorLike = isPlainRecord(error) ? error : {}
 	const code = typeof record.code === 'number' ? record.code : Number(record.code)
-	return Object.assign(new Error(typeof record.message === 'string' ? record.message : 'Unknown provider error'), {
+	return Object.assign(new Error(typeof record.message === 'string' ? record.message : 'Unknown simulation error'), {
 		code: Number.isFinite(code) ? code : -32000,
 		data: 'data' in record ? record.data : error,
-		details: typeof record.message === 'string' ? record.message : 'Unknown provider error',
+		details: typeof record.message === 'string' ? record.message : 'Unknown simulation error',
 	})
 }
 

@@ -565,7 +565,7 @@ describe('OpenOracle helpers', () => {
 
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, token2Address: token1Address } }).message).toBe('Base and quote tokens must use different addresses.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlementTime: '9' } }).message).toBe('Settlement delay must be greater than dispute delay.')
-		expect(getOpenOracleCreateValidation({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } }).message).toBe('Dispute fee plus protocol fee must not exceed 100%.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } }).message).toBe('Dispute fee plus OpenOracle fee must not exceed 100%.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '0.99' } }).message).toBe('Multiplier must be at least 1×.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '2' } }).message).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '1.5' } }).message).toBeUndefined()
@@ -576,14 +576,14 @@ describe('OpenOracle helpers', () => {
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 }).message).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: '.' } }).message).toBe('Enter a valid base token amount.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: '-.' } }).message).toBe('Enter a valid base token amount.')
-		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: '.' } }).message).toBe('Enter a valid escalation halt.')
-		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: '-.' } }).message).toBe('Enter a valid escalation halt.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: '.' } }).message).toBe('Enter a valid dispute limit.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: '-.' } }).message).toBe('Enter a valid dispute limit.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '655.35' } }).message).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '655.36' } }).message).toBe('Multiplier must be at most 655.35×.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } }).message).toBe('Dispute delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } }).message).toBe('Settlement delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Base token amount exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Escalation halt exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Dispute limit exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } }).message).toBe('Settler reward exceeds the contract maximum.')
 	})
 
@@ -628,9 +628,9 @@ describe('OpenOracle helpers', () => {
 		const parse = (protocolFee: string) => parseOpenOracleCreateFormSubmission({ form: { ...validForm, protocolFee }, token1Decimals: 18, token2Decimals: 18 })
 		expect(parse('0.001').protocolFee).toBe(100)
 		expect(parse('1').protocolFee).toBe(100_000)
-		expect(() => parse('')).toThrow('Enter a valid protocol fee.')
-		expect(() => parse('-0.1')).toThrow('Protocol fee must be non-negative')
-		expect(() => parse('0.000001')).toThrow('Enter a valid protocol fee.')
+		expect(() => parse('')).toThrow('Enter a valid OpenOracle fee.')
+		expect(() => parse('-0.1')).toThrow('OpenOracle fee must be non-negative')
+		expect(() => parse('0.000001')).toThrow('Enter a valid OpenOracle fee.')
 	})
 
 	test('open oracle create parser throws invariant validation messages before preparing a write', () => {
@@ -652,7 +652,7 @@ describe('OpenOracle helpers', () => {
 				token1Decimals: 18,
 				token2Decimals: 18,
 			}),
-		).toThrow('Dispute fee plus protocol fee must not exceed 100%.')
+		).toThrow('Dispute fee plus OpenOracle fee must not exceed 100%.')
 		expect(() =>
 			parseOpenOracleCreateFormSubmission({
 				form: {
@@ -794,7 +794,7 @@ describe('OpenOracle helpers', () => {
 		const gasFailure = 'Transaction failed after using its full gas limit. Open the transaction details before retrying.'
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('The settlement contract ran out of gas. Retry using the gas limit suggested by your wallet.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: SettleTooEarly()'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x3edf6050'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement callback failed'))).toBe('Transaction failed while settling the report. Reason: settlement callback failed.')

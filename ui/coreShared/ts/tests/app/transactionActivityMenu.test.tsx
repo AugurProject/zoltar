@@ -91,6 +91,25 @@ test('lists recent transactions with their status and a pending count', async ()
 	await rendered.cleanup()
 })
 
+test('shows the replacement hash and wallet speed-up after confirmation', async () => {
+	const speedUpHash: Hash = '0x7777000000000000000000000000000000000000000000000000000000000000'
+	recordTransactionSubmitted({ hash: pendingHash, scope: [], title: 'Reporting Yes' })
+	recordTransactionSubmitted({ hash: speedUpHash, previousHash: pendingHash, scope: [], title: 'Reporting Yes' })
+	recordTransactionSettled(speedUpHash, { status: 'confirmed' })
+	const rendered = await renderIntoDocument(<TransactionActivityMenu showWalletSpeedUp />)
+	try {
+		const queries = within(rendered.container)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
+		const panel = queries.getByRole('dialog', { name: 'Recent transactions' })
+		expect(panel.textContent).toContain('Confirmed')
+		expect(panel.textContent).toContain('Sped up in your wallet.')
+		expect(within(panel).getByRole('link', { name: `View transaction ${speedUpHash} on explorer (opens in a new tab)` })).toBeDefined()
+		expect(within(panel).queryByRole('link', { name: `View transaction ${pendingHash} on explorer (opens in a new tab)` })).toBeNull()
+	} finally {
+		await rendered.cleanup()
+	}
+})
+
 test('lets the user stop tracking a pending transaction after stating that it can still confirm', async () => {
 	transactionActivity.value = { chainId: 1, entries: [{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Depositing REP' }], ownerKey: 'test', storageKey: undefined }
 	const stopped: Hash[] = []
@@ -194,7 +213,7 @@ test('shows an empty list when this account has no transactions', async () => {
 	await act(() => {
 		fireEvent.click(queries.getByRole('button', { name: 'Activity' }))
 	})
-	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this account yet.')
+	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this wallet yet.')
 	await rendered.cleanup()
 })
 

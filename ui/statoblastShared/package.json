@@ -81,6 +81,14 @@
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
 		},
+		"./lib/reportingOutcomeBalances.js": {
+			"bun": "./ts/lib/reportingOutcomeBalances.ts",
+			"default": "./js/lib/reportingOutcomeBalances.js"
+		},
+		"./lib/deadlineRefresh.js": {
+			"bun": "./ts/lib/deadlineRefresh.ts",
+			"default": "./js/lib/deadlineRefresh.js"
+		},
 		"./protocol/collateral.js": {
 			"bun": "./ts/protocol/collateral.ts",
 			"default": "./js/protocol/collateral.js"
@@ -173,9 +181,9 @@
 			"bun": "./ts/features/oracleTypes.ts",
 			"default": "./js/features/oracleTypes.js"
 		},
-		"./features/reporting/components/EscalationDepositSelectionList.js": {
-			"bun": "./ts/features/reporting/components/EscalationDepositSelectionList.tsx",
-			"default": "./js/features/reporting/components/EscalationDepositSelectionList.js"
+		"./features/reporting/components/EscalationExplainer.js": {
+			"bun": "./ts/features/reporting/components/EscalationExplainer.tsx",
+			"default": "./js/features/reporting/components/EscalationExplainer.js"
 		},
 		"./features/reporting/components/ReportingSection.js": {
 			"bun": "./ts/features/reporting/components/ReportingSection.tsx",
@@ -188,10 +196,6 @@
 		"./features/reporting/lib/reporting.js": {
 			"bun": "./ts/features/reporting/lib/reporting.ts",
 			"default": "./js/features/reporting/lib/reporting.js"
-		},
-		"./features/reporting/lib/reportingStagePresentation.js": {
-			"bun": "./ts/features/reporting/lib/reportingStagePresentation.ts",
-			"default": "./js/features/reporting/lib/reportingStagePresentation.js"
 		},
 		"./features/reporting/lib/reportingDomain.js": {
 			"bun": "./ts/features/reporting/lib/reportingDomain.ts",
@@ -212,6 +216,10 @@
 		"./protocol/deploymentHelpers.js": {
 			"bun": "./ts/protocol/deploymentHelpers.ts",
 			"default": "./js/protocol/deploymentHelpers.js"
+		},
+		"./protocol/deploymentRecovery.js": {
+			"bun": "./ts/protocol/deploymentRecovery.ts",
+			"default": "./js/protocol/deploymentRecovery.js"
 		},
 		"./protocol/openOracleMath.js": {
 			"bun": "./ts/protocol/openOracleMath.ts",
@@ -237,10 +245,6 @@
 			"bun": "./ts/contractArtifact.ts",
 			"default": "./js/contractArtifact.js"
 		},
-		"./features/reporting/components/EscalationSide.js": {
-			"bun": "./ts/features/reporting/components/EscalationSide.tsx",
-			"default": "./js/features/reporting/components/EscalationSide.js"
-		},
 		"./features/universes/components/ShareMigrationTargetsSection.js": {
 			"bun": "./ts/features/universes/components/ShareMigrationTargetsSection.tsx",
 			"default": "./js/features/universes/components/ShareMigrationTargetsSection.js"
@@ -249,13 +253,13 @@
 			"bun": "./ts/protocol/fundingTransactions.ts",
 			"default": "./js/protocol/fundingTransactions.js"
 		},
-		"./features/question-ledgers/components/UniversePoolDirectorySection.js": {
-			"bun": "./ts/features/question-ledgers/components/UniversePoolDirectorySection.tsx",
-			"default": "./js/features/question-ledgers/components/UniversePoolDirectorySection.js"
-		},
 		"./protocol/reviewedClient.js": {
 			"bun": "./ts/protocol/reviewedClient.ts",
 			"default": "./js/protocol/reviewedClient.js"
+		},
+		"./protocol/requestTimeout.js": {
+			"bun": "./ts/protocol/requestTimeout.ts",
+			"default": "./js/protocol/requestTimeout.js"
 		},
 		"./protocol/reviewedBackend.js": {
 			"bun": "./ts/protocol/reviewedBackend.ts",
@@ -269,14 +273,6 @@
 			"bun": "./ts/features/reporting/lib/reportingMaxContribution.ts",
 			"default": "./js/features/reporting/lib/reportingMaxContribution.js"
 		},
-		"./features/reporting/lib/reportingViewerStatus.js": {
-			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
-			"default": "./js/features/reporting/lib/reportingViewerStatus.js"
-		},
-		"./lib/statoblastLocation.js": {
-			"bun": "./ts/lib/statoblastLocation.ts",
-			"default": "./js/lib/statoblastLocation.js"
-		},
 		"./features/question-ledgers/lib/poolLifecycle.js": {
 			"bun": "./ts/features/question-ledgers/lib/poolLifecycle.ts",
 			"default": "./js/features/question-ledgers/lib/poolLifecycle.js"
@@ -289,6 +285,10 @@
 			"bun": "./ts/features/security-pools/components/SecurityPoolsSection.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolsSection.js"
 		},
+		"./features/security-pools/components/SecurityPoolQuestionsPanel.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolQuestionsPanel.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolQuestionsPanel.js"
+		},
 		"./features/security-pools/components/SecurityPoolAggregatePanel.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolAggregatePanel.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolAggregatePanel.js"
@@ -300,10 +300,6 @@
 		"./features/security-pools/hooks/useSecurityPoolActions.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolActions.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolActions.js"
-		},
-		"./features/security-pools/hooks/useSecurityPoolPurchase.js": {
-			"bun": "./ts/features/security-pools/hooks/useSecurityPoolPurchase.ts",
-			"default": "./js/features/security-pools/hooks/useSecurityPoolPurchase.js"
 		},
 		"./features/security-pools/hooks/useSecurityPoolAggregate.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolAggregate.ts",
@@ -357,13 +353,13 @@
 			"bun": "./ts/features/security-pools/lib/creation.ts",
 			"default": "./js/features/security-pools/lib/creation.js"
 		},
+		"./features/security-pools/lib/deploymentWallet.js": {
+			"bun": "./ts/features/security-pools/lib/deploymentWallet.ts",
+			"default": "./js/features/security-pools/lib/deploymentWallet.js"
+		},
 		"./protocol/securityPoolAdmission.js": {
 			"bun": "./ts/protocol/securityPoolAdmission.ts",
 			"default": "./js/protocol/securityPoolAdmission.js"
-		},
-		"./features/open-oracle/components/PriceRequestStatusSection.js": {
-			"bun": "./ts/features/open-oracle/components/PriceRequestStatusSection.tsx",
-			"default": "./js/features/open-oracle/components/PriceRequestStatusSection.js"
 		},
 		"./features/open-oracle/hooks/useOpenOracleSettlementTime.js": {
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleSettlementTime.ts",
@@ -429,10 +425,6 @@
 			"bun": "./ts/features/security-pools/components/SecurityPoolTakeover.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolTakeover.js"
 		},
-		"./features/security-pools/hooks/useSecurityPoolQuestionDetails.js": {
-			"bun": "./ts/features/security-pools/hooks/useSecurityPoolQuestionDetails.ts",
-			"default": "./js/features/security-pools/hooks/useSecurityPoolQuestionDetails.js"
-		},
 		"./features/security-pools/components/SecurityPoolSharedFork.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolSharedFork.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolSharedFork.js"
@@ -440,6 +432,54 @@
 		"./copy/securityPoolSharedFork.js": {
 			"bun": "./ts/copy/securityPoolSharedFork.ts",
 			"default": "./js/copy/securityPoolSharedFork.js"
+		},
+		"./copy/questionPage.js": {
+			"bun": "./ts/copy/questionPage.ts",
+			"default": "./js/copy/questionPage.js"
+		},
+		"./copy/securityPoolPage.js": {
+			"bun": "./ts/copy/securityPoolPage.ts",
+			"default": "./js/copy/securityPoolPage.js"
+		},
+		"./copy/statoblastShell.js": {
+			"bun": "./ts/copy/statoblastShell.ts",
+			"default": "./js/copy/statoblastShell.js"
+		},
+		"./copy/watchlist.js": {
+			"bun": "./ts/copy/watchlist.ts",
+			"default": "./js/copy/watchlist.js"
+		},
+		"./features/reporting/components/LocateReportingDeposits.js": {
+			"bun": "./ts/features/reporting/components/LocateReportingDeposits.tsx",
+			"default": "./js/features/reporting/components/LocateReportingDeposits.js"
+		},
+		"./features/useStatoblastPageRefresh.js": {
+			"bun": "./ts/features/useStatoblastPageRefresh.ts",
+			"default": "./js/features/useStatoblastPageRefresh.js"
+		},
+		"./protocol/reportingDepositSearch.js": {
+			"bun": "./ts/protocol/reportingDepositSearch.ts",
+			"default": "./js/protocol/reportingDepositSearch.js"
+		},
+		"./protocol/reportingDeposits.js": {
+			"bun": "./ts/protocol/reportingDeposits.ts",
+			"default": "./js/protocol/reportingDeposits.js"
+		},
+		"./protocol/statoblastEntries.js": {
+			"bun": "./ts/protocol/statoblastEntries.ts",
+			"default": "./js/protocol/statoblastEntries.js"
+		},
+		"./protocol/statoblastPageCache.js": {
+			"bun": "./ts/protocol/statoblastPageCache.ts",
+			"default": "./js/protocol/statoblastPageCache.js"
+		},
+		"./protocol/watchlistRows.js": {
+			"bun": "./ts/protocol/watchlistRows.ts",
+			"default": "./js/protocol/watchlistRows.js"
+		},
+		"./protocol/watchlistTransfer.js": {
+			"bun": "./ts/protocol/watchlistTransfer.ts",
+			"default": "./js/protocol/watchlistTransfer.js"
 		}
 	},
 	"version": "1.0.0"

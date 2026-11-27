@@ -43,10 +43,12 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	const current = outcomePresentation ?? (transaction?.tone === 'pending' && activeStep !== undefined ? { ...transaction, title: activeStep.title } : transaction)
 	const hiddenAfterOutcome = outcome !== undefined && transaction?.tone === 'pending' && transaction.hash === outcome.hash && isGlobalTransactionDismissed({ dismissKey: outcome.tone === 'error' ? `receipt-diagnostic:${outcome.hash}` : outcome.hash, hash: outcome.hash, title: outcome.title, tone: outcome.tone })
 	const reviewing = transactionSteps.value?.steps.some(step => step.phase === 'review') ?? false
+	const lifecycleInReview = workflow?.showLifecycle === true && workflow.showReviewDialog && (activeStep !== undefined || (current?.hash === undefined && workflow.steps[workflow.activeIndex]?.phase === 'wallet'))
 	const terminal = current?.tone === 'success' || current?.tone === 'error' || current?.tone === 'warning'
 	const compact = current?.tone === 'success' || current?.tone === 'pending' || current?.tone === 'error' || current?.tone === 'awaiting-wallet'
 	// The wallet prompt is shown too, so the user reads that the wallet waits for them; the browser simulation needs no confirmation and stays quiet.
-	const visible = current !== undefined && current.showStatusDialog !== false && current !== dismissedRequest && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
+	const visible =
+		current !== undefined && current.showStatusDialog !== false && current !== dismissedRequest && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && (!lifecycleInReview || current.tone === 'success') && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
 	const dismiss = () => {
 		const focusInside = dialogRef.current?.contains(document.activeElement) === true
 		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)

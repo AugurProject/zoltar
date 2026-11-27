@@ -1,5 +1,4 @@
 export const fallback = 'Collateral'
-export const token = 'token'
 export const selector = 'Collateral token'
 export const weth = 'WETH'
 export const usdc = 'USDC'
@@ -9,21 +8,25 @@ export const fundingLoading = 'Loading collateral balance and approval.'
 export const approvalRequired = 'Collateral approval required.'
 export const formatInsufficientBalance = (symbol: string) => `Insufficient ${symbol} balance.`
 export const approvalFailed = 'Collateral approval failed.'
-export const floorHint = 'Reports also need an exposure-based stake. This floor does not automatically cover dispute gas costs.'
-export const amount = (label: string, symbol: string) => `${label} (${symbol})`
-export const oracleStake = (symbol: string) => amount('Minimum oracle stake', symbol)
+export const floorHint = 'Reports also require collateral based on exposure. This floor does not automatically cover dispute gas costs.'
+const amount = (label: string, symbol: string) => `${label} (${symbol})`
 export const purchaseFee = (symbol: string) => amount('Minimum purchase fee', symbol)
 export const commitment = (symbol: string) => amount('Minimum commitment', symbol)
-export const reportStake = (symbol: string) => amount('Report stake', symbol)
-export const minimumReportStake = (symbol: string) => amount('Minimum report stake', symbol)
+export const reportStake = (symbol: string) => amount('Report collateral', symbol)
 export const walletBalance = (symbol: string) => `Wallet ${symbol}`
 export const released = (symbol: string) => `Released ${symbol}`
 export const recoveryContribution = 'Recovery REP contribution'
 export const maximumRecoveryContribution = 'Maximum recovery REP contribution'
 export const insufficientRecoveryRep = 'Insufficient REP for the proportional recovery contribution.'
 export const recoveryApprovalRequired = 'Recovery REP approval required.'
-export const recoveryBudgetRequired = 'Set a maximum REP contribution that covers the quote.'
-export const recoveryFundingLoading = 'Loading recovery REP funding.'
 export const recoveryContributionHint = 'These complete sets include inherited REP. Your proportional contribution preserves existing holders’ backing.'
 export const approvalPending = 'Wait for the current approval to finish.'
-export const recoveryBudgetHint = 'The default includes 1% headroom and rounding for holding fees until inclusion. Only the current proportional REP contribution is transferred.'
+
+export const fundingReadFailed = 'Unable to load collateral funding.'
+
+export const updatingCollateralQuote = 'Updating collateral quote.'
+export const positiveCollateralAmountRequired = 'Enter a positive collateral amount.'
+
+export const approveRecoveryRep = 'Approve recovery REP'
+export const approveCollateral = 'Approve collateral'
+export const approvingCollateralAction = 'approving collateral'

@@ -53,7 +53,7 @@ export async function readInjectedAccounts(provider: InjectedEthereum, method: '
 
 export async function requireInjectedAccount(provider: InjectedEthereum, method: 'eth_accounts' | 'eth_requestAccounts' = 'eth_accounts') {
 	const account = (await readInjectedAccounts(provider, method))[0]
-	if (account === undefined) throw new Error(method === 'eth_requestAccounts' ? 'Wallet returned no account' : 'Wallet returned no connected account')
+	if (account === undefined) throw new Error(method === 'eth_requestAccounts' ? 'The wallet did not return an address.' : 'No wallet address is connected.')
 	return account
 }
 

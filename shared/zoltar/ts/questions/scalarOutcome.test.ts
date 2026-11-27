@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from './scalarOutcome'
+import { formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor, isValidScalarOutcomeIndex } from './scalarOutcome'
 import { combineScalarParityOutcomeIndex, getScalarParityQuestion, SCALAR_PARITY_ENCODING_FIXTURES, SCALAR_PARITY_LABEL_FIXTURES } from '../testing/scalarOutcomeParityFixtures'
 
 describe('shared scalar outcome codec', () => {
@@ -26,8 +26,8 @@ describe('scalar uint120 question boundary', () => {
 	const question = { answerUnit: '', displayValueMin: 0n, displayValueMax: 1n, numTicks: 1n << 120n }
 
 	test('rejects tick counts that would silently truncate both answer parts', () => {
-		expect(() => getScalarOutcomeIndex(question, 0n)).toThrow('uint120')
-		expect(() => getScalarOutcomeIndex(question, question.numTicks)).toThrow('uint120')
+		expect(() => getScalarOutcomeIndex(question, 0n)).toThrow('The number of scalar ticks is out of range.')
+		expect(() => getScalarOutcomeIndex(question, question.numTicks)).toThrow('The number of scalar ticks is out of range.')
 	})
 
 	test('rejects an impossible question even when two encodable parts sum to its tick count', () => {
@@ -50,5 +50,16 @@ test('#1390 identifies dense ticks in both raw and encoded outcome labels', () =
 		const tick = BigInt(index)
 		expect(formatScalarOutcomeLabel(question, tick)).toBe(label)
 		expect(formatScalarOutcomeIndexLabel(question, getScalarOutcomeIndex(question, tick))).toBe(label)
+	}
+})
+
+test('unregistered zero-tick questions accept only the canonical Invalid sentinel (#1755)', () => {
+	const question = { answerUnit: '', displayValueMin: 0n, displayValueMax: 0n, numTicks: 0n }
+	expect(getScalarOutcomeIndexDescriptor(question, 0n)).toEqual({ kind: 'invalid' })
+	expect(isValidScalarOutcomeIndex(question, 0n)).toBe(true)
+	expect(formatScalarOutcomeIndexLabel(question, 0n)).toBe('Invalid')
+	for (const answer of [1n, 1n << 240n, 1n << 255n, -1n, 1n << 256n]) {
+		expect(isValidScalarOutcomeIndex(question, answer)).toBe(false)
+		expect(() => formatScalarOutcomeIndexLabel(question, answer)).toThrow('malformed')
 	}
 })

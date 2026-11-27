@@ -1,26 +1,45 @@
+import { oracleErrors, reportErrors } from '../copy/protocolErrors.js'
 import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
-import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { encodeFunctionData, zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { projectEscalationEndTime, type EscalationBalanceTuple } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_QuestionLedger_QuestionLedger, statoblast_QuestionForker_QuestionForker, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_QuestionLedger_QuestionLedger, statoblast_QuestionForker_QuestionForker, statoblast_factories_EscalationGameFactory_EscalationGameFactory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
-import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
+import type { EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
+import { readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { requireAddressValue, requireBigintValue, requireIntegerLikeValue, requireTupleValue } from './decoders.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getReportingOutcomeKey, getReportingOutcomeValue, getQuestionLedgerSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { getEscalationSideLabel, hasTimestamp } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { readQuestionLedgerUniverseId } from './questionLedgerActions.js'
 import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { loadForkCarriedEscalationDepositsFromParentSnapshot, readEscalationOutcomeState, readForkContinuation } from './reportingCarryState.js'
-import { CONTRACT_PAGE_SIZE } from './pagination.js'
+import { readEscalationOutcomeState, readForkContinuation } from './reportingCarryState.js'
+import { captureReportingDeposits, reportingDepositStore } from './reportingDeposits.js'
+import { readLocatedReportingDeposits } from './reportingDepositSearch.js'
+import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { readWinningClaimReview } from './reportingClaimReview.js'
+import { getSecondLargestEscalationBalance, getStrictLeadingEscalationOutcome } from '../lib/reportingOutcomeBalances.js'
+
+async function projectCheckedResponseDeadline(client: ReadClient, address: Address, blockNumber: bigint, threshold: bigint, balancesAttoRep: EscalationBalanceTuple) {
+	const game = { address, abi: statoblast_EscalationGame_EscalationGame.abi, blockNumber }
+	const [activationTime, startBondAttoRep, forkContinuation] = await Promise.all([client.readContract({ ...game, functionName: 'activationTime' }), client.readContract({ ...game, functionName: 'startBondAttoRep' }), client.readContract({ ...game, functionName: 'forkContinuation' })])
+	if (forkContinuation) {
+		const [forkResumedAt, forkElapsedAtStart, fixed] = await Promise.all([client.readContract({ ...game, functionName: 'forkResumedAt' }), client.readContract({ ...game, functionName: 'forkElapsedAtStart' }), client.readContract({ ...game, functionName: 'fixedQuestionOutcome' })])
+		if (forkResumedAt === 0n || getReportingOutcomeKey(fixed) !== 'none') return undefined
+		return projectEscalationEndTime({ activationTime, startBondAttoRep, nonDecisionThresholdAttoRep: threshold, balancesAttoRep, continuation: { forkResumedAt, forkElapsedAtStart } })
+	}
+	if (activationTime === 0n) return undefined
+	return projectEscalationEndTime({ activationTime, startBondAttoRep, nonDecisionThresholdAttoRep: threshold, balancesAttoRep })
+}
 
 type ReportingBootstrapReadResult = {
 	questionId: bigint
@@ -34,69 +53,19 @@ type ReportingBootstrapReadResult = {
 	parentQuestionLedgerAddress: Address
 }
 
-type EscalationDepositViewStruct = {
-	amountAttoRep: bigint
-	cumulativeAmountAttoRep: bigint
-	depositor: Address
-}
-
 function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrapReadResult {
-	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentQuestionLedgerAddress] = requireTupleValue(value, 9, 'reporting bootstrap')
+	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentQuestionLedgerAddress] = requireTupleValue(value, 9, 'question reporting details')
 	return {
-		questionId: requireBigintValue(questionId, 'reporting question id'),
-		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting escalation game address'),
-		settlementCollateralAttoEth: requireBigintValue(settlementCollateralAttoEth, 'reporting complete set collateral amount'),
-		universeId: requireBigintValue(universeId, 'reporting universe id'),
-		zoltarAddress: requireAddressValue(zoltarAddress, 'reporting zoltar address'),
-		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'reporting initial escalation game deposit'),
-		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting system state'),
+		questionId: requireBigintValue(questionId, 'question ID'),
+		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting game address'),
+		settlementCollateralAttoEth: requireBigintValue(settlementCollateralAttoEth, 'collateral held for this question'),
+		universeId: requireBigintValue(universeId, 'reporting universe ID'),
+		zoltarAddress: requireAddressValue(zoltarAddress, 'universe contract for reporting'),
+		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'minimum first report'),
+		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting status'),
 		questionOutcomeValue: requireIntegerLikeValue(questionOutcomeValue, 'reporting question outcome'),
-		parentQuestionLedgerAddress: requireAddressValue(parentQuestionLedgerAddress, 'reporting parent question ledger address'),
+		parentQuestionLedgerAddress: requireAddressValue(parentQuestionLedgerAddress, 'parent question contract for reporting'),
 	}
-}
-
-function requireEscalationDepositView(value: unknown, context: string): EscalationDepositViewStruct {
-	const deposit = requireObjectValue(value, context)
-	if ('amountAttoRep' in deposit && 'cumulativeAmountAttoRep' in deposit && 'depositor' in deposit) {
-		return {
-			amountAttoRep: requireBigintValue(deposit.amountAttoRep, context),
-			cumulativeAmountAttoRep: requireBigintValue(deposit.cumulativeAmountAttoRep, context),
-			depositor: requireAddressValue(deposit.depositor, context),
-		}
-	}
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function requireEscalationDepositArray(value: unknown, context: string): EscalationDepositViewStruct[] {
-	return requireArrayValue(value, context).map(deposit => requireEscalationDepositView(deposit, context))
-}
-
-async function loadEscalationDeposits(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
-	let currentIndex = 0n
-	const deposits: EscalationDeposit[] = []
-	while (true) {
-		const page = requireEscalationDepositArray(
-			await client.readContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				address: escalationGameAddress,
-				functionName: 'getDepositsByOutcome',
-				args: [getReportingOutcomeValue(outcome), currentIndex, CONTRACT_PAGE_SIZE],
-			}),
-			'escalation deposit page',
-		)
-		const normalizedPage = page
-			.map((deposit, index) => ({
-				amountAttoRep: deposit.amountAttoRep,
-				cumulativeAmountAttoRep: deposit.cumulativeAmountAttoRep,
-				depositIndex: currentIndex + BigInt(index),
-				depositor: deposit.depositor,
-			}))
-			.filter(deposit => deposit.depositor !== zeroAddress && deposit.amountAttoRep > 0n)
-		deposits.push(...normalizedPage)
-		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
-		currentIndex += CONTRACT_PAGE_SIZE
-	}
-	return deposits
 }
 
 async function loadViewerReportingWalletState(client: ReadClient, fundingAddress: Address, accountAddress: Address | undefined) {
@@ -110,7 +79,7 @@ async function loadViewerReportingWalletState(client: ReadClient, fundingAddress
 	return { viewerWalletRepAllowanceAttoRep, viewerWalletRepBalanceAttoRep, viewerWalletRepTokenAddress }
 }
 
-export async function loadReportingDetails(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
+export async function loadReportingDetails(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined, includeSchedule = false): Promise<ReportingDetails> {
 	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
 			abi: statoblast_QuestionLedger_QuestionLedger.abi,
@@ -181,7 +150,7 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 			args: [universeId],
 		}),
 	])
-	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
+	if (!hasTimestamp(block)) throw new Error(oracleErrors.blockResponse)
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
 		const startBondAttoRep = nonDecisionThresholdAttoRep > 1n && initialEscalationGameDepositAttoRep >= nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep - 1n : initialEscalationGameDepositAttoRep
@@ -190,7 +159,6 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 		return {
 			...(inheritedOutcome ? { reportingBlockedReason: reportingCopy.inheritedOutcomeReportingClosed } : {}),
 			canTriggerOwnFork: false,
-			contributionFunding: 'wallet',
 			...walletReportingState,
 			settlementCollateralAttoEth,
 			currentTime: block.timestamp,
@@ -281,41 +249,34 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 		walletReportingStatePromise,
 	])
 	const balances: [bigint, bigint, bigint] = [invalidOutcomeState.balanceAttoRep, yesOutcomeState.balanceAttoRep, noOutcomeState.balanceAttoRep]
-	const useCarrySnapshot = forkContinuationSnapshot !== undefined
-	const [invalidDeposits, yesDeposits, noDeposits, invalidParentSnapshotDeposits, yesParentSnapshotDeposits, noParentSnapshotDeposits] = await Promise.all([
-		loadEscalationDeposits(client, escalationGameAddress, 'invalid'),
-		loadEscalationDeposits(client, escalationGameAddress, 'yes'),
-		loadEscalationDeposits(client, escalationGameAddress, 'no'),
-		accountAddress === undefined || parentQuestionLedgerAddress === zeroAddress || !useCarrySnapshot ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentQuestionLedgerAddress, 'invalid', accountAddress),
-		accountAddress === undefined || parentQuestionLedgerAddress === zeroAddress || !useCarrySnapshot ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentQuestionLedgerAddress, 'yes', accountAddress),
-		accountAddress === undefined || parentQuestionLedgerAddress === zeroAddress || !useCarrySnapshot ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentQuestionLedgerAddress, 'no', accountAddress),
-	])
-	const sides: EscalationSide[] = [
-		{
-			balance: balances[0] ?? 0n,
-			deposits: invalidDeposits,
-			importedUserDeposits: invalidParentSnapshotDeposits,
-			key: 'invalid',
-			label: getEscalationSideLabel('invalid'),
-			userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress),
-		},
-		{
-			balance: balances[1] ?? 0n,
-			deposits: yesDeposits,
-			importedUserDeposits: yesParentSnapshotDeposits,
-			key: 'yes',
-			label: getEscalationSideLabel('yes'),
-			userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress),
-		},
-		{
-			balance: balances[2] ?? 0n,
-			deposits: noDeposits,
-			importedUserDeposits: noParentSnapshotDeposits,
-			key: 'no',
-			label: getEscalationSideLabel('no'),
-			userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress),
-		},
-	]
+	const securityPool =
+		accountAddress === undefined
+			? undefined
+			: await client.readContract({
+					abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+					address: getInfraContractAddresses().securityPoolFactory,
+					functionName: 'securityPoolOf',
+					args: [questionLedgerAddress],
+					blockNumber: block.number,
+				})
+	const located = accountAddress === undefined ? [] : reportingDepositStore(getRuntimeNetworkProfile()).read()
+	const reportingDepositPool = securityPool === zeroAddress ? undefined : securityPool
+	const outcomes = ['invalid', 'yes', 'no'] as const
+	const sides: EscalationSide[] = await Promise.all(
+		outcomes.map(async (outcome, index) => {
+			const local = reportingDepositPool === undefined || accountAddress === undefined || block.number === undefined ? undefined : await readLocatedReportingDeposits(client, escalationGameAddress, { pool: reportingDepositPool, questionId, universeId, outcome, depositor: accountAddress }, located, block.number)
+			const deposits = local?.deposits ?? []
+			return {
+				balance: balances[index] ?? 0n,
+				deposits,
+				importedUserDeposits: [],
+				key: outcome,
+				label: getEscalationSideLabel(outcome),
+				localPrincipalAttoRep: local?.total,
+				userDeposits: deposits.filter(deposit => deposit.amountAttoRep > 0n),
+			}
+		}),
+	)
 	let settlementState: ReportingSettlementState = 'locked'
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
 		settlementState = 'resolved'
@@ -326,18 +287,26 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 	let reportingBlockedReason: string | undefined
 	if (continuationTiming?.[2] !== undefined && getReportingOutcomeKey(continuationTiming[2]) !== 'none') reportingBlockedReason = reportingCopy.inheritedOutcomeReportingClosed
 	else if (forkContinuationSnapshot && continuationTiming?.[0] === 0n) reportingBlockedReason = reportingCopy.continuationNotResumed
+	let latestEscalationEndTime: bigint | undefined
+	if (includeSchedule && settlementState === 'locked' && !hasReachedNonDecision && reportingBlockedReason === undefined) {
+		const duration = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'computeTimeSinceStartFromAttritionCostAttoRep', args: [nonDecisionThresholdAttoRep], blockNumber: block.number })
+		if (continuationTiming === undefined) latestEscalationEndTime = activationTime + duration
+		else latestEscalationEndTime = continuationTiming[0] + (duration > continuationTiming[1] ? duration - continuationTiming[1] : 0n)
+	}
 
 	return {
 		...(reportingBlockedReason === undefined ? {} : { reportingBlockedReason }),
 		canTriggerOwnFork,
 		bindingCapital,
-		contributionFunding: 'wallet',
 		settlementCollateralAttoEth,
 		currentRequiredBond: totalCostAttoRep === 0n ? startBondAttoRep : totalCostAttoRep,
 		currentTime: block.timestamp,
 		earliestForkTime,
 		escalationEndTime,
+		latestEscalationEndTime,
 		escalationGameAddress,
+		reportingDepositPool,
+		reportingQuestionId: questionId,
 		forkThresholdAttoRep: settlementForkThreshold ?? forkThresholdAttoRep,
 		hasReachedNonDecision,
 		marketDetails,
@@ -372,7 +341,8 @@ function getReportReviewText(outcome: ReportingOutcomeKey, amountAttoRep: bigint
 	}
 }
 
-export async function reportOutcomeInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet', triggersFork = false, requireLead = false) {
+export async function reportOutcomeInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, triggersFork = false, requireLead = false) {
+	const profile = getRuntimeNetworkProfile()
 	const [universeId, escalationGameAddress] = await Promise.all([
 		readQuestionLedgerUniverseId(client, questionLedgerAddress),
 		client.readContract({
@@ -382,7 +352,6 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 			args: [],
 		}),
 	])
-	if (contributionFunding === 'vault') throw new Error('Reports use wallet REP. Withdraw free REP from your security pool before reporting.')
 	if (escalationGameAddress !== zeroAddress) {
 		const [escalationEndTime, block] = await Promise.all([client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] }), client.getBlock()])
 		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime })
@@ -396,37 +365,77 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
+	let reviewRows: readonly { label: string; value: string }[] = []
+	const outcomeIndex = getReportingOutcomeValue(outcome)
 	const reportSteps = [
 		{
 			...callParams,
 			contractAddress: questionLedgerAddress,
+			readReviewRows: () => reviewRows,
 			refreshFundingRequirements: async () => {
 				const tokenAddress = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'repToken' })
 				return [{ tokenAddress, amount: reviewAmountAttoRep }]
 			},
 			validateBeforeSubmit: async () => {
+				const block = await client.getBlock()
+				if (block.number === undefined) throw new Error(transactionCopy.currentStateCheckFailed)
+				const blockNumber = block.number
 				const [currentGame, systemState] = await Promise.all([
-					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame' }),
-					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState' }),
+					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame', blockNumber }),
+					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState', blockNumber }),
 				])
-				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
+				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error(reportErrors.reportingChanged)
+				let leaderBefore: string = reportingCopy.reportComparisonNoReports
+				let leaderAfter: string = getEscalationSideLabel(outcome)
+				let deadlineChange: string | undefined
+				const wallet = client.account.address
+				const repToken = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'repToken', blockNumber })
+				const [walletRep, stakedRep] = await Promise.all([
+					client.readContract({ address: repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [wallet], blockNumber }),
+					currentGame === zeroAddress ? 0n : client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [wallet, outcomeIndex], blockNumber }),
+				])
 				if (currentGame !== zeroAddress) {
-					const [endTime, acceptedDeposit] = await Promise.all([
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
+					const [endTime, acceptedDeposit, balances, threshold] = await Promise.all([
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [outcomeIndex, amountAttoRep], blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep', blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'nonDecisionThresholdAttoRep', blockNumber }),
 					])
-					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
-					const block = await client.getBlock()
+					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error(reportErrors.reportAmountChanged)
 					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
 					if (timingGuard !== undefined) throw new Error(timingGuard)
+					const endsUndecided = acceptedDeposit[1] === threshold && balances.some((balance, index) => index !== outcomeIndex && balance >= threshold)
+					if (endsUndecided && !triggersFork) throw new Error(reportingCopy.forkTriggerChangedSinceReview)
+					const sides = (['invalid', 'yes', 'no'] as const).map((key, index) => ({ key, balance: balances[index] ?? 0n }))
+					const stateLabel = (side: ReportingOutcomeKey | undefined) => (side === undefined ? reportingCopy.tiedPosition : getEscalationSideLabel(side))
+					if (balances.some(balance => balance > 0n)) leaderBefore = stateLabel(getStrictLeadingEscalationOutcome(sides))
+					const projected = sides.map(side => (side.key === outcome ? { ...side, balance: acceptedDeposit[1] } : side))
+					leaderAfter = endsUndecided ? reportingCopy.reportComparisonUndecided : stateLabel(getStrictLeadingEscalationOutcome(projected))
+					if (endsUndecided) {
+						deadlineChange = `${formatTimestamp(endTime)} → ${reportingCopy.reportComparisonUndecided}`
+					} else if (getSecondLargestEscalationBalance(sides) !== getSecondLargestEscalationBalance(projected)) {
+						const projectedBalances: EscalationBalanceTuple = [projected[0]?.balance ?? 0n, projected[1]?.balance ?? 0n, projected[2]?.balance ?? 0n]
+						const deadline = await projectCheckedResponseDeadline(client, currentGame, blockNumber, threshold, projectedBalances)
+						if (deadline !== undefined && deadline > endTime) deadlineChange = `${formatTimestamp(endTime)} → ${formatTimestamp(deadline)}`
+					}
 				}
+				if (walletRep < reviewAmountAttoRep) throw new Error(reportingCopy.reportReviewInsufficientRep)
+				const comparison = (before: bigint, after: bigint) => `${formatCurrencyBalanceWithUnit(before, commonCopy.rep)} → ${formatCurrencyBalanceWithUnit(after, commonCopy.rep)}`
+				reviewRows = [
+					{ label: reportingCopy.walletRepReviewLabel, value: comparison(walletRep, walletRep - reviewAmountAttoRep) },
+					{ label: reportingCopy.stakedRepReviewLabel(getEscalationSideLabel(outcome)), value: comparison(stakedRep, stakedRep + reviewAmountAttoRep) },
+					...(leaderBefore === leaderAfter ? [] : [{ label: reportingCopy.reportComparisonLeader, value: `${leaderBefore} → ${leaderAfter}` }]),
+					...(deadlineChange === undefined ? [] : [{ label: reportingCopy.reportComparisonDeadline, value: deadlineChange }]),
+				]
 			},
 		},
 	] as const
 	const gamePreparation = escalationGameAddress === zeroAddress ? await getEscalationGamePreparation(client, questionLedgerAddress) : undefined
 	if (gamePreparation === undefined) client.onTransactionPlan?.(reportSteps)
 	else await runFundingTransactions(client, [gamePreparation], reportSteps[0])
-	const hash = await writeContractAndWait(client, () => callParams)
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	// A confirmed report remains successful if receipt metadata cannot be saved on this device.
+	await withTimeout(captureReportingDeposits(client, profile, questionLedgerAddress, universeId, receipt), 15_000, reportErrors.savingDepositTimedOut).catch(() => undefined)
 	return {
 		action: 'reportOutcome',
 		hash,
@@ -447,9 +456,9 @@ async function getEscalationGamePreparation(client: WriteClient, questionLedgerA
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionData' }),
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionId' }),
 	])
-	if (getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
+	if (getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error(reportErrors.reportingChanged)
 	const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
-	if (block.timestamp < endTime) throw new Error('Reporting opens when the question ends.')
+	if (block.timestamp < endTime) throw new Error(reportErrors.reportingNotOpen)
 	const factory = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGameFactory' })
 	const game = await client.readContract({ address: factory, abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, functionName: 'escalationGameAddress', args: [questionLedgerAddress] })
 	const isRequired = async () => {
@@ -459,7 +468,15 @@ async function getEscalationGamePreparation(client: WriteClient, questionLedgerA
 	if (!(await isRequired())) return undefined
 	const callParams = { address: factory, abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, functionName: 'prepareEscalationGame', args: [questionLedgerAddress] } as const
 	return {
-		step: { functionName: callParams.functionName, contractAddress: factory, args: callParams.args },
+		step: {
+			functionName: callParams.functionName,
+			contractAddress: factory,
+			args: callParams.args,
+			data: encodeFunctionData(callParams),
+			validateBeforeSubmit: async () => {
+				if (!(await isRequired())) throw new Error(reportingCopy.escalationPreparationChanged)
+			},
+		},
 		isRequired,
 		execute: async () => await writeContractAndWait(client, () => callParams),
 	}
@@ -534,16 +551,34 @@ export async function approveReportingRep(client: WriteClient, questionLedgerAdd
 
 export async function withdrawEscalationFromQuestionLedger(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[], claimAmountAttoRep?: bigint) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	let reviewTitle = transactionCopy.settleEscalationDeposits
-	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatCurrencyBalance(claimAmountAttoRep))
-	const hash = await writeContractAndWait(client, () => ({
+	const reviewTitle = claimAmountAttoRep === undefined || claimAmountAttoRep === 0n ? transactionCopy.settleEscalationDeposits : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatCurrencyBalance(claimAmountAttoRep))
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'withdrawFromEscalationGame',
 		reviewTitle,
-		...(claimAmountAttoRep === 0n ? { reviewDescription: reportingCopy.clearLosingDepositsReviewDescription } : {}),
 		args: [getReportingOutcomeValue(outcome), depositIndexes],
-	}))
+	} as const
+	if (claimAmountAttoRep !== undefined && claimAmountAttoRep > 0n) {
+		let rows: readonly { label: string; value: string }[] = []
+		client.onTransactionPlan?.([
+			{
+				...callParams,
+				contractAddress: questionLedgerAddress,
+				readReviewRows: () => rows,
+				validateBeforeSubmit: async () => {
+					const { wallet, payout } = await readWinningClaimReview(client, questionLedgerAddress, outcome, depositIndexes)
+					if (payout !== claimAmountAttoRep) throw new Error(reportingCopy.claimPayoutChangedSinceReview)
+					const rep = (amount: bigint) => formatCurrencyBalanceWithUnit(amount, commonCopy.rep)
+					rows = [
+						{ label: reportingCopy.claimPayoutReviewLabel, value: rep(payout) },
+						{ label: reportingCopy.walletRepReviewLabel, value: `${rep(wallet)} → ${rep(wallet + payout)}` },
+					]
+				},
+			},
+		])
+	}
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'withdrawEscalation',
 		hash,

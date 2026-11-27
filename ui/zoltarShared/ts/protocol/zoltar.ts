@@ -243,7 +243,7 @@ export async function loadZoltarUniverseSummary(
 	zoltarAddress: Address = getDeploymentStepAddress('zoltar'),
 	{ includeRelatedUniverses = true, scalarOutcomeIndexes = [] }: { includeRelatedUniverses?: boolean; scalarOutcomeIndexes?: readonly bigint[] } = {},
 ): Promise<ZoltarUniverseSummary | undefined> {
-	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
+	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor, forkRecapitalizationDeadline] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'getRepToken',
@@ -273,6 +273,12 @@ export async function loadZoltarUniverseSummary(
 			functionName: 'forkBurnDivisor',
 			address: zoltarAddress,
 			args: [],
+		},
+		{
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'getForkRecapitalizationDeadline',
+			address: zoltarAddress,
+			args: [universeId],
 		},
 	])
 	if (repToken === zeroAddress) return undefined
@@ -365,6 +371,7 @@ export async function loadZoltarUniverseSummary(
 		earliestForkTime,
 		forkBurnDivisor,
 		forkQuestionDetails,
+		...(hasForked ? { forkRecapitalizationDeadline } : {}),
 		forkThresholdAttoRep,
 		forkTime,
 		forkingOutcomeIndex,

@@ -43,8 +43,8 @@ export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['shared/core/ts/evm/ethereum.test.ts', 3118],
 		['solidity/ts/tests/coverageHelpers.test.ts', 1717],
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
-		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1881],
+		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1877],
 		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2369],
-		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3008],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 1626],
 	]),
 ])

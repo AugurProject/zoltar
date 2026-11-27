@@ -86,11 +86,18 @@ describe('Statoblast: independent security pool share recovery rights', () => {
 		await expect(transfer(owner, bob.account.address, [1n, 11n, 0n])).rejects.toThrow('Insufficient recovery rights')
 		expect(await rights(owner)).toEqual([10n, 10n, 10n])
 		expect(await rights(bob)).toEqual([5n, 5n, 5n])
+		const lockAbi = parseAbi(['function isSourceBalanceLocked(uint256 id,address holder) view returns (bool)'])
+		const locked = (holder: typeof owner.account.address) => owner.readContract({ abi: lockAbi, address: token, functionName: 'isSourceBalanceLocked', args: [1n, holder] })
+		expect(await locked(owner.account.address)).toBe(false)
 		await transfer(owner, bob.account.address, [4n, 4n, 4n])
+		expect(await locked(owner.account.address)).toBe(true)
+		expect(await owner.readContract({ ...target, functionName: 'getMigratedShareAmountAttoShares', args: [1n, 1n, owner.account.address] })).toBe(0n)
+
 		await transfer(bob, carol.account.address, [2n, 2n, 2n])
 		await transfer(carol, owner.account.address, [1n, 1n, 1n])
 		await send(owner, { ...target, functionName: 'consumeSecurityPoolRecoveryCompleteSets', args: [0n, bob.account.address, 1n] })
 		// Receiving, forwarding and consuming only credits must not lock Bob's original shares.
+		expect(await locked(bob.account.address)).toBe(false)
 		await send(bob, { ...target, functionName: 'safeBatchTransferFrom', args: [bob.account.address, owner.account.address, [0n, 1n, 2n], [5n, 5n, 5n], '0x'] })
 		expect(await rights(owner)).toEqual([12n, 12n, 12n])
 		expect(await rights(bob)).toEqual([1n, 1n, 1n])

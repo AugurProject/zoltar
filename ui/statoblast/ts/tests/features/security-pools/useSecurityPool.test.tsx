@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -14,43 +14,36 @@ async function mount() {
 	lifecycle.trackRendered(hook)
 	return hook
 }
-/** Opens the bare security pools route with automatic discovery waiting on the returned log request. */
-function installPendingDiscovery() {
+test('the bare simulation route opens the seeded security pool without querying logs', async () => {
 	window.history.replaceState({}, '', '#/security-pools')
 	const source = capitalClient()
-	const logs = createDeferred<never[]>()
-	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
-	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', createReadClient: () => client })
-	return logs
-}
-test.each(['empty', 'failed'])('automatic security pool discovery exposes its pending state and a truthful %s result', async result => {
-	const logs = installPendingDiscovery()
+	let logRequests = 0
+	const client = source.client.extend(() => ({
+		getLogs: async () => {
+			logRequests++
+			return []
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', seededSecurityPool: { address: securityPool, questionIds: [] }, createReadClient: () => client })
 	const hook = await mount()
-	try {
-		expect(hook.state().discovering).toBe(true)
-		expect(hook.state().loading).toBe(false)
-		await act(() => (result === 'empty' ? logs.resolve([]) : logs.reject(new Error('Discovery unavailable.'))))
-		await waitFor(() => expect(hook.state().discovering).toBe(false))
-		expect(hook.state().managerInput).toBe('')
-		expect(hook.state().snapshot).toBeUndefined()
-		expect(hook.state().error).toBe(result === 'failed' ? 'Unable to discover the security pool. Reason: Discovery unavailable.' : undefined)
-	} finally {
-		logs.resolve([])
-	}
+	await waitFor(() => expect(hook.state().snapshot?.securityPool).toBe(securityPool))
+	expect(logRequests).toBe(0)
 })
-test('disabling the security pool clears discovery status and ignores a late discovery failure', async () => {
-	const logs = installPendingDiscovery()
+
+test('a completed page open is not repeated by the draft debounce', async () => {
+	const source = capitalClient()
+	source.install()
 	const hook = await mount()
-	try {
-		expect(hook.state().discovering).toBe(true)
-		await hook.setProps({ enabled: false })
-		expect(hook.state().discovering).toBe(false)
-		await act(() => logs.reject(new Error('Late discovery failure.')))
-		expect(hook.state().error).toBeUndefined()
-	} finally {
-		logs.resolve([])
-	}
+	const setupReads = () => source.reads.filter(read => read.name === 'setupStage').length
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	const readsOnOpen = setupReads()
+	expect(readsOnOpen).toBeGreaterThan(0)
+	await act(async () => await Bun.sleep(350))
+	expect(setupReads()).toBe(readsOnOpen)
+	await act(() => hook.state().refresh())
+	expect(setupReads()).toBeGreaterThan(readsOnOpen)
 })
+
 test('a wallet switch updates an automatic owner and preserves an explicit selection', async () => {
 	window.history.replaceState({}, '', '#/security-pools')
 	capitalClient().install()
@@ -75,7 +68,7 @@ test('permissionless question growth is paged independently of the owner’s sin
 	expect(source.reads.filter(read => read.name === 'getQuestions').every(read => read.args?.[1] === 64n)).toBe(true)
 	expect(source.reads.some(read => read.name === 'getLogs')).toBe(false)
 })
-test('a failed account read for another owner keeps the active security pool setup', async () => {
+test('a failed refresh keeps the last authenticated snapshot and setup for the selected owner', async () => {
 	const source = capitalClient()
 	let failBalance = false
 	const client = source.client.extend(() => ({
@@ -87,11 +80,12 @@ test('a failed account read for another owner keeps the active security pool set
 	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
 	const hook = await mount()
 	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	const previous = hook.state().snapshot
 	expect(hook.state().setup?.stage).toBe(4)
 	failBalance = true
 	await act(() => hook.state().load())
 	await waitFor(() => expect(hook.state().error).toContain('No fork url set'))
-	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().snapshot).toBe(previous)
 	expect(hook.state().setup?.stage).toBe(4)
 })
 const unchangedInputs = [
@@ -192,6 +186,88 @@ test('partial setup loads without touching undeployed capital and resumes on ref
 	expect(hook.state().snapshot?.capitalLedger).toBeDefined()
 })
 
+test('a hidden tab skips pool refresh and keeps the last setup state', async () => {
+	const source = capitalClient()
+	source.setSetupStage(1n)
+	source.install()
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().setup?.stage).toBe(1))
+	source.setSetupStage(2n)
+	Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+	try {
+		await act(() => hook.state().refresh())
+		expect(hook.state().setup?.stage).toBe(1)
+	} finally {
+		Reflect.deleteProperty(document, 'hidden')
+	}
+	await act(() => hook.state().refresh())
+	expect(hook.state().setup?.stage).toBe(2)
+})
+
+test('setup reads each have a timeout without imposing a deadline on the whole refresh', async () => {
+	const source = capitalClient()
+	source.setSetupStage(1n)
+	let slow = false
+	const client = source.client.extend(() => ({
+		getChainId: async () => {
+			if (slow) await Bun.sleep(120)
+			return 1
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().setup?.stage).toBe(1))
+	source.setSetupStage(2n)
+	slow = true
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 200 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		await act(() => hook.state().refresh())
+		expect(hook.state().error).toBeUndefined()
+		expect(hook.state().setup?.stage).toBe(2)
+	} finally {
+		timer.mockRestore()
+	}
+})
+
+test('reopening Deploy shows saved setup progress while the live read is pending', async () => {
+	const source = capitalClient()
+	source.setSetupStage(1n)
+	source.install()
+	const props = { accountAddress: owner, enabled: true, environmentKey: 0, activeUniverseId: 0n, resumeSetup: true }
+	const first = await renderHookWithProps(useSecurityPool, props)
+	lifecycle.trackRendered(first)
+	await waitFor(() => expect(first.state().setup?.stage).toBe(1))
+	await first.cleanup()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	const delayed = createDeferred<number>()
+	let retry = false
+	const client = source.client.extend(() => ({ getChainId: async () => (retry ? 1 : await delayed.promise) }))
+	source.setSetupStage(2n)
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const reopened = await renderHookWithProps(useSecurityPool, props)
+	lifecycle.trackRendered(reopened)
+	try {
+		await waitFor(() => expect(reopened.state().savedSetupStage).toBe(1))
+		expect(reopened.state().displayedAt).toBeDefined()
+		expect(reopened.state().setup).toBeUndefined()
+		expect(reopened.state().loading).toBe(true)
+		await act(() => delayed.reject(new Error('RPC unavailable')))
+		await waitFor(() => expect(reopened.state().error).toContain('RPC unavailable'))
+		expect(reopened.state().savedSetupStage).toBe(1)
+		expect(reopened.state().setup).toBeUndefined()
+		retry = true
+		await act(() => reopened.state().refresh())
+		await waitFor(() => expect(reopened.state().setup?.stage).toBe(2))
+	} finally {
+		delayed.resolve(1)
+	}
+})
+
 test('remembered security pools stay scoped to their genesis REP deployment', async () => {
 	const source = capitalClient()
 	source.install()
@@ -255,7 +331,7 @@ test('same-context authentication preserves presentation only and replaces it wi
 	expect(hook.state().presentationSnapshot?.positions).toEqual([])
 })
 
-test.each(['failure', 'incomplete setup'])('a resolved %s clears retained presentation', async result => {
+test.each(['failure', 'incomplete setup'])('retained presentation distinguishes a %s from verified account data', async result => {
 	const source = capitalClient()
 	let fail = false
 	const client = source.client.extend(() => ({
@@ -274,9 +350,13 @@ test.each(['failure', 'incomplete setup'])('a resolved %s clears retained presen
 	await hook.setProps({ enabled: true })
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	expect(hook.state().snapshot).toBeUndefined()
-	expect(hook.state().presentationSnapshot).toBeUndefined()
-	if (result === 'failure') expect(hook.state().error).toContain('Account read failed.')
-	else expect(hook.state().setup?.stage).toBe(1)
+	if (result === 'failure') {
+		expect(hook.state().error).toContain('Account read failed.')
+		expect(hook.state().presentationSnapshot).toBeDefined()
+	} else {
+		expect(hook.state().setup?.stage).toBe(1)
+		expect(hook.state().presentationSnapshot).toBeUndefined()
+	}
 })
 
 test.each(['securityPool', 'owner', 'universe', 'environment', 'backend replacement', 'backend reinstall', 'bootstrap reset'])('changing %s clears retained presentation immediately', async change => {
