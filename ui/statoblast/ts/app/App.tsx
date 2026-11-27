@@ -266,7 +266,6 @@ export function App() {
 								universeRepBalanceAttoRep={operations.zoltarForkRepBalanceAttoRep}
 								isLoadingUniverseRepBalance={operations.loadingZoltarForkAccess}
 								onGoToGenesisUniverse={() => setUniverse(0n)}
-								longWalletAbbreviation
 								showWethBalance
 								universeControl={
 									<div className='statoblast-header-controls'>

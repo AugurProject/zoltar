@@ -3225,16 +3225,22 @@ span.rep-price-status.stale,
 	background: var(--surface-section-opaque);
 }
 
-/* Phones: one bar of logo, universe, activity, and settings. The wallet details, price, freshness, and auto-refresh
+/* Phones and tablets: one bar of logo, universe, activity, and settings. The wallet details, price, freshness, and auto-refresh
  * move into the settings menu (.app-settings-account and .statoblast-menu-status). */
 .statoblast-menu-status {
 	display: none;
 }
 
-@media (max-width: 40rem) {
+@media (max-width: 64rem) {
 	:root[data-product="statoblast"] .header-toolbar {
+		display: grid;
 		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: center;
+		gap: var(--space-2);
+	}
+
+	:root[data-product="statoblast"] .header-toolbar-brand {
+		grid-area: 1 / 1;
 	}
 
 	:root[data-product="statoblast"] .header-toolbar .application-brand-name {
@@ -4429,12 +4435,14 @@ span.rep-price-status.stale,
 	justify-content: end;
 }
 
-:root[data-product="statoblast"] .wallet-chip .address-value-long-abbreviation {
-	inline-size: 42ch;
+/* The bar shows the short address so the whole top bar stays on one row; the copy button and the wallet menu carry the full address. */
+:root[data-product="statoblast"] .header-toolbar-controls .wallet-chip .address-value-fit-content {
+	inline-size: 11ch;
 }
 
-@media (max-width: 40rem) {
-	:root[data-product="statoblast"] .wallet-chip .address-value-long-abbreviation {
-		inline-size: 26ch;
+@media (width > 64rem) {
+	:root[data-product="statoblast"] .header-toolbar,
+	:root[data-product="statoblast"] .header-toolbar-controls {
+		flex-wrap: nowrap;
 	}
 }
