@@ -19,6 +19,8 @@ import shutil
 from tempfile import TemporaryDirectory
 from threading import Lock
 
+from call_types import preserve_numeric_call_types
+
 ROOT = Path(__file__).resolve().parents[2]
 ORACLE = 'contracts/statoblast/openOracle/'
 DUMP = """
@@ -217,6 +219,7 @@ def check(args, work):
                 check_constructor = (
                     root['contractKind'] == 'contract' and not root['abstract']
                 )
+                selected, _ = preserve_numeric_call_types(selected)
                 target = lower_assembly(selected)
                 with render_lock:
                     code = importer.render_module(

@@ -57,6 +57,8 @@ fi
 (
   cd "$sc"
   lake build +SolidCore.Solidity.Checked:olean
+  lake build +SolidCore.Witness.ConstScopeShadow:olean
+  SOLC="$solc35" SOLIDCORE_ROOT="$sc" python3 "$here/test_call_types.py"
   python3 prototypes/mul512/replay.py "$repo" --solc "$solc35" --anvil "$anvil"
   python3 prototypes/source/test_assembly.py "$solc35"
   python3 prototypes/source/muldiv.py "$repo" --solc "$solc35" --anvil "$anvil"

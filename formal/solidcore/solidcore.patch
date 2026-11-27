@@ -110,10 +110,76 @@ index 08ba31b0265f5a591db1e4ad848ac8ef089378a8..42d217f9d3be4963fef4c4e8a7859890
 
  inductive Behavior where
 diff --git a/SolidCore/Solidity/Interface/Contracts.lean b/SolidCore/Solidity/Interface/Contracts.lean
-index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9f6579864 100644
+index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..38ac4cc6fac55a0770f64e6cd367a10c24381581 100644
 --- a/SolidCore/Solidity/Interface/Contracts.lean
 +++ b/SolidCore/Solidity/Interface/Contracts.lean
-@@ -946,8 +946,10 @@ def ContractDecl.inheritedStateVars (contracts : List ContractDecl)
+@@ -799,6 +799,27 @@ def ModifierInvocations.dropBaseConstructorInvocations
+       else
+         invocation :: tail
+
++/-- Constants visible (unqualified) in `decl`'s OWN lexical scope: `decl`'s own
++    contract-level constants plus those inherited from its base contracts, in
++    C3 order (most-derived-first, so `decl`'s own constant shadows an inherited
++    same-name one). File-level constants are NOT included here; the caller
++    appends them as a lower-priority tail. This keeps a DERIVED contract's
++    constant out of a BASE contract's function body — solc resolves an inherited
++    base function's unqualified identifier in the base's scope, where only the
++    base's own/inherited constants and the file-level constant are visible, so a
++    same-name constant declared only in the derived contract must NOT capture it
++    (and, symmetrically, the base's constant must not leak into a sibling). -/
++def ContractDecl.scopedConstantEntries (contracts : List ContractDecl)
++    (decl : ContractDecl) : ConstantEnv :=
++  let order :=
++    match ContractDecl.dispatchOrder? contracts decl with
++    | some order => order
++    | none => [decl]
++  concatMapList
++    (fun c =>
++      (ContractDecl.directStateVars c).filterMap StateVarDecl.constantEntry?)
++    order
++
+ /-- Qualified-constant `ConstantEnv` entries for reads through a type name.
+     For every contract/library `decl`, every constant reachable through it (its
+     own + inherited, in C3 order) is registered under the joined key
+@@ -817,7 +838,8 @@ def ContractDecl.qualifiedConstantEntries (contracts : List ContractDecl)
+           match StateVarDecl.constantEntry? sv with
+           | some (_, ty, e) =>
+               some
+-                (qualifiedConstantKey (pathOfName decl.name) sv.name, ty, e)
++                (qualifiedConstantKey (pathOfName decl.name) sv.name, ty,
++                  Expr.inlineConstants (ContractDecl.scopedConstantEntries contracts c) e)
+           | none => none))
+     order
+
+@@ -825,27 +847,6 @@ def ContractDecls.qualifiedConstantEntries (contracts : List ContractDecl) :
+     ConstantEnv :=
+   concatMapList (ContractDecl.qualifiedConstantEntries contracts) contracts
+
+-/-- Constants visible (unqualified) in `decl`'s OWN lexical scope: `decl`'s own
+-    contract-level constants plus those inherited from its base contracts, in
+-    C3 order (most-derived-first, so `decl`'s own constant shadows an inherited
+-    same-name one). File-level constants are NOT included here; the caller
+-    appends them as a lower-priority tail. This keeps a DERIVED contract's
+-    constant out of a BASE contract's function body — solc resolves an inherited
+-    base function's unqualified identifier in the base's scope, where only the
+-    base's own/inherited constants and the file-level constant are visible, so a
+-    same-name constant declared only in the derived contract must NOT capture it
+-    (and, symmetrically, the base's constant must not leak into a sibling). -/
+-def ContractDecl.scopedConstantEntries (contracts : List ContractDecl)
+-    (decl : ContractDecl) : ConstantEnv :=
+-  let order :=
+-    match ContractDecl.dispatchOrder? contracts decl with
+-    | some order => order
+-    | none => [decl]
+-  concatMapList
+-    (fun c =>
+-      (ContractDecl.directStateVars c).filterMap StateVarDecl.constantEntry?)
+-    order
+-
+ /-- Names of NON-constant state variables visible (unqualified) in `decl`'s OWN
+     lexical scope: `decl`'s own storage / transient / immutable state variables
+     plus those inherited from its base contracts (C3). Such a variable shadows a
+@@ -946,8 +947,10 @@ def ContractDecl.inheritedStateVars (contracts : List ContractDecl)
      into the member-rewrite type environment (#197). -/
  def ContractDecl.resolveStructsInHierarchy (env : StructEnv)
      (contracts : List ContractDecl) (decl : ContractDecl) : ContractDecl :=
@@ -126,7 +192,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
 
  def FunctionDecl.names (functions : List FunctionDecl) : List Name :=
    functions.filterMap (fun function => function.name)
-@@ -2005,14 +2007,15 @@ def ContractDecl.constructorBodyForDeployment?
+@@ -2005,14 +2008,15 @@ def ContractDecl.constructorBodyForDeployment?
          some (params, initStmts, baseArgCore, [bodyCore])
    | _ => none
 
@@ -144,7 +210,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
      Option CoreContract := do
    let allContracts :=
      appendUniqueContracts allContracts
-@@ -2051,9 +2054,7 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
+@@ -2051,9 +2055,7 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
      dispatchOrder.map (ContractDecl.resolveEnums enumEnv)
    let structEnv :=
      let freeEnv := StructEnv.extendDecls [] sourceStructs
@@ -155,7 +221,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    let usingContracts := allContracts
    let usingFreeFunctions :=
      sourceFunctions ++
-@@ -2393,7 +2394,8 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
+@@ -2393,7 +2395,8 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
    -- a dispatch ID corrupts the read (caught by the frontend-frontier lane).
    let fnIdCandidates :=
      ((availableFunctions ++ sourceFunctions).filterMap FunctionDecl.name).filter
@@ -165,7 +231,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    -- Include modifier- and constructor-body value uses so a function used as a
    -- value ONLY inside a modifier or constructor still gets a dispatch ID and a
    -- table stamp (boundary-completion arc, ctor/modifier residue). The
-@@ -2444,13 +2446,11 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
+@@ -2444,13 +2447,11 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
    -- the splice-era treatment: bodies are already contextualized/super-free
    -- (`contextualSuperHelpers?`/`libraryHelperFunctions`), so no contract-name
    -- rewrites are re-run.
@@ -184,7 +250,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    let elabHelper := fun (fn : FunctionDecl) =>
      FunctionDecl.toCore?
        storageNames constants stateEnv allContracts sourceUsingDecls
-@@ -2470,7 +2470,7 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
+@@ -2470,7 +2471,7 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
            some (some { fd with name := key, selector? := none })
          else
            some none)
@@ -193,7 +259,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    -- Function-boundary refactor stage 2: value-boundary FREE functions also get
    -- selector-less table entries (they are resolved via the freeFunctions branch
    -- of `internalCallParts?` and node-emitted under the same `internalTableKey?`).
-@@ -2498,7 +2498,7 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
+@@ -2498,7 +2499,7 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
    let eagerEntries :=
      concatLists functionGroups ++ libraryInternalEntries ++ freeInternalEntries
    let helperCandidates :=
@@ -202,7 +268,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
        (fun fn => FunctionDecl.isBoundaryCallee fn && fn.body.isSome)
    let bodySeedKeys :=
      concatMapList
-@@ -2514,12 +2514,23 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
+@@ -2514,12 +2515,23 @@ def ContractDecl.toCoreFromOrders? (allContracts : List ContractDecl)
        let fnDecl ←
          availableFunctions.find? (fun fn => fn.name == some pair.fst)
        FunctionDecl.internalTableKey? fnDecl
@@ -229,7 +295,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    -- Stage C: stamp dispatch IDs onto the selector-less table entries of the
    -- numbered (used-as-value) functions; `Contract.table` projects them onto
    -- `InternalFunction.id?` for run-time pointer dispatch.
-@@ -2690,9 +2701,7 @@ def ContractDecl.constructorFunctionFromOrders?
+@@ -2690,9 +2702,7 @@ def ContractDecl.constructorFunctionFromOrders?
      sourceStructs.map (StructDecl.resolveEnums enumEnv)
    let structEnv :=
      let freeEnv := StructEnv.extendDecls [] sourceStructs
@@ -240,7 +306,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    let usingContracts := allContracts
    let usingFreeFunctions :=
      sourceFunctions ++
-@@ -3019,7 +3028,8 @@ def ContractDecl.constructorFunctionFromOrders?
+@@ -3019,7 +3029,8 @@ def ContractDecl.constructorFunctionFromOrders?
    -- (boundary-completion arc, ctor/modifier residue).
    let fnIdCandidates :=
      ((availableFunctions ++ sourceFunctions).filterMap FunctionDecl.name).filter
@@ -250,7 +316,7 @@ index 28ec8c1c05bc49a30b004ed1c0e931717c884e1d..aae701e611e7484a8927e45640f740d9
    let constructorDecls : List FunctionDecl :=
      concatMapList
        (fun contract =>
-@@ -3119,6 +3129,26 @@ def ContractDecl.constructorFunctionFromOrders?
+@@ -3119,6 +3130,26 @@ def ContractDecl.constructorFunctionFromOrders?
          SolidCore.Solidity.Source.Stmt.normalizeStorageValueUses
            (SolidCore.Solidity.Source.Stmt.block stmts) }
 
@@ -12135,3 +12201,48 @@ index 5de6c1eb3190fd1c7988ab07165f6f25581f1889..098a1f17928c68ee5bfd67adb50924e6
      lines.append("")
      lines.append("def importedContractAccepted : Bool :=")
      lines.append("  TypeCheck.Result.isOk (TypeCheck.TypecheckedInput.checkedSourceUnit importedSourceUnit)")
+diff --git a/SolidCore/Witness/ConstScopeShadow.lean b/SolidCore/Witness/ConstScopeShadow.lean
+index a0a8d2eae5492483795396f76898a933ccf47b5a..5efac47929b44af7be941f43e44a6d7cb331139d 100644
+--- a/SolidCore/Witness/ConstScopeShadow.lean
++++ b/SolidCore/Witness/ConstScopeShadow.lean
+@@ -146,3 +146,40 @@ end ConstScopeShadow
+ end Witness
+ end Solidity
+ end SolidCore
++
++/-! A qualified library constant must close over its declaring library, even
++when the consumer declares the same dependency name. Solidity returns 7, not
++999. Keep both the unshadowed control and the hostile consumer observable. -/
++namespace SolidCore.Solidity.Witness.LibraryConstantCapture
++open SolidCore.Solidity
++open SolidCore.Solidity.Source
++
++def constant (name : String) (value : Expr) : ContractItem :=
++  .stateVar { name, ty := .uint 256, mutability := .constant, init := some value }
++
++def libraryDecl : ContractDecl :=
++  { kind := .library, name := "LibraryConstants", items := [
++      constant "DEPENDENCY" (.literal (.number "7")),
++      constant "WINDOW" (.ident "DEPENDENCY")] }
++
++def consumer (name : String) (shadow : Bool) : ContractDecl :=
++  { name, items := (if shadow then [constant "DEPENDENCY" (.literal (.number "999"))] else []) ++ [
++      .function {
++        name := some "run", visibility := some .external_,
++        mutability := StateMutability.pure, returns := [{ ty := .uint 256 }],
++        body := some (.block [.returnValues (some
++          (.member (.typeName (.user { segments := ["LibraryConstants"] })) "WINDOW"))]) }] }
++
++def sourceUnit : SourceUnit :=
++  { items := [.contract libraryDecl, .contract (consumer "Control" false),
++      .contract (consumer "Shadow" true)] }
++
++private def isOkTrue : Except TypeCheck.TypeError Bool → Bool
++  | .ok true => true
++  | _ => false
++
++#guard TypeCheck.Result.isOk (TypeCheck.TypecheckedInput.checkedSourceUnit sourceUnit)
++#guard isOkTrue (SolidCore.Solidity.TypeCheck.Examples.checkedCallWordMatches 4000 sourceUnit "Control" "run" State.empty [] 7)
++#guard isOkTrue (SolidCore.Solidity.TypeCheck.Examples.checkedCallWordMatches 4000 sourceUnit "Shadow" "run" State.empty [] 7)
++#guard isOkTrue ((SolidCore.Solidity.TypeCheck.Examples.checkedCallWordMatches 4000 sourceUnit "Shadow" "run" State.empty [] 999).map not)
++end SolidCore.Solidity.Witness.LibraryConstantCapture
