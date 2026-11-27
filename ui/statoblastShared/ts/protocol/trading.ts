@@ -18,7 +18,7 @@ import type { ShareMigrationTarget, TradingActionResult, TradingDetails, Trading
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readOptionalMulticall, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readQuestionLedgerUniverseId } from './questionLedgerActions.js'
-import { formatAmount, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatScaledPercentage, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmount, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
 import * as collateralCopy from '../copy/collateral.js'
 import { estimatedPurchaseFee, insufficientMintCapacity, invalidMintLimits, maximumMintAmountUnavailable, mintFeeChanged, mintSharesChanged, mintingAfterReportingStarts, mintReview, questionNotLinkedToSecurityPool, questionPoolVerificationFailed } from '../copy/securityPool.js'
@@ -28,8 +28,6 @@ import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/co
 import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { changedSinceReview } from '../copy/app.js'
 import { checksTransactionReview } from './reviewedClient.js'
-
-const redemptionRepToleranceBps = 50n
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type QuestionLedgerMintCapacity = {
@@ -292,11 +290,11 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 	const [initialBalance, collateral] = await Promise.all([readBalance(initialBlock.number), loadTradingCollateralIdentity(client, questionLedgerAddress, initialBlock.number)])
 	let reviewedBalance = initialBalance
 	let reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber, collateral)
-	let callParams = {
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemShares',
-		args: [reviewedQuote.minimumRep],
+		args: [],
 	} as const
 	let reviewRows: ReturnType<typeof redemptionRows> = []
 	client.onTransactionPlan?.([
@@ -315,7 +313,6 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 			refreshReviewData: async () => {
 				reviewedBalance = await readBalance((await client.getBlock()).number)
 				reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber, collateral)
-				callParams = { ...callParams, args: [reviewedQuote.minimumRep] }
 				return encodeFunctionData(callParams)
 			},
 			validateBeforeSubmit: async () => {
@@ -323,8 +320,7 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 				if (winner !== reviewedBalance.winner || amount !== reviewedBalance.amount) throw new Error(changedSinceReview)
 				if (amount === 0n) throw new Error(tradingCopy.redemptionInsufficientShares)
 				const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber, collateral)
-				requireRecoveryRepMinimum(quote, reviewedQuote)
-				reviewRows = redemptionRows(quote, reviewedQuote.minimumRep, amount, balances, [winner])
+				reviewRows = redemptionRows(quote, amount, balances, [winner])
 			},
 		},
 	])
@@ -512,7 +508,7 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemCompleteSet',
-		args: [amount, reviewedQuote.minimumRep],
+		args: [amount],
 	} as const
 	let reviewRows: ReturnType<typeof redemptionRows> = []
 	client.onTransactionPlan?.([
@@ -533,8 +529,7 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 					return balances
 				}
 				const [balances, quote] = await Promise.all([readBalances(), readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber, collateral)])
-				requireRecoveryRepMinimum(quote, reviewedQuote)
-				reviewRows = redemptionRows(quote, reviewedQuote.minimumRep, amount, balances, ['yes', 'no', 'invalid'])
+				reviewRows = redemptionRows(quote, amount, balances, ['yes', 'no', 'invalid'])
 			},
 		},
 	])
@@ -551,29 +546,21 @@ async function readRedemptionQuote(client: Pick<ReadClient, 'multicall'>, pool: 
 	const { cash, rep: recovery } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
 	const collateralAmount = formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)
 	const repAmount = formatCurrencyBalanceWithUnit(recovery, commonCopy.rep)
-	const minimumRep = (requireBigintValue(recovery, 'recovery REP quote') * (10_000n - redemptionRepToleranceBps)) / 10_000n
 	return {
 		collateralAmount,
 		repAmount,
-		recovery,
-		minimumRep,
 		decimals: collateral.decimals,
 		description: tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount),
 	}
 }
 
-function requireRecoveryRepMinimum(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, reviewed: Awaited<ReturnType<typeof readRedemptionQuote>>) {
-	if (quote.recovery < reviewed.minimumRep) throw new Error('Recovery REP payout changed. Review the amount again.')
-}
-
-function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, minimumRep: bigint, amount: bigint, balances: readonly [bigint, bigint, bigint], outcomes: readonly ReportingOutcomeKey[]) {
+function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, amount: bigint, balances: readonly [bigint, bigint, bigint], outcomes: readonly ReportingOutcomeKey[]) {
 	return [
 		...outcomes.map(outcome => {
 			const balance = balances[getReportingOutcomeValue(outcome)]
 			return { label: tradingCopy.formatOutcomeShares(getShareOutcomeLabel(outcome)), value: `${formatCurrencyBalance(balance, quote.decimals)} → ${formatCurrencyBalance(balance - amount, quote.decimals)}` }
 		}),
 		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount, allowValueChange: true },
-		...(quote.recovery === 0n ? [] : [{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount }]),
-		{ label: tradingCopy.minimumRecoveryRep(formatScaledPercentage(redemptionRepToleranceBps, 2)), value: formatCurrencyBalanceWithUnit(minimumRep, commonCopy.rep) },
+		{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount, allowValueChange: true },
 	]
 }

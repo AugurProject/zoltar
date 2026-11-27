@@ -342,7 +342,7 @@ export function createE2E(fixture: Fixture) {
 	const redeemShares = async (sender: WriteClient, pool: Address) => {
 		const universe = await owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'universeId' })
 		const before = { cash: await cash(sender.account.address), rep: await rep(universe, sender.account.address) }
-		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemShares', args: [0n], gas: BRANCH_GAS }))
+		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemShares', args: [], gas: BRANCH_GAS }))
 		return { cash: (await cash(sender.account.address)) - before.cash, rep: (await rep(universe, sender.account.address)) - before.rep }
 	}
 

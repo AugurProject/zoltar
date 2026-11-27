@@ -49,7 +49,7 @@ test('complete-set redemption budgets for a fee checkpoint when both estimates u
 	const context = await environment(first.url, second.url)
 	const anchor = { number: 100n, attestingRpcUrls: new Set([first.url, second.url]) }
 	const step = { id: 'redeemCompleteSet', label: 'Redemption', to: zeroAddress, gasLimit: '12000000', evidence: [], preflightCalls: [], walletAssetDebits: [] }
-	const data = encodeFunctionData({ abi: questionLedgerAbi, functionName: 'redeemCompleteSet', args: [1n, 0n] })
+	const data = encodeFunctionData({ abi: questionLedgerAbi, functionName: 'redeemCompleteSet', args: [1n] })
 	const estimate = await rediscoverableSimulationAndGas(context, { ...step, data }, anchor)
 	expect(paddedTransactionGas(estimate)).toBeGreaterThanOrEqual(1_478_942n)
 	expect(await rediscoverableSimulationAndGas(context, { ...step, data: '0x' }, anchor)).toBe(sameTimestampEstimate)

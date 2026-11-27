@@ -1112,7 +1112,7 @@ describe('event-only replay', () => {
 			const pool = securityPoolFixture.poolFor(question)
 			for (const amount of [3n * unit, 5n * unit, 2n * unit]) {
 				await securityPoolFixture.mint(amount, question)
-				await writeContractAndWait(holder, () => holder.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [amount / 2n, 0n] }))
+				await writeContractAndWait(holder, () => holder.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [amount / 2n] }))
 			}
 			await mockWindow.advanceTime(10n)
 			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'updateSettlementCollateral' }))

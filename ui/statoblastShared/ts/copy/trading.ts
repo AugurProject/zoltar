@@ -4,7 +4,6 @@ export const mintCompleteSets = 'Mint complete sets'
 export const redeemCompleteSets = 'Redeem complete sets'
 export const estimatedRedemptionCollateral = 'Estimated collateral received'
 export const estimatedRedemptionRep = 'Estimated REP received'
-export const minimumRecoveryRep = (tolerance: string) => `Minimum recovery REP (${tolerance} tolerance)`
 export const redemptionNeedsBlock = 'Couldn’t check the redemption at a confirmed block. Try again.'
 export const redemptionInsufficientShares = 'Your balance is too low for this redemption. Review the available shares and try again.'
 export const redemptionEstimate = (shares: string, collateral: string, rep: string) => `Redeem ${shares} for approximately ${collateral} and ${rep} in this universe.`

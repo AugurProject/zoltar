@@ -71,7 +71,7 @@ export async function simulateSettlement(
 		return { blockNumber, blockHash, operation, market: simulation.feeMarket, amount, deadline, slippageBps, expectedAttoEth: simulation.result, expectedAttoRep: simulation.expectedAttoRep, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
 	}
 	if (operation === 'redeem-winning-shares') {
-		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: questionLedgerAbi, address: market.pool, functionName: 'redeemShares', account, args: [0n], blockNumber: block.blockNumber }))
+		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: questionLedgerAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockNumber: block.blockNumber }))
 		return { blockNumber, blockHash, operation, market }
 	}
 	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a share and at least one child universe')

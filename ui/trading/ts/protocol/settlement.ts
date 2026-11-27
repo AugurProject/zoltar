@@ -97,7 +97,7 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 			return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] })
 		})
 	}
-	if (quote.operation === 'redeem-winning-shares') return await guardedWrite(async () => await client.writeContract({ abi: questionLedgerAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [0n] }))
+	if (quote.operation === 'redeem-winning-shares') return await guardedWrite(async () => await client.writeContract({ abi: questionLedgerAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
 	if (refreshed.operation !== 'migrate-shares') throw new Error('Settlement operation changed during revalidation')
 	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(refreshed.sourceOutcome)
 	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, refreshed.targetOutcomeIndexes] }))

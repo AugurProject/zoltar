@@ -121,7 +121,7 @@ describe("audit: a carried game's resumed curve keeps game, settlement book and 
 		await expect(honest.simulateContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 500n * unit] })).rejects.toThrow('Invalid deposit preview')
 		const shares = { abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken }
 		await writeContractAndWait(honest, () => honest.writeContract({ ...shares, functionName: 'migrate', args: [fixture.base.genesisUniverse * 256n + 1n, [1n]] }))
-		await writeContractAndWait(honest, () => honest.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'redeemShares', args: [0n] }))
+		await writeContractAndWait(honest, () => honest.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'redeemShares', args: [] }))
 		const final = await schedules(child.game, child.universe)
 		expect(final.frozen).not.toBe(0n)
 		await writeContractAndWait(honest, () => honest.writeContract({ abi: reporterArtifact.abi, address: reporterLedger, functionName: 'checkpoint', args: [child.universe] }))

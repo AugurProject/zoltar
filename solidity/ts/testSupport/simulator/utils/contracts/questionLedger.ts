@@ -62,7 +62,7 @@ export const redeemCompleteSet = async (client: WriteClient, questionLedgerAddre
 			abi: statoblast_QuestionLedger_QuestionLedger.abi,
 			functionName: 'redeemCompleteSet',
 			address: questionLedgerAddress,
-			args: [amountAttoShares, 0n],
+			args: [amountAttoShares],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
@@ -127,7 +127,7 @@ export const redeemShares = async (client: WriteClient, questionLedgerAddress: A
 			abi: statoblast_QuestionLedger_QuestionLedger.abi,
 			functionName: 'redeemShares',
 			address: questionLedgerAddress,
-			args: [0n],
+			args: [],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)

@@ -189,7 +189,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		const token = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		const before = await getERC20Balance(client, token, client.account.address)
 		await fixture.base.mockWindow.anvilRevert(saved)
-		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [shares, 0n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [shares] }))
 		expect((await getERC20Balance(client, token, client.account.address)) - before).toBe(quote.cash)
 	})
 
