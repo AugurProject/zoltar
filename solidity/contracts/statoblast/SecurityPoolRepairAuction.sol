@@ -114,8 +114,6 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 			required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
 		}
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
-		if (minimumCollateralAttoRepPerLot > inventoryAttoRep)
-			(targetLots, lotAttoEth, minimumCollateralAttoRepPerLot) = _inventoryBackedLots();
 		require(minimumCollateralAttoRepPerLot != 0 && minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
 		require(_fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote does not cover final lots');
 		engine.startRepairAuction(block.timestamp, closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid, address(this));
@@ -240,26 +238,6 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	function _gcd(uint256 a, uint256 b) private pure returns (uint256) {
 		while (b != 0) (a, b) = (b, a % b);
 		return a;
-	}
-	/// @dev Search affordable REP-grid bands, returning the first size that meets
-	/// the rounding policy. Only the successful result is stored by open().
-	function _inventoryBackedLots() private view returns (uint256 lots, uint256 lot, uint256 minimumRep) {
-		uint256 repBudget = (inventoryAttoRep / repGrid) * repGrid;
-		uint256 minimumLot = securityPool.minimumCommitmentAttoEth();
-		while (repBudget != 0) {
-			// Undo the security multiplier, then convert REP into collateral.
-			uint256 baseRepBudget = (repBudget * 10_000) / capital.securityMultiplierBps();
-			uint256 maximumLot = Math.mulDiv(baseRepBudget, 1e18, openingConservativePrice);
-			if (maximumLot < minimumLot) break;
-			(lots, lot) = _coveringLots(shortfallAttoEth, Math.ceilDiv(shortfallAttoEth, maximumLot), minimumLot);
-			uint256 required = capital.commitmentIndex().requiredRep(lot, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
-			minimumRep = Math.ceilDiv(required, repGrid) * repGrid;
-			if (lots == 1 || (minimumRep - required) * 100 < required) return (lots, lot, minimumRep);
-			// Smaller requirements in this band only worsen rounding. A failed
-			// requirement is below 100 grids, so fewer than 100 bands remain.
-			repBudget = (required / repGrid) * repGrid;
-		}
-		revert('Collateral repair auction inventory cannot back one lot');
 	}
 	/// @dev Equal lots of at least the minimum commitment that together cover the
 	/// whole deficit: at most `requestedLots` lots of ceil(deficit / requestedLots),
