@@ -5,6 +5,7 @@ import {
 	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
+	ReputationToken_ReputationToken as tokenArtifact,
 	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 } from '../../types/contractArtifact'
 import { burnedCollateralBalance, collateralBalance } from './burnEvidence'
@@ -46,6 +47,7 @@ describe('Statoblast: repair auction lots under a holding fee', () => {
 		const forksRepBefore = await context.balance(context.forks)
 		const settlement = await read({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
 		const settlementRepBefore = await context.balance(settlement)
+		const supplyBefore = await read({ abi: tokenArtifact.abi, address: context.token, functionName: 'totalSupply' })
 		expect(await context.balance(context.auction)).toBe(inventory)
 		const book = await read({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
 		const parentBookId = await read({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.source] })
@@ -71,12 +73,12 @@ describe('Statoblast: repair auction lots under a holding fee', () => {
 		expect(await collateralBalance(context.owner, fixture.securityPool, context.auction)).toBe(0n)
 		expect(await collateralBalance(context.owner, fixture.securityPool, context.engine)).toBe(0n)
 
-		// REP: sold inventory enters capital custody and the unsold rest joins the child's recovery REP.
+		// REP: sold inventory enters capital custody and the full repair burns the unsold rest.
 		expect(await context.balance(context.auction)).toBe(0n)
 		expect((await context.balance(context.capital)) - capitalRepBefore).toBe(soldAttoRep)
-		const forksRepDelta = (await context.balance(context.forks)) - forksRepBefore
-		const settlementRepDelta = (await context.balance(settlement)) - settlementRepBefore
-		expect(forksRepDelta + settlementRepDelta + soldAttoRep).toBe(inventory)
+		expect(await context.balance(context.forks)).toBe(forksRepBefore)
+		expect(await context.balance(settlement)).toBe(settlementRepBefore)
+		expect(await read({ abi: tokenArtifact.abi, address: context.token, functionName: 'totalSupply' })).toBe(supplyBefore - (inventory - soldAttoRep))
 		expect((await read({ abi: capitalArtifact.abi, address: context.capital, functionName: 'totals' }))[1]).toBeGreaterThanOrEqual(targetCash)
 	})
 })

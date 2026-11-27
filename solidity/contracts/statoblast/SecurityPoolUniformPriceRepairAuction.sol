@@ -8,7 +8,8 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice A branch auction of exact collateral lots. Lower REP-per-lot limits bid a
 /// higher price; every winning lot pledges exactly the same clearing REP.
-/// Only filled lots sell REP; unsold inventory, including grid residue, returns as recovery REP.
+/// Only filled lots sell REP; unsold inventory, including grid residue, returns to the fork
+/// coordinator, which burns it after a full repair and otherwise keeps it as recovery REP.
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
 contract SecurityPoolUniformPriceRepairAuction {
