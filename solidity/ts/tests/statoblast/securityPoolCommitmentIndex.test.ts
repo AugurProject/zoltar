@@ -973,6 +973,19 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 			}
 		}
 	})
+	test('INV-01 inverse price overflows above the last representable boundary', async () => {
+		const maxWord = (1n << 256n) - 1n
+		const scale = 10n ** 18n
+		const lastQuotient = maxWord / scale
+		for (const factor of [1n, 2n]) {
+			const multiplier = factor * 10000n
+			const backing = factor * (lastQuotient + 1n)
+			const maximumPrice = (rep: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'maximumHealthyPrice', args: [rep, 1n, multiplier] })
+			expect(await client.readContract({ abi: artifact.abi, address, functionName: 'requiredRep', args: [1n, maxWord, multiplier, 10000n] })).toBe(backing)
+			expect(await maximumPrice(backing - 1n)).toBe(lastQuotient * scale)
+			await expect(maximumPrice(backing)).rejects.toThrow(/overflow|0x11/i)
+		}
+	})
 	test('an unrepresentable healthy-price boundary reverts while the forward quote succeeds', async () => {
 		const wordMax = (1n << 256n) - 1n
 		const scale = 10n ** 18n

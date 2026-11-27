@@ -33,4 +33,8 @@ contract TwoWayConstantProductMathHarness {
 	function panic(uint256 code) external pure {
 		Panic.panic(code);
 	}
+
+	function conditionalYesBps(uint256 yesReserve, uint256 noReserve) external pure returns (uint256) {
+		return TwoWayConstantProductMath.conditionalYesBps(yesReserve, noReserve);
+	}
 }

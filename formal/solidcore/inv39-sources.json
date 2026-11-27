@@ -1,0 +1,3503 @@
+{
+	"entries": ["Inv39Proved"],
+	"modules": [
+		{
+			"module": "Inv32Generated",
+			"path": null,
+			"model_relative_path": "contracts/trading/test/TwoWayConstantProductMathHarness.sol/TwoWayConstantProductMathHarness.lean",
+			"sha256": "0a1477df4ed513ea75dd46168e43b988174cedfb2ed8a09649e2a483cef0734f",
+			"imports": []
+		},
+		{
+			"module": "Inv39Generated",
+			"path": null,
+			"model_relative_path": "contracts/ReputationToken.sol/ReputationToken.lean",
+			"sha256": "3c28369f6b9044e82bd036de8dcb273391d78e1203581d00d03e450b1047a35c",
+			"imports": []
+		},
+		{
+			"module": "Inv39History",
+			"path": "formal/solidcore/inv39/Inv39History.lean",
+			"model_relative_path": null,
+			"sha256": "0a4bb421b642a4aa92a210f5a12dd783db7f33a702e6895d2daa67eabc900b9d",
+			"imports": []
+		},
+		{
+			"module": "Inv40Thresholds",
+			"path": "formal/solidcore/inv40/Inv40Thresholds.lean",
+			"model_relative_path": null,
+			"sha256": "f54952b7f94bacb69573b300aba1d332bc63976ad48d695f9399ff0cfa8d9622",
+			"imports": []
+		},
+		{
+			"module": "Inv27Generated",
+			"path": null,
+			"model_relative_path": "contracts/test/statoblast/InvariantMathHarness.sol/InvariantMathHarness.lean",
+			"sha256": "32ea02e75462d9c70f384baf12963f3baa6730d83c5b8b0d42c739513ca7fbe7",
+			"imports": []
+		},
+		{
+			"module": "Inv39PrecompileEcho",
+			"path": "formal/solidcore/inv39/Inv39PrecompileEcho.lean",
+			"model_relative_path": null,
+			"sha256": "9516be5069f56ed1f81096bffc6b7d8c7834eb62e6a1927309ad81425ed4cf35",
+			"imports": []
+		},
+		{
+			"module": "Inv45Generated",
+			"path": null,
+			"model_relative_path": "contracts/ZoltarQuestionData.sol/ZoltarQuestionData.lean",
+			"sha256": "99b4ce39c01496f77b0ad2162658dd8139191992e6a5675b3011d2bee35de999",
+			"imports": []
+		},
+		{
+			"module": "Inv08Generated",
+			"path": null,
+			"model_relative_path": "contracts/statoblast/SecurityPoolCapitalFeeStreams.sol/SecurityPoolCapitalFeeStreams.lean",
+			"sha256": "6a32e965f8cce227f0740274eec3ffc31f6b7d66cac781f555c9bf73719e8cf6",
+			"imports": []
+		},
+		{
+			"module": "Inv08Schedule",
+			"path": "formal/solidcore/inv08/Inv08Schedule.lean",
+			"model_relative_path": null,
+			"sha256": "e611aa6f60e95c4975021f4ccc56fedec2a46d397e12afb6b934454e77c9fc16",
+			"imports": []
+		},
+		{
+			"module": "Inv32Loop",
+			"path": "formal/solidcore/inv32/Inv32Loop.lean",
+			"model_relative_path": null,
+			"sha256": "4d328218e2f11bcdceb284e03ca90495fecc6d21777c4f23cde72744887c71e1",
+			"imports": []
+		},
+		{
+			"module": "Inv45FuelMonotonicity",
+			"path": "formal/solidcore/inv39/Inv45FuelMonotonicity.lean",
+			"model_relative_path": null,
+			"sha256": "795b42de228af8c1808bf592d243edb69bc70dc01560dcbd0161de6cf6de0e8f",
+			"imports": []
+		},
+		{
+			"module": "Inv32Source",
+			"path": "formal/solidcore/inv32/Inv32Source.lean",
+			"model_relative_path": null,
+			"sha256": "20438a8571c4ad1dcc81a9d0808b07d195158246ac5c5d1f9f7f18db06985c28",
+			"imports": ["Inv32Generated"]
+		},
+		{
+			"module": "Inv39Model",
+			"path": "formal/solidcore/inv39/Inv39Model.lean",
+			"model_relative_path": null,
+			"sha256": "4cdc7e7ad6d4a432246295fcc6bf7b01390cadb51abe07789b2787e330372ace",
+			"imports": ["Inv39Generated"]
+		},
+		{
+			"module": "Inv39Balances",
+			"path": "formal/solidcore/inv39/Inv39Balances.lean",
+			"model_relative_path": null,
+			"sha256": "d778c5044ff6289447d380f037ec8cc1172acdc7ae42a4422feb4f20117c5f00",
+			"imports": ["Inv39History"]
+		},
+		{
+			"module": "Inv45Model",
+			"path": "formal/solidcore/inv45/Inv45Model.lean",
+			"model_relative_path": null,
+			"sha256": "d578437ee72950f13aec6f407ba103d6b2e4b15ee9649ed097704934308610e0",
+			"imports": ["Inv45Generated"]
+		},
+		{
+			"module": "Inv08Model",
+			"path": "formal/solidcore/inv08/Inv08Model.lean",
+			"model_relative_path": null,
+			"sha256": "8895e34be459d12aba8650e77d4df08e36f32c1248a7ed16952e16dd6b4228fd",
+			"imports": ["Inv08Generated"]
+		},
+		{
+			"module": "Inv08Expired",
+			"path": "formal/solidcore/inv08/Inv08Expired.lean",
+			"model_relative_path": null,
+			"sha256": "70b275989561cad4136b42f3c0a6f6d83947c5f93abb8acac8f016464f6e6151",
+			"imports": ["Inv08Schedule"]
+		},
+		{
+			"module": "Inv08Prefix",
+			"path": "formal/solidcore/inv08/Inv08Prefix.lean",
+			"model_relative_path": null,
+			"sha256": "2bdf61ed97fae2ad7e538a93168b428349b3fd1984300c8ece3f850f7b723b59",
+			"imports": ["Inv08Schedule"]
+		},
+		{
+			"module": "Inv32ExecutionBridge",
+			"path": "formal/solidcore/inv32/Inv32ExecutionBridge.lean",
+			"model_relative_path": null,
+			"sha256": "91490f0ab3294ab19372d53400ce9e202e0bb72c223907951d7cdf3214e5856d",
+			"imports": ["Inv32Source"]
+		},
+		{
+			"module": "Inv32Dispatch",
+			"path": "formal/solidcore/inv32/Inv32Dispatch.lean",
+			"model_relative_path": null,
+			"sha256": "a8749492a37a3da7a00a331e4543c1144086de5415d5bc198867b0196a1c5009",
+			"imports": ["Inv32Source"]
+		},
+		{
+			"module": "Inv39EventLayout",
+			"path": "formal/solidcore/inv39/Inv39EventLayout.lean",
+			"model_relative_path": null,
+			"sha256": "c71189ad0ec51828f44031967c50ef5b1c8f40df332e0b62c6aa294ccf255500",
+			"imports": ["Inv39Model"]
+		},
+		{
+			"module": "Inv39RawAuthShape",
+			"path": "formal/solidcore/inv39/Inv39RawAuthShape.lean",
+			"model_relative_path": null,
+			"sha256": "0e53d95e9c9c469c5da35c80baa1ab62bded70aa93252d7a47d496adca784142",
+			"imports": ["Inv39Model"]
+		},
+		{
+			"module": "Inv39Coverage",
+			"path": "formal/solidcore/inv39/Inv39Coverage.lean",
+			"model_relative_path": null,
+			"sha256": "d53b30f6a43100f47b803182f13c525c04ff1cb9cc41ef40680a282b17752c03",
+			"imports": ["Inv39Model"]
+		},
+		{
+			"module": "Inv32Division",
+			"path": "formal/solidcore/inv32/Inv32Division.lean",
+			"model_relative_path": null,
+			"sha256": "b376c8115705292c89b74babf4c92d06ba9e28a7421020f18ad49a28d7e4808d",
+			"imports": ["Inv32ExecutionBridge"]
+		},
+		{
+			"module": "Inv32Shapes",
+			"path": "formal/solidcore/inv32/Inv32Shapes.lean",
+			"model_relative_path": null,
+			"sha256": "754e665f96dc0018ab71602a6523c2eccea3ee51acecdc1336856c74361d3804",
+			"imports": ["Inv32Dispatch"]
+		},
+		{
+			"module": "Inv32CoreBodies",
+			"path": "formal/solidcore/inv32/Inv32CoreBodies.lean",
+			"model_relative_path": null,
+			"sha256": "c0f1b3b562187c395f32547083e922b2d612d4520e7cc2a99c2b2b8a24a146a2",
+			"imports": ["Inv32Dispatch"]
+		},
+		{
+			"module": "Inv32Rounding",
+			"path": "formal/solidcore/inv32/Inv32Rounding.lean",
+			"model_relative_path": null,
+			"sha256": "6a060a1d8ac71acda9bf0a79c109af25f1daa06387d1c7a7f53843c6a7c30720",
+			"imports": ["Inv32Division"]
+		},
+		{
+			"module": "Inv45Arithmetic",
+			"path": "formal/solidcore/inv45/Inv45Arithmetic.lean",
+			"model_relative_path": null,
+			"sha256": "eece250db23ba63db04475aa2a1249561aa9b22788557d1d33cd83a4e1e05864",
+			"imports": ["Inv32Division"]
+		},
+		{
+			"module": "Inv32ExactMul512",
+			"path": "formal/solidcore/inv32/Inv32ExactMul512.lean",
+			"model_relative_path": null,
+			"sha256": "3b4c6130a8127d186a19b442b073f978828cccae4c47b9da78dbe9aa9ec3e0f4",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactFloor",
+			"path": "formal/solidcore/inv32/Inv32ExactFloor.lean",
+			"model_relative_path": null,
+			"sha256": "2f7d0c2fc19898678864bb67ad83ca1003aab4c501082d7a8ad410818691eaba",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactCeil",
+			"path": "formal/solidcore/inv32/Inv32ExactCeil.lean",
+			"model_relative_path": null,
+			"sha256": "a8182fab8f7e959564cda547f38ba817f555bbc61e64a72ad48f88a9610a7f1b",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactComparison",
+			"path": "formal/solidcore/inv32/Inv32ExactComparison.lean",
+			"model_relative_path": null,
+			"sha256": "a332ffaea34a60d7a33ebe02fd799f2dd0de4386688ae5f34d49f8ee72e5356b",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactForward",
+			"path": "formal/solidcore/inv32/Inv32ExactForward.lean",
+			"model_relative_path": null,
+			"sha256": "920708f1a1740c5333d2ab2db653eacd83848b9aa0286f6d5e993aa8c4915312",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactInverse",
+			"path": "formal/solidcore/inv32/Inv32ExactInverse.lean",
+			"model_relative_path": null,
+			"sha256": "f0f7428cef6da042064e28e65d0ffb242a848bf8befe305641294a4d49f19ce9",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactRatio",
+			"path": "formal/solidcore/inv32/Inv32ExactRatio.lean",
+			"model_relative_path": null,
+			"sha256": "f5bdac12734c8d168f6ed88fdac8409f7c0cc1c8cef79bf36b302ddc15801380",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactPanic",
+			"path": "formal/solidcore/inv32/Inv32ExactPanic.lean",
+			"model_relative_path": null,
+			"sha256": "297bbae38f9da84fd43032cfcb98f77b040c017f5dce483e5459c00824b9c8a5",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactTernary",
+			"path": "formal/solidcore/inv32/Inv32ExactTernary.lean",
+			"model_relative_path": null,
+			"sha256": "c9776d8c0cf3d779c13af0330ad2ac68fcf0ba363c957af89678a0535034b219",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactRoundsUp",
+			"path": "formal/solidcore/inv32/Inv32ExactRoundsUp.lean",
+			"model_relative_path": null,
+			"sha256": "5d473c670579327090037f771f3db2e21e48b70d860974a34da1357cea791992",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32ExactToUint",
+			"path": "formal/solidcore/inv32/Inv32ExactToUint.lean",
+			"model_relative_path": null,
+			"sha256": "c2fe31d44f99aae34a922b4c9597a04591e703607d80cc678365d2f39f6ff2f1",
+			"imports": ["Inv32Shapes"]
+		},
+		{
+			"module": "Inv32Eval",
+			"path": "formal/solidcore/inv32/Inv32Eval.lean",
+			"model_relative_path": null,
+			"sha256": "2e8dc2bcc6520334f1cfcc886a936266cd39cd17da1a67cd323fe25909efdc3f",
+			"imports": ["Inv32Rounding"]
+		},
+		{
+			"module": "Inv32Guards",
+			"path": "formal/solidcore/inv32/Inv32Guards.lean",
+			"model_relative_path": null,
+			"sha256": "6d33bf1a982c2fac2c99930bbbc604b1cb7cbe01439303253c7a801cd6064388",
+			"imports": ["Inv32Eval", "Inv32Dispatch"]
+		},
+		{
+			"module": "Inv39WordField",
+			"path": "formal/solidcore/inv39/Inv39WordField.lean",
+			"model_relative_path": null,
+			"sha256": "0268c626d88df24a95f50a5439b5977926b666d91eefb918438c4c1f845f0b2d",
+			"imports": ["Inv32Guards"]
+		},
+		{
+			"module": "Inv32Scalar",
+			"path": "formal/solidcore/inv32/Inv32Scalar.lean",
+			"model_relative_path": null,
+			"sha256": "d0cbb9a5344df6bb42222f2cea84c6ce60465628dbbf94909572acc047787b24",
+			"imports": ["Inv32Guards"]
+		},
+		{
+			"module": "Inv39Slots",
+			"path": "formal/solidcore/inv39/Inv39Slots.lean",
+			"model_relative_path": null,
+			"sha256": "e35584e1e278c3d311cc90e4e31a616198867a243278bbdfef0beccd17a54b59",
+			"imports": ["Inv39WordField"]
+		},
+		{
+			"module": "Inv39SupplyFields",
+			"path": "formal/solidcore/inv39/Inv39SupplyFields.lean",
+			"model_relative_path": null,
+			"sha256": "e42fabb337d024c27403bce486af694c423f1fef7877c241052dbc668e2e56db",
+			"imports": ["Inv39Model", "Inv39History", "Inv39WordField", "Inv32Shapes"]
+		},
+		{
+			"module": "Inv32Writes",
+			"path": "formal/solidcore/inv32/Inv32Writes.lean",
+			"model_relative_path": null,
+			"sha256": "a270d5912890f15ced174d5ca873875030ca6c9cc21477341bf3f0abe4939707",
+			"imports": ["Inv32Scalar"]
+		},
+		{
+			"module": "Inv32RoundingHelper",
+			"path": "formal/solidcore/inv32/Inv32RoundingHelper.lean",
+			"model_relative_path": null,
+			"sha256": "46c44383de777a33113f9fb269e40a5c876d6299cb9be26103070be6a17ab626",
+			"imports": ["Inv32Scalar", "Inv32ExactRoundsUp"]
+		},
+		{
+			"module": "Inv39Frame",
+			"path": "formal/solidcore/inv39/Inv39Frame.lean",
+			"model_relative_path": null,
+			"sha256": "6949490b566f6131d1fe59571a462c514c4df75ce043738ffce921879b494298",
+			"imports": ["Inv39Slots"]
+		},
+		{
+			"module": "Inv39StringFrame",
+			"path": "formal/solidcore/inv39/Inv39StringFrame.lean",
+			"model_relative_path": null,
+			"sha256": "6b4734623a506080d2a33ad053d8229b2009b5ad808004ba218f33cd00dcae50",
+			"imports": ["Inv39Slots"]
+		},
+		{
+			"module": "Inv39BalanceSlots",
+			"path": "formal/solidcore/inv39/Inv39BalanceSlots.lean",
+			"model_relative_path": null,
+			"sha256": "825c602f5fd45dc228b2ed51bf86e4ef18a706c77fc24d4ad2ac783d5b2b4475",
+			"imports": ["Inv39Balances", "Inv39Slots"]
+		},
+		{
+			"module": "Inv32Choice",
+			"path": "formal/solidcore/inv32/Inv32Choice.lean",
+			"model_relative_path": null,
+			"sha256": "d6184aca15d1ba3e1d1a21fb4b5e173210de0117461715efee157031f2ade8f3",
+			"imports": ["Inv32Writes"]
+		},
+		{
+			"module": "Inv32Assign",
+			"path": "formal/solidcore/inv32/Inv32Assign.lean",
+			"model_relative_path": null,
+			"sha256": "182d5f0484a8fbbf707c61ddc4b335090001bb781a3b754f14b67ce0aa52dcda",
+			"imports": ["Inv32Writes"]
+		},
+		{
+			"module": "Inv39FrameReads",
+			"path": "formal/solidcore/inv39/Inv39FrameReads.lean",
+			"model_relative_path": null,
+			"sha256": "6f95dd5336e451391d682e5d4c1e3ed47787744fd61924cabcd5e3335f32af0d",
+			"imports": ["Inv39Frame"]
+		},
+		{
+			"module": "Inv39ReturnStorage",
+			"path": "formal/solidcore/inv39/Inv39ReturnStorage.lean",
+			"model_relative_path": null,
+			"sha256": "d18b130660cda8cb3248d2de06def40736e8c95b768c4b376630a7dc576c7b04",
+			"imports": ["Inv39Frame"]
+		},
+		{
+			"module": "Inv39Fold",
+			"path": "formal/solidcore/inv39/Inv39Fold.lean",
+			"model_relative_path": null,
+			"sha256": "018d1b44f8d035430ceec56dd2d05834b6ae48ba2df6ad79783692740aac6cc7",
+			"imports": ["Inv39PrecompileEcho", "Inv39Frame"]
+		},
+		{
+			"module": "Inv39MappingLayout",
+			"path": "formal/solidcore/inv39/Inv39MappingLayout.lean",
+			"model_relative_path": null,
+			"sha256": "7e93217c0ac6ea8e3789ebbdb2ec6d4a12861268b5507bd4b6d0e5fc59da3aa4",
+			"imports": ["Inv39SupplyFields", "Inv39BalanceSlots"]
+		},
+		{
+			"module": "Inv32Arithmetic",
+			"path": "formal/solidcore/inv32/Inv32Arithmetic.lean",
+			"model_relative_path": null,
+			"sha256": "d779da17f2ad657fc46af24b00a51f253d81ff733708ba9967e5361a9a25d4a3",
+			"imports": ["Inv32Choice"]
+		},
+		{
+			"module": "Inv32Blocks",
+			"path": "formal/solidcore/inv32/Inv32Blocks.lean",
+			"model_relative_path": null,
+			"sha256": "1e479ef43c1846ddd925838c819da7e412061afef30a6a0c044f9642c265f59f",
+			"imports": ["Inv32Choice"]
+		},
+		{
+			"module": "Inv39FrameControl",
+			"path": "formal/solidcore/inv39/Inv39FrameControl.lean",
+			"model_relative_path": null,
+			"sha256": "a1b96e79e5f8be5280baef6ac7128ea7799a8a6cad1bd995d0da251f3275d81c",
+			"imports": ["Inv39FrameReads"]
+		},
+		{
+			"module": "Inv39Mapping",
+			"path": "formal/solidcore/inv39/Inv39Mapping.lean",
+			"model_relative_path": null,
+			"sha256": "7560f01aca3d472a0386f806654803109476ad80f4d829881eca8f12fa24a9f9",
+			"imports": ["Inv39MappingLayout"]
+		},
+		{
+			"module": "Inv32Actions",
+			"path": "formal/solidcore/inv32/Inv32Actions.lean",
+			"model_relative_path": null,
+			"sha256": "4b29a182e58d78be615366b2aec9d6223a3aa13bd38cbb99cd4c748244893c55",
+			"imports": ["Inv32Arithmetic", "Inv32Assign"]
+		},
+		{
+			"module": "Inv32BoolHelper",
+			"path": "formal/solidcore/inv32/Inv32BoolHelper.lean",
+			"model_relative_path": null,
+			"sha256": "3e10a60e8c2aedfd30ff6bb065ba51a98c57a16923e635c9b2f6dc4b7c54a04e",
+			"imports": ["Inv32ExactToUint", "Inv32Blocks"]
+		},
+		{
+			"module": "Inv39PlainFrames",
+			"path": "formal/solidcore/inv39/Inv39PlainFrames.lean",
+			"model_relative_path": null,
+			"sha256": "f01848a47e61b8c97de24f391f592077be1a50324bc9512d2ab7a2f5e72838c6",
+			"imports": ["Inv39FrameControl"]
+		},
+		{
+			"module": "Inv39AllowanceLayout",
+			"path": "formal/solidcore/inv39/Inv39AllowanceLayout.lean",
+			"model_relative_path": null,
+			"sha256": "740732e70a17d26e468e12c185e29cf6fec39886dd67f2a0b9c29fdcdcab238d",
+			"imports": ["Inv39Mapping"]
+		},
+		{
+			"module": "Inv32ConditionalAction",
+			"path": "formal/solidcore/inv32/Inv32ConditionalAction.lean",
+			"model_relative_path": null,
+			"sha256": "a68f45f95d0ffa0b38616f33ea5b623dc0ff4e08a21ae1f9e7580f1038bc5e71",
+			"imports": ["Inv32Actions", "Inv32Blocks"]
+		},
+		{
+			"module": "Inv39FrameMemory",
+			"path": "formal/solidcore/inv39/Inv39FrameMemory.lean",
+			"model_relative_path": null,
+			"sha256": "3e6917b49029360dbd10b589fe7ecdd8f5df6b86a24dd26e78e77fc862164913",
+			"imports": ["Inv39PlainFrames"]
+		},
+		{
+			"module": "Inv39AllowanceSlots",
+			"path": "formal/solidcore/inv39/Inv39AllowanceSlots.lean",
+			"model_relative_path": null,
+			"sha256": "a6b8420d0be173c88826f805ad8a48835b8f05128e2a980486616c407e81771a",
+			"imports": ["Inv39AllowanceLayout"]
+		},
+		{
+			"module": "Inv32Product",
+			"path": "formal/solidcore/inv32/Inv32Product.lean",
+			"model_relative_path": null,
+			"sha256": "74af39274443909f37fbfc0175c80763a66f419eb161c242c1c9c83cb902e31c",
+			"imports": ["Inv32ConditionalAction", "Inv32ExactMul512"]
+		},
+		{
+			"module": "Inv39SafeTemplates",
+			"path": "formal/solidcore/inv39/Inv39SafeTemplates.lean",
+			"model_relative_path": null,
+			"sha256": "0be696fb12159fd41844c4ef83311f24c07569edfba24f27369132ce064dc921",
+			"imports": ["Inv39FrameMemory"]
+		},
+		{
+			"module": "Inv39FrameNumeric",
+			"path": "formal/solidcore/inv39/Inv39FrameNumeric.lean",
+			"model_relative_path": null,
+			"sha256": "696ec7a540b4fb1bb662a5cc37d48657b6e3017bd957a332106098f1b415e7e4",
+			"imports": ["Inv39FrameMemory"]
+		},
+		{
+			"module": "Inv39AuthSlots",
+			"path": "formal/solidcore/inv39/Inv39AuthSlots.lean",
+			"model_relative_path": null,
+			"sha256": "186bbd4aac85866bf95f696bd54c2a4cef461fe9f76c3c7048f30319ad96705e",
+			"imports": ["Inv39RawAuthShape", "Inv39AllowanceSlots"]
+		},
+		{
+			"module": "Inv32ProductValues",
+			"path": "formal/solidcore/inv32/Inv32ProductValues.lean",
+			"model_relative_path": null,
+			"sha256": "023e9ad38ed15c055e4b1bc49503c175ca6a07998f1041d430b08af4949f47dd",
+			"imports": ["Inv32Product"]
+		},
+		{
+			"module": "Inv39FrameIndex",
+			"path": "formal/solidcore/inv39/Inv39FrameIndex.lean",
+			"model_relative_path": null,
+			"sha256": "56f8c172801697715efee28c6a1c9f8a25a6592946a6e2e4b25feec505f7dc94",
+			"imports": ["Inv39FrameNumeric"]
+		},
+		{
+			"module": "Inv32High",
+			"path": "formal/solidcore/inv32/Inv32High.lean",
+			"model_relative_path": null,
+			"sha256": "88a153bf90a263c38cdd1528f2eda15b95b28597e96af3c6a3c733bcd37feb9e",
+			"imports": ["Inv32ProductValues"]
+		},
+		{
+			"module": "Inv39FrameTyped",
+			"path": "formal/solidcore/inv39/Inv39FrameTyped.lean",
+			"model_relative_path": null,
+			"sha256": "c5bfe708acc518a629f7bbd019c3cb6f517b0e8d2abcb587000008e9e561e579",
+			"imports": ["Inv39FrameIndex"]
+		},
+		{
+			"module": "Inv32Mul512",
+			"path": "formal/solidcore/inv32/Inv32Mul512.lean",
+			"model_relative_path": null,
+			"sha256": "923cfe4aeb9bc08e20ea53990c48b6627dfa3f91a81b5d9e171a8944f516eb04",
+			"imports": ["Inv32High"]
+		},
+		{
+			"module": "Inv39FrameAssign",
+			"path": "formal/solidcore/inv39/Inv39FrameAssign.lean",
+			"model_relative_path": null,
+			"sha256": "42e9e0291422b8a2a9972a0fe24b3158d7efe60b0ba5515bb2850e9d3dde46b6",
+			"imports": ["Inv39FrameTyped"]
+		},
+		{
+			"module": "Inv32Internal",
+			"path": "formal/solidcore/inv32/Inv32Internal.lean",
+			"model_relative_path": null,
+			"sha256": "2f8bbcfd4d97d26901a0f846ef552ac3ed54baee05587283f0bb1d91ad0335de",
+			"imports": ["Inv32Mul512"]
+		},
+		{
+			"module": "Inv39FrameStatements",
+			"path": "formal/solidcore/inv39/Inv39FrameStatements.lean",
+			"model_relative_path": null,
+			"sha256": "248368514686c3eb135d2a1c06ecd68d069e2041c92d0732088b3d78b63f13dd",
+			"imports": ["Inv39FrameAssign"]
+		},
+		{
+			"module": "Inv32ProductCall",
+			"path": "formal/solidcore/inv32/Inv32ProductCall.lean",
+			"model_relative_path": null,
+			"sha256": "5a70cd1fde59e076b18ffa37dca9396896f20907c7d16f23911fa879bb8de8b1",
+			"imports": ["Inv32Internal"]
+		},
+		{
+			"module": "Inv39FrameGrammar",
+			"path": "formal/solidcore/inv39/Inv39FrameGrammar.lean",
+			"model_relative_path": null,
+			"sha256": "cce9699d001482faf09fb768882e4da1108abe2346c98d4e541c0cc42bf80002",
+			"imports": ["Inv39FrameStatements"]
+		},
+		{
+			"module": "Inv32Temps",
+			"path": "formal/solidcore/inv32/Inv32Temps.lean",
+			"model_relative_path": null,
+			"sha256": "c62c8f6a7f5dca451870785092d77d9113ab86e1375b28b9afe4b6f7fe0cc871",
+			"imports": ["Inv32ProductCall"]
+		},
+		{
+			"module": "Inv39InputReads",
+			"path": "formal/solidcore/inv39/Inv39InputReads.lean",
+			"model_relative_path": null,
+			"sha256": "42acf725284e13e2f173e261ad6d4bf3fd06eae58c3b0ffa75b8a329efa53ec5",
+			"imports": ["Inv39FrameGrammar"]
+		},
+		{
+			"module": "Inv39DecimalFrame",
+			"path": "formal/solidcore/inv39/Inv39DecimalFrame.lean",
+			"model_relative_path": null,
+			"sha256": "1b75575f4cde652ac8b5f62d6940ec925ff0f38728460d5695dc452359460f73",
+			"imports": ["Inv39FrameGrammar", "Inv39Model"]
+		},
+		{
+			"module": "Inv32FloorStart",
+			"path": "formal/solidcore/inv32/Inv32FloorStart.lean",
+			"model_relative_path": null,
+			"sha256": "89a880330773d950066403d05c0f5e2e225cc3cd129313fb12cb5919db3c5a0a",
+			"imports": ["Inv32Temps", "Inv32ExactFloor"]
+		},
+		{
+			"module": "Inv39DecimalCall",
+			"path": "formal/solidcore/inv39/Inv39DecimalCall.lean",
+			"model_relative_path": null,
+			"sha256": "fac3ada5e4c747a199baed6e76cd75512fefe8480b4322882026215543651506",
+			"imports": ["Inv39DecimalFrame", "Inv39ReturnStorage", "Inv32ProductCall"]
+		},
+		{
+			"module": "Inv32FloorNarrow",
+			"path": "formal/solidcore/inv32/Inv32FloorNarrow.lean",
+			"model_relative_path": null,
+			"sha256": "b2951d116402fa606d883800516369159de55ad5ae47da7f19450281de87523d",
+			"imports": ["Inv32FloorStart"]
+		},
+		{
+			"module": "Inv32FloorFastPath",
+			"path": "formal/solidcore/inv32/Inv32FloorFastPath.lean",
+			"model_relative_path": null,
+			"sha256": "4291a7db5ffbef5539629942c0f0b65ecbebf149a916099b0d5d4e4b39c75793",
+			"imports": ["Inv32FloorNarrow"]
+		},
+		{
+			"module": "Inv32Compound",
+			"path": "formal/solidcore/inv32/Inv32Compound.lean",
+			"model_relative_path": null,
+			"sha256": "66f0582b041c224f596025ead2c144f4506164d4dc91c290761eb46e7122eb67",
+			"imports": ["Inv32FloorFastPath"]
+		},
+		{
+			"module": "Inv32NewtonBody",
+			"path": "formal/solidcore/inv32/Inv32NewtonBody.lean",
+			"model_relative_path": null,
+			"sha256": "2e1111f9eac319fb5005b083a7935d2ce56c4b8deef2bac5d1ab1c42e962eee1",
+			"imports": ["Inv32Compound"]
+		},
+		{
+			"module": "Inv32NewtonSeed",
+			"path": "formal/solidcore/inv32/Inv32NewtonSeed.lean",
+			"model_relative_path": null,
+			"sha256": "d0bfc006e07c4b9f24eb8742c9415acb587bb4b0b313da7e0920388901964a20",
+			"imports": ["Inv32NewtonBody"]
+		},
+		{
+			"module": "Inv32WideWords",
+			"path": "formal/solidcore/inv32/Inv32WideWords.lean",
+			"model_relative_path": null,
+			"sha256": "5f5d85f76111d25b178659e6ebc690bac8d50e4d63fcc9d46fc20c696c15c503",
+			"imports": ["Inv32NewtonSeed"]
+		},
+		{
+			"module": "Inv32WideGuards",
+			"path": "formal/solidcore/inv32/Inv32WideGuards.lean",
+			"model_relative_path": null,
+			"sha256": "d69f689696ad4bd81b7d9639f9a1b52d48a2bce6f3f42351868fcdda33894230",
+			"imports": ["Inv32WideWords"]
+		},
+		{
+			"module": "Inv32Borrow",
+			"path": "formal/solidcore/inv32/Inv32Borrow.lean",
+			"model_relative_path": null,
+			"sha256": "88e3803f444c310cee882d92e2aec6834d47bc8d644ea649fc95fc164de3c76c",
+			"imports": ["Inv32WideGuards"]
+		},
+		{
+			"module": "Inv32BorrowRun",
+			"path": "formal/solidcore/inv32/Inv32BorrowRun.lean",
+			"model_relative_path": null,
+			"sha256": "7987f3b8fa9ed6255f1d1c6d2a0412124b659ffca163b8c0c96bcf9325b4717f",
+			"imports": ["Inv32Borrow"]
+		},
+		{
+			"module": "Inv32Factor",
+			"path": "formal/solidcore/inv32/Inv32Factor.lean",
+			"model_relative_path": null,
+			"sha256": "8e1d00130977b5250bf21be633de6b75556cb468d38ba1e71a07985037e87f79",
+			"imports": ["Inv32BorrowRun"]
+		},
+		{
+			"module": "Inv32FactorRun",
+			"path": "formal/solidcore/inv32/Inv32FactorRun.lean",
+			"model_relative_path": null,
+			"sha256": "92dfdc60b5129f5864c006bb3e7394ce3d934823bdaa412f589e10fefdb91965",
+			"imports": ["Inv32Factor"]
+		},
+		{
+			"module": "Inv32WideFinish",
+			"path": "formal/solidcore/inv32/Inv32WideFinish.lean",
+			"model_relative_path": null,
+			"sha256": "b5f0ece48edc546d6a8c04f7ff06937f7e9d267ee4a967594bb6a4f44a4195c3",
+			"imports": ["Inv32FactorRun"]
+		},
+		{
+			"module": "Inv32WideEntry",
+			"path": "formal/solidcore/inv32/Inv32WideEntry.lean",
+			"model_relative_path": null,
+			"sha256": "1a659119546592ca2f48c1db50f73ca447ad5389ccd22d7e590c19906a8746f1",
+			"imports": ["Inv32WideFinish"]
+		},
+		{
+			"module": "Inv32MathParts",
+			"path": "formal/solidcore/inv32/Inv32MathParts.lean",
+			"model_relative_path": null,
+			"sha256": "3e070f47fa8b5ea92531f09431a299c68812155ffbc4706012ddd09888791611",
+			"imports": ["Inv32WideEntry"]
+		},
+		{
+			"module": "Inv32WideAdapters",
+			"path": "formal/solidcore/inv32/Inv32WideAdapters.lean",
+			"model_relative_path": null,
+			"sha256": "14d85b967dc9840ad1bd874068b57102e2800c51a10271eff7a458046c09607f",
+			"imports": ["Inv32MathParts"]
+		},
+		{
+			"module": "Inv32WideExecution",
+			"path": "formal/solidcore/inv32/Inv32WideExecution.lean",
+			"model_relative_path": null,
+			"sha256": "d2804c90eaa174a9398bde3f405c2b642ced5828326fdeaa9dfb269a61a12083",
+			"imports": ["Inv32WideAdapters"]
+		},
+		{
+			"module": "Inv32WidePath",
+			"path": "formal/solidcore/inv32/Inv32WidePath.lean",
+			"model_relative_path": null,
+			"sha256": "9217f8641ea8ff7fe74f170e25a2e034758862c7e9287423afc77a3dd46997b1",
+			"imports": ["Inv32WideExecution"]
+		},
+		{
+			"module": "Inv32FloorSuccess",
+			"path": "formal/solidcore/inv32/Inv32FloorSuccess.lean",
+			"model_relative_path": null,
+			"sha256": "b956c611454e244d2376b5d1bcf802ff0aed2a6368a62a7bc560bc5d9aece4da",
+			"imports": ["Inv32WidePath"]
+		},
+		{
+			"module": "Inv32FloorCall",
+			"path": "formal/solidcore/inv32/Inv32FloorCall.lean",
+			"model_relative_path": null,
+			"sha256": "21f324db005f8f5227207e09ada40e37fdc9159c5bd40bbc9fac6d46ffbd3e1a",
+			"imports": ["Inv32FloorSuccess"]
+		},
+		{
+			"module": "Inv32Library",
+			"path": "formal/solidcore/inv32/Inv32Library.lean",
+			"model_relative_path": null,
+			"sha256": "66cd864c5900c653f4090b251627ed3fb5476546902ed8b7f4823230e1c49686",
+			"imports": ["Inv32FloorCall", "Inv32ExactCeil", "Inv32ExactComparison", "Inv32ExactForward", "Inv32ExactInverse", "Inv32ExactRatio", "Inv32ExactPanic", "Inv32ExactTernary", "Inv32RoundingHelper", "Inv32BoolHelper"]
+		},
+		{
+			"module": "Inv32Revert",
+			"path": "formal/solidcore/inv32/Inv32Revert.lean",
+			"model_relative_path": null,
+			"sha256": "19c4c5dbc0cd59d9d46923668a5d2aceca912955a5af5fb5227f8b485a84d446",
+			"imports": ["Inv32FloorCall", "Inv32ExactPanic"]
+		},
+		{
+			"module": "Inv32RejectionLinks",
+			"path": "formal/solidcore/inv32/Inv32RejectionLinks.lean",
+			"model_relative_path": null,
+			"sha256": "c17a63803a7810cd44e6fea770e8591b273426d289136c6f49003c96c37e683c",
+			"imports": ["Inv32Library"]
+		},
+		{
+			"module": "Inv32FlagCalls",
+			"path": "formal/solidcore/inv32/Inv32FlagCalls.lean",
+			"model_relative_path": null,
+			"sha256": "52ce33ba6a024348a99cc852297c30fb5549c26992fa19a7099b1250475e81c2",
+			"imports": ["Inv32Library"]
+		},
+		{
+			"module": "Inv32PanicChoice",
+			"path": "formal/solidcore/inv32/Inv32PanicChoice.lean",
+			"model_relative_path": null,
+			"sha256": "487a6dd4bbfe71274a841a3573c997abe63dd342da87352ade1ad9951844a6b0",
+			"imports": ["Inv32RejectionLinks", "Inv32FlagCalls", "Inv32Revert"]
+		},
+		{
+			"module": "Inv03SettlementMath",
+			"path": "formal/solidcore/inv03/Inv03SettlementMath.lean",
+			"model_relative_path": null,
+			"sha256": "70d17ad17c4098adbcaaed35030f8f7713fd81bac44dfef5a5997bf718d7444e",
+			"imports": ["Inv27Generated", "Inv32FlagCalls"]
+		},
+		{
+			"module": "Inv32TernaryCall",
+			"path": "formal/solidcore/inv32/Inv32TernaryCall.lean",
+			"model_relative_path": null,
+			"sha256": "5883f910565bf5e3e7459c992a41e6ac81422d2fe6f0fe729faea4ab59a00fde",
+			"imports": ["Inv32PanicChoice"]
+		},
+		{
+			"module": "Inv32PanicCall",
+			"path": "formal/solidcore/inv32/Inv32PanicCall.lean",
+			"model_relative_path": null,
+			"sha256": "30072e702d6cdaccfc6f991cfda149b98358010fd382c60132125962eca554c6",
+			"imports": ["Inv32TernaryCall"]
+		},
+		{
+			"module": "Inv32OverflowBody",
+			"path": "formal/solidcore/inv32/Inv32OverflowBody.lean",
+			"model_relative_path": null,
+			"sha256": "79b6967925e77a4c454ece8ac620605bf055c477a6784d77a1a2f33bfd56e5d7",
+			"imports": ["Inv32PanicCall"]
+		},
+		{
+			"module": "Inv32FloorRejection",
+			"path": "formal/solidcore/inv32/Inv32FloorRejection.lean",
+			"model_relative_path": null,
+			"sha256": "be3df71b1f628e7a84b0a689397f10e1e0b72b7e6bf156d1e8ede7bd22bcbdb8",
+			"imports": ["Inv32OverflowBody"]
+		},
+		{
+			"module": "Inv32FloorOverflow",
+			"path": "formal/solidcore/inv32/Inv32FloorOverflow.lean",
+			"model_relative_path": null,
+			"sha256": "5a1a2b45938655a0e8a83aed3951ca438cc9fb4ddd754afe3adbeab1ca050722",
+			"imports": ["Inv32FloorRejection"]
+		},
+		{
+			"module": "Inv32Hoist",
+			"path": "formal/solidcore/inv32/Inv32Hoist.lean",
+			"model_relative_path": null,
+			"sha256": "3d7548c1f62e3315e0c25384bc15e25a274756624127133df7a3a231c832f011",
+			"imports": ["Inv32FloorOverflow"]
+		},
+		{
+			"module": "Inv32OneArg",
+			"path": "formal/solidcore/inv32/Inv32OneArg.lean",
+			"model_relative_path": null,
+			"sha256": "4c162ad249c8d42851e61f5163eaf2316fa75e3be7f1f7677ae2a23d2d5c82f7",
+			"imports": ["Inv32Hoist"]
+		},
+		{
+			"module": "Inv32CeilFlags",
+			"path": "formal/solidcore/inv32/Inv32CeilFlags.lean",
+			"model_relative_path": null,
+			"sha256": "02f49a71099ff29ff248329a148175dbe124c79cce035a5730fb60b70fa188ab",
+			"imports": ["Inv32OneArg"]
+		},
+		{
+			"module": "Inv32FloorHoist",
+			"path": "formal/solidcore/inv32/Inv32FloorHoist.lean",
+			"model_relative_path": null,
+			"sha256": "26f36c0fe7d770903fa96a4fd18728af8322662cb449ed968bbc6d550954fa47",
+			"imports": ["Inv32CeilFlags"]
+		},
+		{
+			"module": "Inv32CeilAdd",
+			"path": "formal/solidcore/inv32/Inv32CeilAdd.lean",
+			"model_relative_path": null,
+			"sha256": "a6f5c3620a6d4f91f913d8cda38be79e89beceb6fb8ae886241834b7992fae59",
+			"imports": ["Inv32FloorHoist"]
+		},
+		{
+			"module": "Inv32Exit",
+			"path": "formal/solidcore/inv32/Inv32Exit.lean",
+			"model_relative_path": null,
+			"sha256": "6348a3f426f4a651186d4e8e05c4293eeb3ba712e55464c9fa9a86f9d75e0722",
+			"imports": ["Inv32CeilAdd"]
+		},
+		{
+			"module": "Inv32CeilBody",
+			"path": "formal/solidcore/inv32/Inv32CeilBody.lean",
+			"model_relative_path": null,
+			"sha256": "662d2d011a7f51e2738c1fa2e2c186158dfcf45a6e66e125d78857f22103eb15",
+			"imports": ["Inv32Exit"]
+		},
+		{
+			"module": "Inv32CeilCall",
+			"path": "formal/solidcore/inv32/Inv32CeilCall.lean",
+			"model_relative_path": null,
+			"sha256": "596d91a051201da209d3f3ec9417588489082b83395f2b095b36192d778a026e",
+			"imports": ["Inv32CeilBody"]
+		},
+		{
+			"module": "Inv32QuoteExpr",
+			"path": "formal/solidcore/inv32/Inv32QuoteExpr.lean",
+			"model_relative_path": null,
+			"sha256": "ad43a068f21335d4c40233d9d7dcdc84038165bd305de3c74a3091c4715b29b3",
+			"imports": ["Inv32CeilCall"]
+		},
+		{
+			"module": "Inv32QuoteGuard",
+			"path": "formal/solidcore/inv32/Inv32QuoteGuard.lean",
+			"model_relative_path": null,
+			"sha256": "bb972e333cbbdfe4d32cc32f55ba0f3915f394db51cb04dfe66e45bbc6886410",
+			"imports": ["Inv32QuoteExpr"]
+		},
+		{
+			"module": "Inv32CeilHoist",
+			"path": "formal/solidcore/inv32/Inv32CeilHoist.lean",
+			"model_relative_path": null,
+			"sha256": "bd8cc57a2ab03f8c7a67c7f60b457e2a00209174d2e78fd6524dd3ef118b6467",
+			"imports": ["Inv32QuoteGuard"]
+		},
+		{
+			"module": "Inv32Normal",
+			"path": "formal/solidcore/inv32/Inv32Normal.lean",
+			"model_relative_path": null,
+			"sha256": "0b95148e6848607ccded42275fd7fac7fac305905391bafa3af127d687e918fa",
+			"imports": ["Inv32CeilHoist"]
+		},
+		{
+			"module": "Inv03Bodies",
+			"path": "formal/solidcore/inv03/Inv03Bodies.lean",
+			"model_relative_path": null,
+			"sha256": "87fa932b8a963c9354722cb5d0b41188d336506dc63b1418bb8155b2df3c9a17",
+			"imports": ["Inv03SettlementMath", "Inv32CeilHoist"]
+		},
+		{
+			"module": "Inv32InverseSteps",
+			"path": "formal/solidcore/inv32/Inv32InverseSteps.lean",
+			"model_relative_path": null,
+			"sha256": "83642bfd76c605b67146c14f3770965d88120765d507ec37aae5c70e07769ae5",
+			"imports": ["Inv32Normal"]
+		},
+		{
+			"module": "Inv45MulShape",
+			"path": "formal/solidcore/inv45/Inv45MulShape.lean",
+			"model_relative_path": null,
+			"sha256": "b9938a75ebf72a2367198f55849b91e8cc6adc8dac53e721aaea810e20d3b701",
+			"imports": ["Inv45Model", "Inv03Bodies"]
+		},
+		{
+			"module": "Inv08SearchBinding",
+			"path": "formal/solidcore/inv08/Inv08SearchBinding.lean",
+			"model_relative_path": null,
+			"sha256": "313886d35d61b488e75ccfa5b74e773027e7918ba84bc052482708370b51bfa4",
+			"imports": ["Inv08Model", "Inv03Bodies"]
+		},
+		{
+			"module": "Inv45AbsoluteShape",
+			"path": "formal/solidcore/inv45/Inv45AbsoluteShape.lean",
+			"model_relative_path": null,
+			"sha256": "3fb419be86e295919dbdb52351eb312a34b2a4d80282a07503222b77f38c8862",
+			"imports": ["Inv45Model", "Inv03Bodies"]
+		},
+		{
+			"module": "Inv32InverseBody",
+			"path": "formal/solidcore/inv32/Inv32InverseBody.lean",
+			"model_relative_path": null,
+			"sha256": "8835303383ef3d0794f5e717fdb42e3f3f8d1d5e99e95cb12109e902246824e9",
+			"imports": ["Inv32InverseSteps"]
+		},
+		{
+			"module": "Inv32InverseCall",
+			"path": "formal/solidcore/inv32/Inv32InverseCall.lean",
+			"model_relative_path": null,
+			"sha256": "e91b88bf817145d3fc5ba9faed46c5aa3145343f0897d917ea59859d0eb54b30",
+			"imports": ["Inv32InverseBody"]
+		},
+		{
+			"module": "Inv32Wrapper",
+			"path": "formal/solidcore/inv32/Inv32Wrapper.lean",
+			"model_relative_path": null,
+			"sha256": "f7ad4b4b3348024d39180c0de9bc8df355bb8913f707aa4f4244f2be665ef85f",
+			"imports": ["Inv32InverseCall", "Inv32CoreBodies"]
+		},
+		{
+			"module": "Inv32WrapperExec",
+			"path": "formal/solidcore/inv32/Inv32WrapperExec.lean",
+			"model_relative_path": null,
+			"sha256": "65194e8f88708a8aaca804c09c763129d4f3a350c4de4440d78ae8afeaa00509",
+			"imports": ["Inv32Wrapper"]
+		},
+		{
+			"module": "Inv32CompareProducts",
+			"path": "formal/solidcore/inv32/Inv32CompareProducts.lean",
+			"model_relative_path": null,
+			"sha256": "0e1425362793b903c2e9491f23ddc1885a50c0edb0edca5facf8caae98613789",
+			"imports": ["Inv32WrapperExec"]
+		},
+		{
+			"module": "Inv32CompareValues",
+			"path": "formal/solidcore/inv32/Inv32CompareValues.lean",
+			"model_relative_path": null,
+			"sha256": "cbb58a44b8c3a01ca1d598aa5cf46bd435e4b24052441630ca2b83af2adebce8",
+			"imports": ["Inv32CompareProducts"]
+		},
+		{
+			"module": "Inv40Evaluation",
+			"path": "formal/solidcore/inv40/Inv40Evaluation.lean",
+			"model_relative_path": null,
+			"sha256": "aad36d4c49b0d6dfd352b375edd393108aac58b3c9f4e824b9982dd32d1b29ec",
+			"imports": ["Inv40Thresholds", "Inv32CompareValues"]
+		},
+		{
+			"module": "Inv03Expressions",
+			"path": "formal/solidcore/inv03/Inv03Expressions.lean",
+			"model_relative_path": null,
+			"sha256": "8bf2d85f63c058946648d8dc8d2921e3c42e495812205016948d1f536c86a8fc",
+			"imports": ["Inv03Bodies", "Inv32CompareValues"]
+		},
+		{
+			"module": "Inv32CompareBody",
+			"path": "formal/solidcore/inv32/Inv32CompareBody.lean",
+			"model_relative_path": null,
+			"sha256": "ed3f8842d254b51e764dbf8833ded6d730720c549e4d02fdbc2707a7d1e559c6",
+			"imports": ["Inv32CompareValues"]
+		},
+		{
+			"module": "Inv39SupplyWrites",
+			"path": "formal/solidcore/inv39/Inv39SupplyWrites.lean",
+			"model_relative_path": null,
+			"sha256": "2395ee0140f649ed9d9425dba2b3abe6caefae3b2de1a58d1dd9697098436328",
+			"imports": ["Inv39SupplyFields", "Inv39Slots", "Inv40Evaluation", "Inv32QuoteExpr"]
+		},
+		{
+			"module": "Inv08ReleaseQuote",
+			"path": "formal/solidcore/inv08/Inv08ReleaseQuote.lean",
+			"model_relative_path": null,
+			"sha256": "66902d929dfaef99d110ba4575d2193f2174a40e2cbfe5864e12ce0cee7fdf7b",
+			"imports": ["Inv08Model", "Inv03Bodies", "Inv40Evaluation"]
+		},
+		{
+			"module": "Inv32CompareCall",
+			"path": "formal/solidcore/inv32/Inv32CompareCall.lean",
+			"model_relative_path": null,
+			"sha256": "ecb683db473c9bb036890df7db5058af5324a67d8e10e699de666208fdccb0d7",
+			"imports": ["Inv32CompareBody"]
+		},
+		{
+			"module": "Inv39Terms",
+			"path": "formal/solidcore/inv39/Inv39Terms.lean",
+			"model_relative_path": null,
+			"sha256": "23a418baa3ae45c01a47ceb84c483bf78751e859cede31538e653cf3c44dbbf5",
+			"imports": ["Inv39SupplyWrites", "Inv32WideGuards"]
+		},
+		{
+			"module": "Inv39Sites",
+			"path": "formal/solidcore/inv39/Inv39Sites.lean",
+			"model_relative_path": null,
+			"sha256": "e32fe035f835a79dcc7eabfa77ac3c5164c05728752691743d1b638ddf22ff55",
+			"imports": ["Inv39SupplyWrites"]
+		},
+		{
+			"module": "Inv39SupplyDelta",
+			"path": "formal/solidcore/inv39/Inv39SupplyDelta.lean",
+			"model_relative_path": null,
+			"sha256": "56b2c4f3c6c6c731e89f5df6dbf5bc44a50599e7ebd2fea8aa31824e0f66ddeb",
+			"imports": ["Inv39SupplyWrites"]
+		},
+		{
+			"module": "Inv08Storage",
+			"path": "formal/solidcore/inv08/Inv08Storage.lean",
+			"model_relative_path": null,
+			"sha256": "480672bd338e80526dc4aec29ce5e9a0d1449b0777438ed24aad0e045770d2cf",
+			"imports": ["Inv08ReleaseQuote"]
+		},
+		{
+			"module": "Inv32Midpoint",
+			"path": "formal/solidcore/inv32/Inv32Midpoint.lean",
+			"model_relative_path": null,
+			"sha256": "340995768776d40e0dafb7399084ce4ab4562cd0844eb933fbc34aab6ef9cf51",
+			"imports": ["Inv32CompareCall"]
+		},
+		{
+			"module": "Inv39BalanceExecution",
+			"path": "formal/solidcore/inv39/Inv39BalanceExecution.lean",
+			"model_relative_path": null,
+			"sha256": "9b2737fbfdab03fc373dcf77df844a2640c2665d4e554a55f31f95a55c27abfe",
+			"imports": ["Inv39Mapping", "Inv39Terms"]
+		},
+		{
+			"module": "Inv39SupplyEvents",
+			"path": "formal/solidcore/inv39/Inv39SupplyEvents.lean",
+			"model_relative_path": null,
+			"sha256": "7d304d416d08178c621a66f2e58e2ce8e2d359e2ffbe4ffe7639b9b4a799fa19",
+			"imports": ["Inv39EventLayout", "Inv39Terms"]
+		},
+		{
+			"module": "Inv39Authority",
+			"path": "formal/solidcore/inv39/Inv39Authority.lean",
+			"model_relative_path": null,
+			"sha256": "dda49480ee7f655149269bb673d1f387ec2838702544e9f6541f11a8582fc848",
+			"imports": ["Inv39Terms"]
+		},
+		{
+			"module": "Inv39UpdateBody",
+			"path": "formal/solidcore/inv39/Inv39UpdateBody.lean",
+			"model_relative_path": null,
+			"sha256": "175d32a2161fcfa9322d5f4cd5681170388ca37c1e23d45c03f959ef14b04f0f",
+			"imports": ["Inv39Sites", "Inv03Bodies"]
+		},
+		{
+			"module": "Inv39GetterBinding",
+			"path": "formal/solidcore/inv39/Inv39GetterBinding.lean",
+			"model_relative_path": null,
+			"sha256": "24511b6a0657f9345d5875e36e65105c05c93cd37f83c26a95d59e38e5bf0deb",
+			"imports": ["Inv39Sites", "Inv03Bodies", "CheckedWordCall"]
+		},
+		{
+			"module": "Inv08StorageUpdate",
+			"path": "formal/solidcore/inv08/Inv08StorageUpdate.lean",
+			"model_relative_path": null,
+			"sha256": "c5f839a3309a7256e8efac1680f678ed5f17537ba0f44ac5fad4d697e8150816",
+			"imports": ["Inv08Storage"]
+		},
+		{
+			"module": "Inv08StoredQuote",
+			"path": "formal/solidcore/inv08/Inv08StoredQuote.lean",
+			"model_relative_path": null,
+			"sha256": "0a1b94e7a7e75dc88d82e0bb8e392e7c66e62d49eb141baa28f9cc3fc29d386d",
+			"imports": ["Inv08Storage"]
+		},
+		{
+			"module": "Inv08Middle",
+			"path": "formal/solidcore/inv08/Inv08Middle.lean",
+			"model_relative_path": null,
+			"sha256": "0ec2db2e6f5f487bc51546805980605a7cc533d3235f49986519efa18798a85a",
+			"imports": ["Inv08SearchBinding", "Inv08Expired", "Inv32Midpoint"]
+		},
+		{
+			"module": "Inv32RatioTest",
+			"path": "formal/solidcore/inv32/Inv32RatioTest.lean",
+			"model_relative_path": null,
+			"sha256": "5fd2aec28962a5546a03c3a35fe8803f3fe05706ac5840e929590ba976d35fde",
+			"imports": ["Inv32Midpoint"]
+		},
+		{
+			"module": "Inv39Debit",
+			"path": "formal/solidcore/inv39/Inv39Debit.lean",
+			"model_relative_path": null,
+			"sha256": "f44c357a4e2905e90501b804a123412a95358df0ecf0599cc29112c43850a5d2",
+			"imports": ["Inv39BalanceExecution"]
+		},
+		{
+			"module": "Inv39Getters",
+			"path": "formal/solidcore/inv39/Inv39Getters.lean",
+			"model_relative_path": null,
+			"sha256": "5c6b4d1e78d2d94a4a2bc8382f3769955662ada53c00343cb037ce73c63b2b6f",
+			"imports": ["Inv39GetterBinding"]
+		},
+		{
+			"module": "Inv08ReleaseWrites",
+			"path": "formal/solidcore/inv08/Inv08ReleaseWrites.lean",
+			"model_relative_path": null,
+			"sha256": "cb958b831920d094db4fb7cd786bcadb846dfc73b884f9113c0b303e610db241",
+			"imports": ["Inv08StoredQuote"]
+		},
+		{
+			"module": "Inv08SearchBody",
+			"path": "formal/solidcore/inv08/Inv08SearchBody.lean",
+			"model_relative_path": null,
+			"sha256": "f35b17d4c01a34f0cd62bf934db4a84002ffc9626e15630da9999ca7e8fb0b90",
+			"imports": ["Inv08Middle"]
+		},
+		{
+			"module": "Inv32RatioStep",
+			"path": "formal/solidcore/inv32/Inv32RatioStep.lean",
+			"model_relative_path": null,
+			"sha256": "69175d0c0d3514068607098d8e37901143a6f687f31ac96967a3d7bf18c748bf",
+			"imports": ["Inv32RatioTest", "Inv32Loop"]
+		},
+		{
+			"module": "Inv39Assignment",
+			"path": "formal/solidcore/inv39/Inv39Assignment.lean",
+			"model_relative_path": null,
+			"sha256": "f2e674a781460bc95ccc1a3512a9cb2a727f4fc93c78191add08653b6cd9931c",
+			"imports": ["Inv39Debit"]
+		},
+		{
+			"module": "Inv08Compound",
+			"path": "formal/solidcore/inv08/Inv08Compound.lean",
+			"model_relative_path": null,
+			"sha256": "00d0f87741cfbbd905e3b030c22c0bb603aeffbf9ebc3eb7d3f4086efd76f694",
+			"imports": ["Inv08StorageUpdate", "Inv08ReleaseWrites"]
+		},
+		{
+			"module": "Inv08SearchExpressions",
+			"path": "formal/solidcore/inv08/Inv08SearchExpressions.lean",
+			"model_relative_path": null,
+			"sha256": "b5cc9161d1a60e5a6feb5bc201c3647f7d172323e6be69c05fa389a805cfe26b",
+			"imports": ["Inv08SearchBody", "Inv08Storage"]
+		},
+		{
+			"module": "Inv39Branches",
+			"path": "formal/solidcore/inv39/Inv39Branches.lean",
+			"model_relative_path": null,
+			"sha256": "c8fb425c734bfa9ccb1290689551c3f924513a44c95b30bd52f41f4c25a7e6fa",
+			"imports": ["Inv39Assignment", "Inv39UpdateBody"]
+		},
+		{
+			"module": "Inv08CursorExecution",
+			"path": "formal/solidcore/inv08/Inv08CursorExecution.lean",
+			"model_relative_path": null,
+			"sha256": "c18eea980ddb19504310654002cf5909ca4460f4327148de141c7cb050818934",
+			"imports": ["Inv08Compound", "Inv03Expressions"]
+		},
+		{
+			"module": "Inv08LoopStep",
+			"path": "formal/solidcore/inv08/Inv08LoopStep.lean",
+			"model_relative_path": null,
+			"sha256": "827f51cc2e2d9e12ed7c4a45c605ed2c1418f63a657100fc7e80d01c9928ee23",
+			"imports": ["Inv08SearchExpressions", "Inv32RatioStep"]
+		},
+		{
+			"module": "Inv39DebitBranch",
+			"path": "formal/solidcore/inv39/Inv39DebitBranch.lean",
+			"model_relative_path": null,
+			"sha256": "84ef0aab90d2684574116db847f3ffb33bfb8d8789f4821344802ce4ff0c9425",
+			"imports": ["Inv39Branches", "Inv39Assignment", "Inv39UpdateBody"]
+		},
+		{
+			"module": "Inv08Integral",
+			"path": "formal/solidcore/inv08/Inv08Integral.lean",
+			"model_relative_path": null,
+			"sha256": "fef00ef87e3b556d80df5689f10327d541f3a9ec8adcf176674c25a4916e3364",
+			"imports": ["Inv08CursorExecution", "Inv08Prefix"]
+		},
+		{
+			"module": "Inv08Loop",
+			"path": "formal/solidcore/inv08/Inv08Loop.lean",
+			"model_relative_path": null,
+			"sha256": "628cef0f9ad4b55c8ade9c714248baf8623451fec66f73640d50596ae5944c2f",
+			"imports": ["Inv08LoopStep"]
+		},
+		{
+			"module": "Inv39UpdateStores",
+			"path": "formal/solidcore/inv39/Inv39UpdateStores.lean",
+			"model_relative_path": null,
+			"sha256": "249235f4660df345b4a11eadf052928f8c14cd737f3ad62f5bb92d06de32b3b9",
+			"imports": ["Inv39DebitBranch"]
+		},
+		{
+			"module": "Inv08Members",
+			"path": "formal/solidcore/inv08/Inv08Members.lean",
+			"model_relative_path": null,
+			"sha256": "c013a2aebb65e205959b78e9bc1427da72ffe111a11651da621cda097c0a585c",
+			"imports": ["Inv08Integral"]
+		},
+		{
+			"module": "Inv39EventEffect",
+			"path": "formal/solidcore/inv39/Inv39EventEffect.lean",
+			"model_relative_path": null,
+			"sha256": "e8c682773b8b0d1a2ba830213b4c569b4ffef8c2f38c4de6bb3ca4276e8321bb",
+			"imports": ["Inv39UpdateStores"]
+		},
+		{
+			"module": "Inv08ExpiryStorage",
+			"path": "formal/solidcore/inv08/Inv08ExpiryStorage.lean",
+			"model_relative_path": null,
+			"sha256": "2183d9a577fdb95b6bc93cf2033ab0f872753854c1ed65e94206cc1ac7ee5920",
+			"imports": ["Inv08Members"]
+		},
+		{
+			"module": "Inv39Emit",
+			"path": "formal/solidcore/inv39/Inv39Emit.lean",
+			"model_relative_path": null,
+			"sha256": "60124ed10bc371d4449e18ae3c11d5a9ea930ca6380f3d336846d5400371f8ab",
+			"imports": ["Inv39EventEffect", "Inv39EventLayout"]
+		},
+		{
+			"module": "Inv39LogInputs",
+			"path": "formal/solidcore/inv39/Inv39LogInputs.lean",
+			"model_relative_path": null,
+			"sha256": "464e29a799604464bac2c8697e61af73cef89ce86a0394a75800ead982b5b63a",
+			"imports": ["Inv39SupplyEvents", "Inv39EventEffect"]
+		},
+		{
+			"module": "Inv08SearchTable",
+			"path": "formal/solidcore/inv08/Inv08SearchTable.lean",
+			"model_relative_path": null,
+			"sha256": "9f35cfe2e06f8b37e810d04a044401da1f62a69bd597c24d9f96ce61839c60f5",
+			"imports": ["Inv08SearchExpressions", "Inv08ExpiryStorage"]
+		},
+		{
+			"module": "Inv39UpdateExecution",
+			"path": "formal/solidcore/inv39/Inv39UpdateExecution.lean",
+			"model_relative_path": null,
+			"sha256": "a2fc587ed697f39133b760fb52d859b05492048ad9db0aac78927754031477e2",
+			"imports": ["Inv39Emit"]
+		},
+		{
+			"module": "Inv08SearchGuards",
+			"path": "formal/solidcore/inv08/Inv08SearchGuards.lean",
+			"model_relative_path": null,
+			"sha256": "7db6f4bf40cb63964bc10bd0d89ae89282b05a94eedf21128aae5e1c2134b2ea",
+			"imports": ["Inv08Loop", "Inv08SearchTable"]
+		},
+		{
+			"module": "Inv39EmitSuccess",
+			"path": "formal/solidcore/inv39/Inv39EmitSuccess.lean",
+			"model_relative_path": null,
+			"sha256": "61db28b0e47cb8282c7da3b54af196271d812487bff529c902a8a3ebd9bd6f38",
+			"imports": ["Inv39UpdateExecution"]
+		},
+		{
+			"module": "Inv08AuthorityShapes",
+			"path": "formal/solidcore/inv08/Inv08AuthorityShapes.lean",
+			"model_relative_path": null,
+			"sha256": "02904123fe1d2b096be4927c0775382158b1f9b3c2c9f06f3be07a1cb5293e3b",
+			"imports": ["Inv08CursorExecution", "Inv08SearchGuards"]
+		},
+		{
+			"module": "Inv39UpdateCall",
+			"path": "formal/solidcore/inv39/Inv39UpdateCall.lean",
+			"model_relative_path": null,
+			"sha256": "cf70aed6ddd71ace27955379315b70ef745d9f2ce0b7025e824e876e86a04f6d",
+			"imports": ["Inv39EmitSuccess"]
+		},
+		{
+			"module": "Inv39LogEmissions",
+			"path": "formal/solidcore/inv39/Inv39LogEmissions.lean",
+			"model_relative_path": null,
+			"sha256": "320c6bd3ec8bd16885410b8c16f9459b2ddf400f4c70be5c06697d360c93ae11",
+			"imports": ["Inv39LogInputs", "Inv39EmitSuccess"]
+		},
+		{
+			"module": "Inv08AuthorityBytes",
+			"path": "formal/solidcore/inv08/Inv08AuthorityBytes.lean",
+			"model_relative_path": null,
+			"sha256": "b9ac64fdb76214fff7913eef8a99f0e826bc2f2f8bb66d2c480a25f94a9d4b7b",
+			"imports": ["Inv08AuthorityShapes"]
+		},
+		{
+			"module": "Inv39Ledger",
+			"path": "formal/solidcore/inv39/Inv39Ledger.lean",
+			"model_relative_path": null,
+			"sha256": "e4f794c5faf8f9993fda7fff3d75e1e6a6d93f863b267e94ade6c30252e03e39",
+			"imports": ["Inv39UpdateCall", "Inv39SupplyDelta"]
+		},
+		{
+			"module": "Inv39SupplyEventSuccess",
+			"path": "formal/solidcore/inv39/Inv39SupplyEventSuccess.lean",
+			"model_relative_path": null,
+			"sha256": "4a46684850673dca48138a35816e3b18ccee78740ccf8778eac3e2f48785f905",
+			"imports": ["Inv39LogEmissions"]
+		},
+		{
+			"module": "Inv08AuthorityMemory",
+			"path": "formal/solidcore/inv08/Inv08AuthorityMemory.lean",
+			"model_relative_path": null,
+			"sha256": "732630783a55c0159e0e095747f86b6b6e5b519f96c39beaccada51a31313c92",
+			"imports": ["Inv08AuthorityBytes"]
+		},
+		{
+			"module": "Inv39InitWrites",
+			"path": "formal/solidcore/inv39/Inv39InitWrites.lean",
+			"model_relative_path": null,
+			"sha256": "57c77119ddf9b95f258e74856961fa8cab03e8cd3fd0929e2a4300609421de77",
+			"imports": ["Inv39StringFrame", "Inv39Ledger"]
+		},
+		{
+			"module": "Inv39Movement",
+			"path": "formal/solidcore/inv39/Inv39Movement.lean",
+			"model_relative_path": null,
+			"sha256": "45df557a69603a9acfba8cbf2a1e604e0781b8cffbf3c3a4edbeb6b68d56f234",
+			"imports": ["Inv39UpdateBody", "Inv39Ledger"]
+		},
+		{
+			"module": "Inv08AuthorityExpressions",
+			"path": "formal/solidcore/inv08/Inv08AuthorityExpressions.lean",
+			"model_relative_path": null,
+			"sha256": "7d1d156ddbdcb9e8fe239d0e9c0a40cbddfbd3c5fd13ba6cf7cb66367ab2207c",
+			"imports": ["Inv08AuthorityMemory"]
+		},
+		{
+			"module": "Inv39InitState",
+			"path": "formal/solidcore/inv39/Inv39InitState.lean",
+			"model_relative_path": null,
+			"sha256": "66112d696f835186c7bcccfdc4771b25e6f1f7a2288aac9a3ceed82d9eb00d8b",
+			"imports": ["Inv39SafeTemplates", "Inv39InitWrites"]
+		},
+		{
+			"module": "Inv39InitDescriptors",
+			"path": "formal/solidcore/inv39/Inv39InitDescriptors.lean",
+			"model_relative_path": null,
+			"sha256": "19926aa7e26a1711e779cf9a07a147b8de872f9fbe0b7b5bfe8a8817233a037f",
+			"imports": ["Inv39InitWrites"]
+		},
+		{
+			"module": "Inv39InitBounds",
+			"path": "formal/solidcore/inv39/Inv39InitBounds.lean",
+			"model_relative_path": null,
+			"sha256": "dc7189577887aa9683079b44cb72902391bf05eb0832ef30cdbba271042cca91",
+			"imports": ["Inv39InitWrites"]
+		},
+		{
+			"module": "Inv39MotionArgs",
+			"path": "formal/solidcore/inv39/Inv39MotionArgs.lean",
+			"model_relative_path": null,
+			"sha256": "6bf43f0f730d0c94340a3cc19b0c21db48c547f87800f98aeb066e32aacc69a0",
+			"imports": ["Inv39Movement"]
+		},
+		{
+			"module": "Inv45Signed",
+			"path": "formal/solidcore/inv45/Inv45Signed.lean",
+			"model_relative_path": null,
+			"sha256": "a9d9419be8d3074686eb009cd33654150a109715d6fb77489bb52e9ca17b5225",
+			"imports": ["Inv45Arithmetic", "Inv08AuthorityExpressions"]
+		},
+		{
+			"module": "Inv39InitMemory",
+			"path": "formal/solidcore/inv39/Inv39InitMemory.lean",
+			"model_relative_path": null,
+			"sha256": "482033ac693ef602587e23f80b864cf2ae390cf220df232d5d73feb94dec284e",
+			"imports": ["Inv39InitState", "Inv39ReturnStorage"]
+		},
+		{
+			"module": "Inv39InitLayout",
+			"path": "formal/solidcore/inv39/Inv39InitLayout.lean",
+			"model_relative_path": null,
+			"sha256": "5328ea7493410177ea5097099bff9d7a87fadcb52b6a944fc5bf38c2cafccfa9",
+			"imports": ["Inv39InitDescriptors"]
+		},
+		{
+			"module": "Inv39MotionExecution",
+			"path": "formal/solidcore/inv39/Inv39MotionExecution.lean",
+			"model_relative_path": null,
+			"sha256": "a6628db757bed3c50e04ce9869288b94c1c0badf8e3ad965968fce58326dcd04",
+			"imports": ["Inv39MotionArgs"]
+		},
+		{
+			"module": "Inv45Comparisons",
+			"path": "formal/solidcore/inv45/Inv45Comparisons.lean",
+			"model_relative_path": null,
+			"sha256": "2dbcf9096402035935e93f2e0b41eda70887ac423c7d42c19e93d35c0006759c",
+			"imports": ["Inv45Signed"]
+		},
+		{
+			"module": "Inv39InitControl",
+			"path": "formal/solidcore/inv39/Inv39InitControl.lean",
+			"model_relative_path": null,
+			"sha256": "8f97a45a894ad30d63e321c1d165667aedb3ef6ae7dc13c1d9c0ef9e06a752f9",
+			"imports": ["Inv39InitMemory", "Inv39InputReads", "Inv39EventEffect"]
+		},
+		{
+			"module": "Inv39InitStores",
+			"path": "formal/solidcore/inv39/Inv39InitStores.lean",
+			"model_relative_path": null,
+			"sha256": "deebf4220ce31e515e761d024c22c7364810bd8739c3c8b80341bc8e578bbbd7",
+			"imports": ["Inv39InitDescriptors", "Inv39InitMemory", "Inv39InputReads"]
+		},
+		{
+			"module": "Inv39MotionCall",
+			"path": "formal/solidcore/inv39/Inv39MotionCall.lean",
+			"model_relative_path": null,
+			"sha256": "3cecef144862120f6004fe4fbbb8347a15e1dc6ac5c4a6f9ff0ef34f589712fa",
+			"imports": ["Inv39MotionExecution"]
+		},
+		{
+			"module": "Inv39ZeroGuard",
+			"path": "formal/solidcore/inv39/Inv39ZeroGuard.lean",
+			"model_relative_path": null,
+			"sha256": "d3d1eb8c75399fe9e8b74c3d4e3deefdd702db2c08731b5aa2b124cd29b94634",
+			"imports": ["Inv39MotionExecution", "Inv32Revert"]
+		},
+		{
+			"module": "Inv45WordOps",
+			"path": "formal/solidcore/inv45/Inv45WordOps.lean",
+			"model_relative_path": null,
+			"sha256": "eb392fec45a90f3fd9e2e58ebfe941dae1162ad3d8aeebcb0fdbebffec403825",
+			"imports": ["Inv45Comparisons", "Inv32CompareValues"]
+		},
+		{
+			"module": "Inv39InitLocal",
+			"path": "formal/solidcore/inv39/Inv39InitLocal.lean",
+			"model_relative_path": null,
+			"sha256": "4ca6dce4600cf503546e5e383092a08752fc52e6ea968442d334913393f9163a",
+			"imports": ["Inv39InitControl"]
+		},
+		{
+			"module": "Inv39ChildBody",
+			"path": "formal/solidcore/inv39/Inv39ChildBody.lean",
+			"model_relative_path": null,
+			"sha256": "415f67dab94dc09c027624132987fa26b201385d47c8ddf175ebcfdde2248221",
+			"imports": ["Inv39MotionCall", "Inv39GetterBinding", "Inv39SupplyEvents"]
+		},
+		{
+			"module": "Inv39ZeroCall",
+			"path": "formal/solidcore/inv39/Inv39ZeroCall.lean",
+			"model_relative_path": null,
+			"sha256": "4acd5fe5177894a84ef9802527f5572a1acace191d797da4807d8c6569f3adc6",
+			"imports": ["Inv39MotionCall", "Inv39ZeroGuard"]
+		},
+		{
+			"module": "Inv45Expressions",
+			"path": "formal/solidcore/inv45/Inv45Expressions.lean",
+			"model_relative_path": null,
+			"sha256": "63d1fc46e2ad18d1e47351d86d3f98d2ef0ec3e518dad23e5d525af86cc486a4",
+			"imports": ["Inv45WordOps", "Inv45AbsoluteShape"]
+		},
+		{
+			"module": "Inv39InitDeclarations",
+			"path": "formal/solidcore/inv39/Inv39InitDeclarations.lean",
+			"model_relative_path": null,
+			"sha256": "ec3c0a663151f0bd21e3f2c8f3178a6d90982d5fd829a486ab9f82f07b065d2a",
+			"imports": ["Inv39InitLocal", "Inv39InitStores", "Inv39InitLayout"]
+		},
+		{
+			"module": "Inv39ChildGo",
+			"path": "formal/solidcore/inv39/Inv39ChildGo.lean",
+			"model_relative_path": null,
+			"sha256": "16753a74f57c0cb946e79822c228f05ef23fea80eb6fc73f676e6eb8493fd682",
+			"imports": ["Inv39ChildBody"]
+		},
+		{
+			"module": "Inv39GuardNumbers",
+			"path": "formal/solidcore/inv39/Inv39GuardNumbers.lean",
+			"model_relative_path": null,
+			"sha256": "6fd3ab947ce633616f9af5aa7ac8840b9590be8c2769687c0d06072d8bed7643",
+			"imports": ["Inv39ChildBody", "Inv40Evaluation"]
+		},
+		{
+			"module": "Inv39TransferBinding",
+			"path": "formal/solidcore/inv39/Inv39TransferBinding.lean",
+			"model_relative_path": null,
+			"sha256": "b531eba27d7c34241d4263330a58d8da8bb084dc55a3c654402bfdcf9272acd7",
+			"imports": ["Inv39ChildBody"]
+		},
+		{
+			"module": "Inv39GuardBinding",
+			"path": "formal/solidcore/inv39/Inv39GuardBinding.lean",
+			"model_relative_path": null,
+			"sha256": "fc55d6921f45c4e17a6f9addd8b32210afc8f65da8934fb86ea392a106e586f8",
+			"imports": ["Inv39ChildBody", "Inv39Getters"]
+		},
+		{
+			"module": "Inv45MulExpressions",
+			"path": "formal/solidcore/inv45/Inv45MulExpressions.lean",
+			"model_relative_path": null,
+			"sha256": "931c7be1a47a45aaa656128d707b59eaab6941f419325d48f551fb0ce691893f",
+			"imports": ["Inv45MulShape", "Inv45Expressions"]
+		},
+		{
+			"module": "Inv45AbsExpressions",
+			"path": "formal/solidcore/inv45/Inv45AbsExpressions.lean",
+			"model_relative_path": null,
+			"sha256": "87b84ff7b9b55f805127270a293738fcc430b90e7fb380d48ee020e781320e73",
+			"imports": ["Inv45Expressions"]
+		},
+		{
+			"module": "Inv39InitDecimal",
+			"path": "formal/solidcore/inv39/Inv39InitDecimal.lean",
+			"model_relative_path": null,
+			"sha256": "6bd6d42a810b1cda85f361a9b4139ebf54d8a33c2854fac1284a3721c5f79a8e",
+			"imports": ["Inv39InitDeclarations", "Inv39DecimalCall"]
+		},
+		{
+			"module": "Inv39ChildWrapper",
+			"path": "formal/solidcore/inv39/Inv39ChildWrapper.lean",
+			"model_relative_path": null,
+			"sha256": "8b81fdb249444e61b5c82c532c5e0365b6b3b4eb9f7dd889397fdedcb3f32b8e",
+			"imports": ["Inv39ChildGo", "Inv39Authority"]
+		},
+		{
+			"module": "Inv39BurnEffect",
+			"path": "formal/solidcore/inv39/Inv39BurnEffect.lean",
+			"model_relative_path": null,
+			"sha256": "607a125bbedf8bb3ee757669633e41a0c72155c8b9426df0f48fba7901a93885",
+			"imports": ["Inv39ChildGo", "Inv39SupplyEventSuccess"]
+		},
+		{
+			"module": "Inv39AllowanceRead",
+			"path": "formal/solidcore/inv39/Inv39AllowanceRead.lean",
+			"model_relative_path": null,
+			"sha256": "d1ce8ceb12e9b968143e946116f4030bf23651fdf067e5c78700618b5329189c",
+			"imports": ["Inv39AllowanceSlots", "Inv39GuardNumbers", "Inv39BalanceExecution"]
+		},
+		{
+			"module": "Inv39Shortage",
+			"path": "formal/solidcore/inv39/Inv39Shortage.lean",
+			"model_relative_path": null,
+			"sha256": "2bb4c764af5e56b2a34cdc2ff5a3302b7c9bdb6c7235e63ff9e85d6c939036e0",
+			"imports": ["Inv39UpdateExecution", "Inv39GuardNumbers"]
+		},
+		{
+			"module": "Inv39AllowanceTerms",
+			"path": "formal/solidcore/inv39/Inv39AllowanceTerms.lean",
+			"model_relative_path": null,
+			"sha256": "b9e1ea280949cb5ee8681044ccb42daba3acdec602f532fad1d2308d14a10fb8",
+			"imports": ["Inv39MotionCall", "Inv39TransferBinding"]
+		},
+		{
+			"module": "Inv39Fetch",
+			"path": "formal/solidcore/inv39/Inv39Fetch.lean",
+			"model_relative_path": null,
+			"sha256": "3d963b1e21c25e1f220fb6f9adc6f5f4aece5e36cbe790b08e0a939884a0a8fb",
+			"imports": ["Inv39GuardBinding"]
+		},
+		{
+			"module": "Inv45Product",
+			"path": "formal/solidcore/inv45/Inv45Product.lean",
+			"model_relative_path": null,
+			"sha256": "464e638a1a6027d65f39699a41d4663ab18a2da42639fee31d2be3b96919e89d",
+			"imports": ["Inv45MulExpressions"]
+		},
+		{
+			"module": "Inv45Absolute",
+			"path": "formal/solidcore/inv45/Inv45Absolute.lean",
+			"model_relative_path": null,
+			"sha256": "d55070ea9b191296c802ba33e0548f8fa337dd98e78474d5645fabc940344a0d",
+			"imports": ["Inv45AbsExpressions"]
+		},
+		{
+			"module": "Inv39InitHoist",
+			"path": "formal/solidcore/inv39/Inv39InitHoist.lean",
+			"model_relative_path": null,
+			"sha256": "f25bc46f115e32990e2014240184988f457c8b7d78bc8aaa2f05a11bc3ba1d10",
+			"imports": ["Inv39InitDecimal"]
+		},
+		{
+			"module": "Inv39Public",
+			"path": "formal/solidcore/inv39/Inv39Public.lean",
+			"model_relative_path": null,
+			"sha256": "56155dbb5f9f79ea02eb86b97d6bfe22ff64949a27eea97945942b25ab4bf299",
+			"imports": ["Inv39ChildWrapper", "Inv39BurnEffect"]
+		},
+		{
+			"module": "Inv39FailedUpdate",
+			"path": "formal/solidcore/inv39/Inv39FailedUpdate.lean",
+			"model_relative_path": null,
+			"sha256": "9eee766994f95c0b43e4cc7d5327a3ef1a197583be3890bc9ada016d6ff37497",
+			"imports": ["Inv39UpdateCall", "Inv39Shortage"]
+		},
+		{
+			"module": "Inv39ApprovalEvent",
+			"path": "formal/solidcore/inv39/Inv39ApprovalEvent.lean",
+			"model_relative_path": null,
+			"sha256": "e41fdf222b9bad9f6708d104fa2cc863fc64d9bb0d1a7483dd4e8edb0d1ed4d9",
+			"imports": ["Inv39EmitSuccess", "Inv39AllowanceTerms"]
+		},
+		{
+			"module": "Inv39AllowanceBindings",
+			"path": "formal/solidcore/inv39/Inv39AllowanceBindings.lean",
+			"model_relative_path": null,
+			"sha256": "b95a4188a3ccf51b18c6de1375c486389b9864fd5491065964ae73ab999699c2",
+			"imports": ["Inv39AllowanceTerms"]
+		},
+		{
+			"module": "Inv39SpendShape",
+			"path": "formal/solidcore/inv39/Inv39SpendShape.lean",
+			"model_relative_path": null,
+			"sha256": "fb7ab70420f0c130a61c27b370c885f6eb518a07a2578db56c6f5bf9b27e39af",
+			"imports": ["Inv39AllowanceTerms"]
+		},
+		{
+			"module": "Inv39Sender",
+			"path": "formal/solidcore/inv39/Inv39Sender.lean",
+			"model_relative_path": null,
+			"sha256": "345977c5ec2bfd927614f25df0502b0c5dc4d42077fa3ede0a7244b69f628096",
+			"imports": ["Inv39TransferBinding", "Inv39Fetch"]
+		},
+		{
+			"module": "Inv39Guard",
+			"path": "formal/solidcore/inv39/Inv39Guard.lean",
+			"model_relative_path": null,
+			"sha256": "894f0ea0d393b9386411be34d78c2d7ffb604523da7bdb47562891e332614405",
+			"imports": ["Inv39Fetch", "Inv39GuardNumbers"]
+		},
+		{
+			"module": "Inv45DivisionState",
+			"path": "formal/solidcore/inv45/Inv45DivisionState.lean",
+			"model_relative_path": null,
+			"sha256": "16cbae1a31f9543c1b4362d23d57e6bb8029628703749f9c6b465d22a56d3191",
+			"imports": ["Inv45Product"]
+		},
+		{
+			"module": "Inv39InitSyntax",
+			"path": "formal/solidcore/inv39/Inv39InitSyntax.lean",
+			"model_relative_path": null,
+			"sha256": "24c7d23cb2cef03d63addf68369d82e1ffe2f7d4a8a986796cd2111266534f69",
+			"imports": ["Inv39InitHoist"]
+		},
+		{
+			"module": "Inv39RawAuth",
+			"path": "formal/solidcore/inv39/Inv39RawAuth.lean",
+			"model_relative_path": null,
+			"sha256": "83109307c9a254390b246afc5a75bc82c078bd1c7fd8ffb2562edaf5646e439a",
+			"imports": ["Inv39RawAuthShape", "Inv39Public"]
+		},
+		{
+			"module": "Inv39DenyEntry",
+			"path": "formal/solidcore/inv39/Inv39DenyEntry.lean",
+			"model_relative_path": null,
+			"sha256": "1f0d64e87c2db2ead96168ce32d2ecaee178b59c8872b6f043694dd362814010",
+			"imports": ["Inv39Public"]
+		},
+		{
+			"module": "Inv39FailedMotionArgs",
+			"path": "formal/solidcore/inv39/Inv39FailedMotionArgs.lean",
+			"model_relative_path": null,
+			"sha256": "268feb12b53d3b3c33ec2781a9ebfd70cec65fb6598b479736a13f66b70d8a62",
+			"imports": ["Inv39MotionArgs", "Inv39FailedUpdate"]
+		},
+		{
+			"module": "Inv39ApproveBody",
+			"path": "formal/solidcore/inv39/Inv39ApproveBody.lean",
+			"model_relative_path": null,
+			"sha256": "367a9ff87cb5ab6571a8d8939c811b7af50eb30104a15f9c33b3f4888cd9b008",
+			"imports": ["Inv39ApprovalEvent", "Inv39AllowanceRead", "Inv39ZeroGuard"]
+		},
+		{
+			"module": "Inv39SpendMath",
+			"path": "formal/solidcore/inv39/Inv39SpendMath.lean",
+			"model_relative_path": null,
+			"sha256": "6ff205c43eb8fa7bf096cd17a0d54475f20f0cdb59ebe07af25766deaed306d7",
+			"imports": ["Inv39SpendShape", "Inv39GuardNumbers"]
+		},
+		{
+			"module": "Inv39ApprovalShape",
+			"path": "formal/solidcore/inv39/Inv39ApprovalShape.lean",
+			"model_relative_path": null,
+			"sha256": "f4bcabf7bf341e48f13b349dceab4b113f9de60e4905e15b8e3d53030416d24f",
+			"imports": ["Inv39SpendShape", "Inv39AllowanceBindings"]
+		},
+		{
+			"module": "Inv39AllowanceGetter",
+			"path": "formal/solidcore/inv39/Inv39AllowanceGetter.lean",
+			"model_relative_path": null,
+			"sha256": "4fcb5b96cc6b5d9205da1f11ef1f5e167590251bfdd3d0311f4af43e734209c8",
+			"imports": ["Inv39AllowanceRead", "Inv39AllowanceBindings", "Inv39Sender"]
+		},
+		{
+			"module": "Inv39PublicMint",
+			"path": "formal/solidcore/inv39/Inv39PublicMint.lean",
+			"model_relative_path": null,
+			"sha256": "9bc15763e32b7d0365ab40f090a842f6edba1b60b1fde2bde274bd4adfeba2f5",
+			"imports": ["Inv39Guard", "Inv39Public"]
+		},
+		{
+			"module": "Inv39GuardReject",
+			"path": "formal/solidcore/inv39/Inv39GuardReject.lean",
+			"model_relative_path": null,
+			"sha256": "664020548d643133ce32d776d93f5bc49d5c178b170486c397b65010c3b13347",
+			"imports": ["Inv39Guard"]
+		},
+		{
+			"module": "Inv45Factor",
+			"path": "formal/solidcore/inv45/Inv45Factor.lean",
+			"model_relative_path": null,
+			"sha256": "7e9c86049a592ead276802a34cc7da18af6453483b9814569ada88afe9f13106",
+			"imports": ["Inv45DivisionState"]
+		},
+		{
+			"module": "Inv39EntryWrites",
+			"path": "formal/solidcore/inv39/Inv39EntryWrites.lean",
+			"model_relative_path": null,
+			"sha256": "4adcd101d14f15d385701c3fc8f05107efde6c33baa95e72520aec77f18869d5",
+			"imports": ["Inv39InitSyntax", "Inv39Public"]
+		},
+		{
+			"module": "Inv39InitBinding",
+			"path": "formal/solidcore/inv39/Inv39InitBinding.lean",
+			"model_relative_path": null,
+			"sha256": "31a9121ddf0a197700d2f82d2c6f224ffc21ffba963ec4f8f23d1cc111cc2e5c",
+			"imports": ["Inv39InitSyntax"]
+		},
+		{
+			"module": "Inv39AuthReads",
+			"path": "formal/solidcore/inv39/Inv39AuthReads.lean",
+			"model_relative_path": null,
+			"sha256": "9abb6a45be6a65c040fb45072e04132055545dbe0b33a6b2895322048d7dd537",
+			"imports": ["Inv39InitSyntax"]
+		},
+		{
+			"module": "Inv39AuthResolve",
+			"path": "formal/solidcore/inv39/Inv39AuthResolve.lean",
+			"model_relative_path": null,
+			"sha256": "3f59d228014656dad413a0dc9d7634110db6f4aa2adb4bf905fad79565ead754",
+			"imports": ["Inv39AuthSlots", "Inv39AllowanceRead", "Inv39RawAuth"]
+		},
+		{
+			"module": "Inv39AuthScopes",
+			"path": "formal/solidcore/inv39/Inv39AuthScopes.lean",
+			"model_relative_path": null,
+			"sha256": "9927a5afd62dcd62106543978dbd8bc7dd2a2591b79ec9186b12ad64d92ecef3",
+			"imports": ["Inv39InitMemory", "Inv39RawAuth"]
+		},
+		{
+			"module": "Inv39MotionRejected",
+			"path": "formal/solidcore/inv39/Inv39MotionRejected.lean",
+			"model_relative_path": null,
+			"sha256": "f4e7d86e8adf97a2274ad249ba108933b37dee980f1b48d4024183247c08b3c9",
+			"imports": ["Inv39MotionExecution", "Inv39FailedMotionArgs"]
+		},
+		{
+			"module": "Inv39ApproveCall",
+			"path": "formal/solidcore/inv39/Inv39ApproveCall.lean",
+			"model_relative_path": null,
+			"sha256": "4cf399ce4bedd413309131a503e9a4ef6d2e4526c2a513b45100b9be36468a9d",
+			"imports": ["Inv39ApproveBody", "Inv39AllowanceBindings"]
+		},
+		{
+			"module": "Inv39SpendFetch",
+			"path": "formal/solidcore/inv39/Inv39SpendFetch.lean",
+			"model_relative_path": null,
+			"sha256": "1a23ff8c8883dc9aee1c6459a748e3a43eaa15ba080a9bb81aaf97ea8a944c79",
+			"imports": ["Inv39SpendShape", "Inv39AllowanceGetter"]
+		},
+		{
+			"module": "Inv39TransferCore",
+			"path": "formal/solidcore/inv39/Inv39TransferCore.lean",
+			"model_relative_path": null,
+			"sha256": "7ddcc775e7ae7b302bba5910788c4009d5f57ef3355123ca90fe9571562588d5",
+			"imports": ["Inv39PublicMint"]
+		},
+		{
+			"module": "Inv39GuardOverflow",
+			"path": "formal/solidcore/inv39/Inv39GuardOverflow.lean",
+			"model_relative_path": null,
+			"sha256": "72f679f423b1260278af0638d19e2ca21e02755bca1728616f7b90a9aefd99a6",
+			"imports": ["Inv39GuardReject"]
+		},
+		{
+			"module": "Inv45DivideTwos",
+			"path": "formal/solidcore/inv45/Inv45DivideTwos.lean",
+			"model_relative_path": null,
+			"sha256": "ac6ca876aba592609ae84b76e78e2995ccb5edc8893168beed88d113544d101c",
+			"imports": ["Inv45Factor"]
+		},
+		{
+			"module": "Inv39RecoverExpr",
+			"path": "formal/solidcore/inv39/Inv39RecoverExpr.lean",
+			"model_relative_path": null,
+			"sha256": "1f1ee40887d1fde22d35c6d92d88f07272dc9b1a279aea8e137551b20e121a62",
+			"imports": ["Inv39AuthReads", "Inv39Fold"]
+		},
+		{
+			"module": "Inv39AuthLocals",
+			"path": "formal/solidcore/inv39/Inv39AuthLocals.lean",
+			"model_relative_path": null,
+			"sha256": "060d9430109554200c672d10cc59822d863e33efc003af6ff69c9103ec76fcb3",
+			"imports": ["Inv39AuthScopes", "Inv39Fold"]
+		},
+		{
+			"module": "Inv39ScalarTemplates",
+			"path": "formal/solidcore/inv39/Inv39ScalarTemplates.lean",
+			"model_relative_path": null,
+			"sha256": "a6982130a0c788726bdbda8ff7a209c46e47c91f2e608be3fda5dadeed02401e",
+			"imports": ["Inv39AuthScopes"]
+		},
+		{
+			"module": "Inv39RejectedCall",
+			"path": "formal/solidcore/inv39/Inv39RejectedCall.lean",
+			"model_relative_path": null,
+			"sha256": "0c97a77f347c4114eb52241acd93392dc7ae74ec60d7b5b03d18d5dafb410762",
+			"imports": ["Inv39MotionCall", "Inv39MotionRejected"]
+		},
+		{
+			"module": "Inv39ApprovalHoist",
+			"path": "formal/solidcore/inv39/Inv39ApprovalHoist.lean",
+			"model_relative_path": null,
+			"sha256": "20ff7bb85154153be6bf3ebde7eb0759deeddb87cb52a70ae27f01695c3307d4",
+			"imports": ["Inv39ApproveCall", "Inv39SpendShape"]
+		},
+		{
+			"module": "Inv39ApproveDenied",
+			"path": "formal/solidcore/inv39/Inv39ApproveDenied.lean",
+			"model_relative_path": null,
+			"sha256": "24c6b23f10a4a12e375f3499fbcad977156ec292436453b0d3546c3e0f57f8b1",
+			"imports": ["Inv39ApproveCall"]
+		},
+		{
+			"module": "Inv39TransferBody",
+			"path": "formal/solidcore/inv39/Inv39TransferBody.lean",
+			"model_relative_path": null,
+			"sha256": "4a9b2abaaaa118709825acfacd45a61c8d198e9cedb56e3ef8479bb95023b09f",
+			"imports": ["Inv39Sender", "Inv39TransferCore"]
+		},
+		{
+			"module": "Inv39CapNecessity",
+			"path": "formal/solidcore/inv39/Inv39CapNecessity.lean",
+			"model_relative_path": null,
+			"sha256": "514d9f322464c3b5623431b2f3664e6f56ac72940631a11ce72a47cec92845db",
+			"imports": ["Inv39GuardOverflow", "Inv39Public", "Inv39Authority"]
+		},
+		{
+			"module": "Inv45Newton",
+			"path": "formal/solidcore/inv45/Inv45Newton.lean",
+			"model_relative_path": null,
+			"sha256": "7112374ab139efea340b0bb92dc395df12bf324b13d1141d1b3e439b3710bacd",
+			"imports": ["Inv45DivideTwos"]
+		},
+		{
+			"module": "Inv39GuardControl",
+			"path": "formal/solidcore/inv39/Inv39GuardControl.lean",
+			"model_relative_path": null,
+			"sha256": "f62c6beec2bf247d98a007dcbeb8e4ad44e98b5e18e57f1453306806e96b3525",
+			"imports": ["Inv39AuthLocals"]
+		},
+		{
+			"module": "Inv39SpendBranch",
+			"path": "formal/solidcore/inv39/Inv39SpendBranch.lean",
+			"model_relative_path": null,
+			"sha256": "adeaa58ea4c042afa070afce303fca6e239d375ac485614a9fe56841a4bf1c4a",
+			"imports": ["Inv39ApprovalHoist", "Inv39SpendMath"]
+		},
+		{
+			"module": "Inv39DeniedHoist",
+			"path": "formal/solidcore/inv39/Inv39DeniedHoist.lean",
+			"model_relative_path": null,
+			"sha256": "512f7d383aa6a3b97fb57c06a874976375b9d37e9da86088afa94b0ab2c99c4a",
+			"imports": ["Inv39ApproveDenied", "Inv39SpendShape"]
+		},
+		{
+			"module": "Inv39PublicTransfer",
+			"path": "formal/solidcore/inv39/Inv39PublicTransfer.lean",
+			"model_relative_path": null,
+			"sha256": "611ec483e2bf77745c2e1490809e4781e79c438c58e3ced223e1ab1349a1100b",
+			"imports": ["Inv39TransferBody"]
+		},
+		{
+			"module": "Inv39BurnRejected",
+			"path": "formal/solidcore/inv39/Inv39BurnRejected.lean",
+			"model_relative_path": null,
+			"sha256": "9a2c6a1b13c91519e3886b6576b4ca1b96328e0c6c0432bb08d4a4e7a65bcd68",
+			"imports": ["Inv39RejectedCall", "Inv39ZeroCall", "Inv39CapNecessity"]
+		},
+		{
+			"module": "Inv39Denial",
+			"path": "formal/solidcore/inv39/Inv39Denial.lean",
+			"model_relative_path": null,
+			"sha256": "27aa3a315b3c15079a61ffc32ecc5e24ab192b162ace1314fa0c8fc3054f729d",
+			"imports": ["Inv39Authority", "Inv39CapNecessity"]
+		},
+		{
+			"module": "Inv45Wide",
+			"path": "formal/solidcore/inv45/Inv45Wide.lean",
+			"model_relative_path": null,
+			"sha256": "68b0bb42748437c77f16821de2c5170d5a2bd57f4d36fee2661fcfe233910020",
+			"imports": ["Inv45Newton"]
+		},
+		{
+			"module": "Inv39GuardDecl",
+			"path": "formal/solidcore/inv39/Inv39GuardDecl.lean",
+			"model_relative_path": null,
+			"sha256": "c76633655928750b2a11fe18dccdea657e5be997ad5689c9d8d779da586a4b64",
+			"imports": ["Inv39GuardControl", "Inv39ScalarTemplates", "Inv39AuthReads"]
+		},
+		{
+			"module": "Inv39SpendBody",
+			"path": "formal/solidcore/inv39/Inv39SpendBody.lean",
+			"model_relative_path": null,
+			"sha256": "623a780daf6465c3cef96d0f87cdb993abdf3cebf4f760c7c97e0fd31b1c447c",
+			"imports": ["Inv39SpendBranch", "Inv39SpendFetch"]
+		},
+		{
+			"module": "Inv39DelegatedBooks",
+			"path": "formal/solidcore/inv39/Inv39DelegatedBooks.lean",
+			"model_relative_path": null,
+			"sha256": "5f20b491e54cd9956151ea84f890ef04e24c443e8f389adc2889cdbbb32a32f8",
+			"imports": ["Inv39SpendBranch", "Inv39Ledger"]
+		},
+		{
+			"module": "Inv39SpendDenied",
+			"path": "formal/solidcore/inv39/Inv39SpendDenied.lean",
+			"model_relative_path": null,
+			"sha256": "ff2b14e3d6057a9fb2174f7cc97a775806b888d415c9b7be180ede1d181a14a6",
+			"imports": ["Inv39DeniedHoist", "Inv39SpendMath"]
+		},
+		{
+			"module": "Inv39TransferRejected",
+			"path": "formal/solidcore/inv39/Inv39TransferRejected.lean",
+			"model_relative_path": null,
+			"sha256": "38fb8f2f18b97d5656cb0d71894fd7933e3972e995beb8f9307fca09077eafec",
+			"imports": ["Inv39RejectedCall", "Inv39ZeroCall", "Inv39PublicTransfer"]
+		},
+		{
+			"module": "Inv45MulExecution",
+			"path": "formal/solidcore/inv45/Inv45MulExecution.lean",
+			"model_relative_path": null,
+			"sha256": "e476a3255e1be3452dc14e57f97fab9b477f5bcf0b952392a3d639904ef808ec",
+			"imports": ["Inv45Wide"]
+		},
+		{
+			"module": "Inv39GuardWrite",
+			"path": "formal/solidcore/inv39/Inv39GuardWrite.lean",
+			"model_relative_path": null,
+			"sha256": "b4e5ec4f18b193fea670bd91527e5d028d8a90b0fe8f1b0cbe2f039a81a9aacb",
+			"imports": ["Inv39GuardDecl", "Inv39RecoverExpr"]
+		},
+		{
+			"module": "Inv39SpendCall",
+			"path": "formal/solidcore/inv39/Inv39SpendCall.lean",
+			"model_relative_path": null,
+			"sha256": "8223d65670072298f71e647e66fee8fbabc1f20d4f994f1729c16b3a50dd22b0",
+			"imports": ["Inv39SpendBody", "Inv39AllowanceBindings"]
+		},
+		{
+			"module": "Inv39DirectApproveBody",
+			"path": "formal/solidcore/inv39/Inv39DirectApproveBody.lean",
+			"model_relative_path": null,
+			"sha256": "5fe24c3c397f11cf5d23f6adabd7c12361faa311565a13fad7286be0b41a1404",
+			"imports": ["Inv39ApprovalShape", "Inv39ApprovalHoist", "Inv39DeniedHoist", "Inv39SpendBody"]
+		},
+		{
+			"module": "Inv39DeniedSpendBody",
+			"path": "formal/solidcore/inv39/Inv39DeniedSpendBody.lean",
+			"model_relative_path": null,
+			"sha256": "546c30833b0dc7b67a836d4eb11e83f4ba122fbcf54731dfff46ef9bea1afcc1",
+			"imports": ["Inv39SpendDenied", "Inv39SpendBody", "Inv39SpendFetch"]
+		},
+		{
+			"module": "Inv45Calls",
+			"path": "formal/solidcore/inv45/Inv45Calls.lean",
+			"model_relative_path": null,
+			"sha256": "6dd0ce84bdf14612e20c06a55caf2ed3beeeb8d4645f23075312924d1892bf2f",
+			"imports": ["Inv45MulExecution", "Inv45Absolute"]
+		},
+		{
+			"module": "Inv39GuardAssign",
+			"path": "formal/solidcore/inv39/Inv39GuardAssign.lean",
+			"model_relative_path": null,
+			"sha256": "c8b85b734214479d236fe0124a73ca778ccc64733985e22ca70a72d197823315",
+			"imports": ["Inv39GuardWrite"]
+		},
+		{
+			"module": "Inv39SpendPrep",
+			"path": "formal/solidcore/inv39/Inv39SpendPrep.lean",
+			"model_relative_path": null,
+			"sha256": "51bcb13b03e217e89725a99ff1f3d99f5b2dd751b163e74b4defe79aa5bdcd59",
+			"imports": ["Inv39SpendCall", "Inv39TransferCore"]
+		},
+		{
+			"module": "Inv39DirectApproveCall",
+			"path": "formal/solidcore/inv39/Inv39DirectApproveCall.lean",
+			"model_relative_path": null,
+			"sha256": "3845410b7d8f649eeff300b4c80134fc1dbc1d3a5831f5017c776b0a795c77c1",
+			"imports": ["Inv39SpendCall", "Inv39DirectApproveBody", "Inv39AllowanceBindings"]
+		},
+		{
+			"module": "Inv39DeniedSpendCall",
+			"path": "formal/solidcore/inv39/Inv39DeniedSpendCall.lean",
+			"model_relative_path": null,
+			"sha256": "f73d5c1c8591481f334e11bb2804362f4ed29f24106fccc75df5fa60540a4858",
+			"imports": ["Inv39SpendCall", "Inv39DeniedSpendBody", "Inv39AllowanceBindings"]
+		},
+		{
+			"module": "Inv45AddShape",
+			"path": "formal/solidcore/inv45/Inv45AddShape.lean",
+			"model_relative_path": null,
+			"sha256": "abee75cbae621e0688cf34f8b08207180a4c7aaba84a9ed4fbdfea1735e6dcc5",
+			"imports": ["Inv45Calls"]
+		},
+		{
+			"module": "Inv39GuardReturn",
+			"path": "formal/solidcore/inv39/Inv39GuardReturn.lean",
+			"model_relative_path": null,
+			"sha256": "d12bf8902843165e1cc20b059c2bcace3b51342785eb11f35461c2243e3dec09",
+			"imports": ["Inv39GuardAssign"]
+		},
+		{
+			"module": "Inv39DelegateBody",
+			"path": "formal/solidcore/inv39/Inv39DelegateBody.lean",
+			"model_relative_path": null,
+			"sha256": "57836283ff1b395a259ba525211a0c0fd0fb972fbf48d824c6cfd32bc1d97886",
+			"imports": ["Inv39SpendPrep", "Inv39DelegatedBooks", "Inv39PublicTransfer"]
+		},
+		{
+			"module": "Inv39DeniedPrep",
+			"path": "formal/solidcore/inv39/Inv39DeniedPrep.lean",
+			"model_relative_path": null,
+			"sha256": "e6a45e9ac65cd021b9857c7ca6266f1af6f05799b1e4131dd13ff89383d69910",
+			"imports": ["Inv39DeniedSpendCall", "Inv39SpendPrep", "Inv39TransferCore"]
+		},
+		{
+			"module": "Inv45AddReads",
+			"path": "formal/solidcore/inv45/Inv45AddReads.lean",
+			"model_relative_path": null,
+			"sha256": "d6e4445c9a5e02b7cc3c4f92c616a44a9057f82a0da799d4784b2dbf8d56d70c",
+			"imports": ["Inv45AddShape"]
+		},
+		{
+			"module": "Inv39GuardLocalize",
+			"path": "formal/solidcore/inv39/Inv39GuardLocalize.lean",
+			"model_relative_path": null,
+			"sha256": "fba9d362c6e6768265146269e1a1a06a1164436338a8ee3f8830225b4aa64690",
+			"imports": ["Inv39GuardReturn"]
+		},
+		{
+			"module": "Inv39PublicDelegate",
+			"path": "formal/solidcore/inv39/Inv39PublicDelegate.lean",
+			"model_relative_path": null,
+			"sha256": "c294fb5276cd2312d613c04f8fac6c9a07afa9651d479c05998b83fd5e070ec2",
+			"imports": ["Inv39DelegateBody"]
+		},
+		{
+			"module": "Inv39DirectApprove",
+			"path": "formal/solidcore/inv39/Inv39DirectApprove.lean",
+			"model_relative_path": null,
+			"sha256": "e23477a61bd4041d20421102308882dd21153ab2be44b024da80831801ab02cc",
+			"imports": ["Inv39DirectApproveCall", "Inv39DeniedPrep", "Inv39PublicTransfer"]
+		},
+		{
+			"module": "Inv39DelegateFailure",
+			"path": "formal/solidcore/inv39/Inv39DelegateFailure.lean",
+			"model_relative_path": null,
+			"sha256": "b495669b50099c6546d97527fbcc228e918fc41c42a625b2a2f2e47f66b7c960",
+			"imports": ["Inv39DeniedPrep", "Inv39DelegateBody", "Inv39TransferRejected"]
+		},
+		{
+			"module": "Inv45Declarations",
+			"path": "formal/solidcore/inv45/Inv45Declarations.lean",
+			"model_relative_path": null,
+			"sha256": "4ce1632da4b69d4c0163c646f88c5de138bc7e628b0e9431ba4ccd9f5acc9c4d",
+			"imports": ["Inv45AddReads"]
+		},
+		{
+			"module": "Inv39GuardSyntax",
+			"path": "formal/solidcore/inv39/Inv39GuardSyntax.lean",
+			"model_relative_path": null,
+			"sha256": "b50ddf54f14e6b337d363e2ad4f2312c5aa41581b5a585f4ac5f401f4a5efd03",
+			"imports": ["Inv39GuardLocalize"]
+		},
+		{
+			"module": "Inv39PublicApprove",
+			"path": "formal/solidcore/inv39/Inv39PublicApprove.lean",
+			"model_relative_path": null,
+			"sha256": "7415df472e9823ca84f4f4fdfdafe69e49e53afb1e3079141d3313c53e6fc429",
+			"imports": ["Inv39DirectApprove", "Inv39DenyEntry"]
+		},
+		{
+			"module": "Inv39DelegateDenied",
+			"path": "formal/solidcore/inv39/Inv39DelegateDenied.lean",
+			"model_relative_path": null,
+			"sha256": "b3f1b1639970afc71b36d8ed34f0d9c90ad2d8c42b814f6aa0f8d209227b58ea",
+			"imports": ["Inv39DelegateFailure", "Inv39PublicDelegate", "Inv39DenyEntry"]
+		},
+		{
+			"module": "Inv45AddPositive",
+			"path": "formal/solidcore/inv45/Inv45AddPositive.lean",
+			"model_relative_path": null,
+			"sha256": "8b462968c1abe93e7510b6116c697393e384337fe0356d4102d0e065cb35682a",
+			"imports": ["Inv45Declarations"]
+		},
+		{
+			"module": "Inv39SigArguments",
+			"path": "formal/solidcore/inv39/Inv39SigArguments.lean",
+			"model_relative_path": null,
+			"sha256": "a0a0d61c95c922b099f889afa75226f77de824d6bb3a15960203ad9cc12367bf",
+			"imports": ["Inv39GuardSyntax"]
+		},
+		{
+			"module": "Inv39SigLeaves",
+			"path": "formal/solidcore/inv39/Inv39SigLeaves.lean",
+			"model_relative_path": null,
+			"sha256": "27f102ab990062bafba6af78f6d44da779e863ae068c34cc870e979b1c4bb47d",
+			"imports": ["Inv39GuardSyntax"]
+		},
+		{
+			"module": "Inv39DelegateSuccess",
+			"path": "formal/solidcore/inv39/Inv39DelegateSuccess.lean",
+			"model_relative_path": null,
+			"sha256": "f0a6e25ad780250ce68b4d0fe1d4c7253d8fa1876cf1b4d4cf57b2f72e9af05c",
+			"imports": ["Inv39DelegateDenied"]
+		},
+		{
+			"module": "Inv45Magnitude",
+			"path": "formal/solidcore/inv45/Inv45Magnitude.lean",
+			"model_relative_path": null,
+			"sha256": "ebb1ab845bb94d55a5db442b4d9c971f77135f33fd45fae672d55a6c06f8b57e",
+			"imports": ["Inv45AddPositive"]
+		},
+		{
+			"module": "Inv39SigEnter",
+			"path": "formal/solidcore/inv39/Inv39SigEnter.lean",
+			"model_relative_path": null,
+			"sha256": "137d126ca580973c4d29a1f165abc3ceb5d7724d66c5b3eecdd058ff6d61d3e7",
+			"imports": ["Inv39SigArguments"]
+		},
+		{
+			"module": "Inv45AddCross",
+			"path": "formal/solidcore/inv45/Inv45AddCross.lean",
+			"model_relative_path": null,
+			"sha256": "d0a0c3e4f86df2d70437101da8ddb3f662fc7dddf41142b09dd8e26d22e95894",
+			"imports": ["Inv45Magnitude"]
+		},
+		{
+			"module": "Inv39SigFinish",
+			"path": "formal/solidcore/inv39/Inv39SigFinish.lean",
+			"model_relative_path": null,
+			"sha256": "e456a2f9996ed8a1b57fee736df88be6dd9804fab338bdcb443f0a8454c7f3a8",
+			"imports": ["Inv39SigEnter"]
+		},
+		{
+			"module": "Inv45AddHoist",
+			"path": "formal/solidcore/inv45/Inv45AddHoist.lean",
+			"model_relative_path": null,
+			"sha256": "8ee41b5c1d8117c01c1f58ec2114708210cfd07634585c887460dbed24d4c9e0",
+			"imports": ["Inv45AddCross"]
+		},
+		{
+			"module": "Inv39SafeCall",
+			"path": "formal/solidcore/inv39/Inv39SafeCall.lean",
+			"model_relative_path": null,
+			"sha256": "24f13ed4fdc3ba31212a1ff5dc336bd43c9de7ce1e37120f463692aefcf1ab97",
+			"imports": ["Inv39SigFinish"]
+		},
+		{
+			"module": "Inv45AddBranches",
+			"path": "formal/solidcore/inv45/Inv45AddBranches.lean",
+			"model_relative_path": null,
+			"sha256": "73edc72a4f9eb8a9e4d626bbad8b9b116c837ca93f79061336a736746c70d44d",
+			"imports": ["Inv45AddHoist"]
+		},
+		{
+			"module": "Inv39SigCalls",
+			"path": "formal/solidcore/inv39/Inv39SigCalls.lean",
+			"model_relative_path": null,
+			"sha256": "505174e05e33474b0cd790a003c80c03815b86d5bc085d80e7998fd60acf1aa0",
+			"imports": ["Inv39SafeCall", "Inv39SigLeaves"]
+		},
+		{
+			"module": "Inv45AddExecution",
+			"path": "formal/solidcore/inv45/Inv45AddExecution.lean",
+			"model_relative_path": null,
+			"sha256": "54b53e312294cbfb9a2c5cd2c1386bbbe4235aefb3ecf2b5532ecbd109ffacfd",
+			"imports": ["Inv45AddBranches"]
+		},
+		{
+			"module": "Inv39SigDomain",
+			"path": "formal/solidcore/inv39/Inv39SigDomain.lean",
+			"model_relative_path": null,
+			"sha256": "12398d3b10938f975a24025c6f0fd219721e3310c2fef1cbadf08dd907e2f064",
+			"imports": ["Inv39SigCalls"]
+		},
+		{
+			"module": "Inv45Interpolation",
+			"path": "formal/solidcore/inv45/Inv45Interpolation.lean",
+			"model_relative_path": null,
+			"sha256": "fd72286a8ad091469f287baf799dd5a8591b225ab5c423d6ca91238277994f8b",
+			"imports": ["Inv45AddExecution"]
+		},
+		{
+			"module": "Inv39AuthFlag",
+			"path": "formal/solidcore/inv39/Inv39AuthFlag.lean",
+			"model_relative_path": null,
+			"sha256": "7fcc003391eda8d03a036c26503f88388308352269e12dffe1b3a98191f62740",
+			"imports": ["Inv39AuthResolve", "Inv39SigDomain"]
+		},
+		{
+			"module": "Inv45Decimal",
+			"path": "formal/solidcore/inv45/Inv45Decimal.lean",
+			"model_relative_path": null,
+			"sha256": "0db271bc57a6bb2329ecc46d63fd1df3336c2af618a6e541d008fc85ddc4f9a3",
+			"imports": ["Inv45Interpolation"]
+		},
+		{
+			"module": "Inv39AuthWorld",
+			"path": "formal/solidcore/inv39/Inv39AuthWorld.lean",
+			"model_relative_path": null,
+			"sha256": "fc51095f563605d266818ca2594bfaef7beb0c3ef0b2aa36ce3b99e7ed3758e6",
+			"imports": ["Inv39AuthFlag", "Inv39InitBounds"]
+		},
+		{
+			"module": "Inv45DecimalShape",
+			"path": "formal/solidcore/inv45/Inv45DecimalShape.lean",
+			"model_relative_path": null,
+			"sha256": "5f3cca0e496d8af51dd0a8d6101be7cbfd0a3e5d5c2e99299423674e99771653",
+			"imports": ["Inv45Decimal"]
+		},
+		{
+			"module": "Inv39AuthBind",
+			"path": "formal/solidcore/inv39/Inv39AuthBind.lean",
+			"model_relative_path": null,
+			"sha256": "9dc15d7b8114c37f2484f61e378e2a881f476ca124e3cc8c85f826ebd3514291",
+			"imports": ["Inv39AuthWorld"]
+		},
+		{
+			"module": "Inv45DecimalActions",
+			"path": "formal/solidcore/inv45/Inv45DecimalActions.lean",
+			"model_relative_path": null,
+			"sha256": "3ecc67137eb6ee3890fc7ee3f76ce55b8ddff41fe0dbbaed2e11322f7b34af96",
+			"imports": ["Inv45DecimalShape"]
+		},
+		{
+			"module": "Inv39AuthSeq",
+			"path": "formal/solidcore/inv39/Inv39AuthSeq.lean",
+			"model_relative_path": null,
+			"sha256": "38e18515ceefe1796e6d6ab24ef771a7cf5a4c289f7669343d07ed5ab77edeb3",
+			"imports": ["Inv39AuthBind"]
+		},
+		{
+			"module": "Inv45ByteRead",
+			"path": "formal/solidcore/inv45/Inv45ByteRead.lean",
+			"model_relative_path": null,
+			"sha256": "63746d27a117a5901c2a631294df7ce365099a119b54d8c34e79c41525472b49",
+			"imports": ["Inv45DecimalActions"]
+		},
+		{
+			"module": "Inv39UnusedAuth",
+			"path": "formal/solidcore/inv39/Inv39UnusedAuth.lean",
+			"model_relative_path": null,
+			"sha256": "f43686bdffc1d4b8462d8944d3e6b5a8a0b55e14d6c9fd1f3fc7ba1cabc05468",
+			"imports": ["Inv39AuthSeq"]
+		},
+		{
+			"module": "Inv39ObservedEntry",
+			"path": "formal/solidcore/inv39/Inv39ObservedEntry.lean",
+			"model_relative_path": null,
+			"sha256": "267cd71be7537828aa2170174846a90756fef20b42ede6e6c801c8bf90cd5d00",
+			"imports": ["Inv39AuthSeq", "Inv39EntryWrites"]
+		},
+		{
+			"module": "Inv39AuthNonce",
+			"path": "formal/solidcore/inv39/Inv39AuthNonce.lean",
+			"model_relative_path": null,
+			"sha256": "dd0a4f420bd0d3e5e7656b7f17f706f6ad23423d993f59e1de8a3bdf29ff9ad8",
+			"imports": ["Inv39AuthSeq"]
+		},
+		{
+			"module": "Inv39CleanParameters",
+			"path": "formal/solidcore/inv39/Inv39CleanParameters.lean",
+			"model_relative_path": null,
+			"sha256": "9b886e09edffcd3a0bd663a0454e1cf7995b1afc04431ca0038d6e4446f3a12c",
+			"imports": ["Inv39AuthSeq"]
+		},
+		{
+			"module": "Inv45ByteStore",
+			"path": "formal/solidcore/inv45/Inv45ByteStore.lean",
+			"model_relative_path": null,
+			"sha256": "609827477c1aca10f5371abb9010854d38a28ba71aaae6b405f3aa55a5c33044",
+			"imports": ["Inv45ByteRead"]
+		},
+		{
+			"module": "Inv39CancelTerms",
+			"path": "formal/solidcore/inv39/Inv39CancelTerms.lean",
+			"model_relative_path": null,
+			"sha256": "8815d05010183045f5a61b80d187e911b17494337db38e2395da1c8970e7ff12",
+			"imports": ["Inv39UnusedAuth"]
+		},
+		{
+			"module": "Inv45DigitScan",
+			"path": "formal/solidcore/inv45/Inv45DigitScan.lean",
+			"model_relative_path": null,
+			"sha256": "30a83bdb22a11393527ecbe8ec8a8d3fe9da26314ec52e4669cc35e60f0185a3",
+			"imports": ["Inv45ByteStore"]
+		},
+		{
+			"module": "Inv45Allocation",
+			"path": "formal/solidcore/inv45/Inv45Allocation.lean",
+			"model_relative_path": null,
+			"sha256": "3400c129f286e8e8c7694525a3de6796e58d60418e17445cbf2c670cf3c19beb",
+			"imports": ["Inv45ByteStore"]
+		},
+		{
+			"module": "Inv39UseFlag",
+			"path": "formal/solidcore/inv39/Inv39UseFlag.lean",
+			"model_relative_path": null,
+			"sha256": "acbd17922535159506a5f12b018fc9afbab271c55a07035b27c7d17535cbb472",
+			"imports": ["Inv39CancelTerms"]
+		},
+		{
+			"module": "Inv39CancelEvidence",
+			"path": "formal/solidcore/inv39/Inv39CancelEvidence.lean",
+			"model_relative_path": null,
+			"sha256": "b1fb71bc74fdecba7f26b785ee08f07feef02debc3310b2bdcb5cfda332a776b",
+			"imports": ["Inv39CancelTerms"]
+		},
+		{
+			"module": "Inv39PermitTerms",
+			"path": "formal/solidcore/inv39/Inv39PermitTerms.lean",
+			"model_relative_path": null,
+			"sha256": "e695d9b791aa418e1e039a12e2ad94c6f5d3155ae776bf7f6fe901ec80e23b21",
+			"imports": ["Inv39AuthNonce", "Inv39CleanParameters", "Inv39CancelTerms", "Inv39DirectApprove"]
+		},
+		{
+			"module": "Inv45DecimalRun",
+			"path": "formal/solidcore/inv45/Inv45DecimalRun.lean",
+			"model_relative_path": null,
+			"sha256": "2245bcc30af71713687f710e2feea28a931e62d52247bb2c5b19f2174c0dc9fe",
+			"imports": ["Inv45DigitScan", "Inv45Allocation"]
+		},
+		{
+			"module": "Inv39DecimalBoundAlloc",
+			"path": "formal/solidcore/inv39/Inv39DecimalBoundAlloc.lean",
+			"model_relative_path": null,
+			"sha256": "9c56f52f8fbbf1b3350793ba548030de751644fd2f2253d5e0c00fa87befb7f6",
+			"imports": ["Inv45Allocation", "Inv45ByteStore"]
+		},
+		{
+			"module": "Inv39CancelBody",
+			"path": "formal/solidcore/inv39/Inv39CancelBody.lean",
+			"model_relative_path": null,
+			"sha256": "9a7d6ac020c57cdd511aaf91a252d07dd3c071ad0790bbc858b01d26d798d803",
+			"imports": ["Inv39UseFlag"]
+		},
+		{
+			"module": "Inv39CancelShape",
+			"path": "formal/solidcore/inv39/Inv39CancelShape.lean",
+			"model_relative_path": null,
+			"sha256": "8a3d8c4f462887a5ef6c987c6d10e22e97e43403f9dde29c32a27bff61c700a2",
+			"imports": ["Inv39CancelEvidence"]
+		},
+		{
+			"module": "Inv39Grant",
+			"path": "formal/solidcore/inv39/Inv39Grant.lean",
+			"model_relative_path": null,
+			"sha256": "c4ac20335f66821c4fad710ad38f900fbd90516be082b2b016f820bef17e76b0",
+			"imports": ["Inv39PermitTerms"]
+		},
+		{
+			"module": "Inv39PermitEvidence",
+			"path": "formal/solidcore/inv39/Inv39PermitEvidence.lean",
+			"model_relative_path": null,
+			"sha256": "a368176bfe4c27fde48c61243ea221eadb861f3971c6669e1a4ec85bdfa144fe",
+			"imports": ["Inv39PermitTerms"]
+		},
+		{
+			"module": "Inv45DecimalCall",
+			"path": "formal/solidcore/inv45/Inv45DecimalCall.lean",
+			"model_relative_path": null,
+			"sha256": "4833483f7ba3b500c54d6c6dc6b389107078fb269591e28a7d7bc9a20b98c481",
+			"imports": ["Inv45DecimalRun"]
+		},
+		{
+			"module": "Inv39PublicCancel",
+			"path": "formal/solidcore/inv39/Inv39PublicCancel.lean",
+			"model_relative_path": null,
+			"sha256": "66fe30b9b9a8bcefddc940679d939498db2ad27a720d1fa2c63003d26c6536f6",
+			"imports": ["Inv39CancelBody", "Inv39CancelShape", "Inv39ObservedEntry"]
+		},
+		{
+			"module": "Inv39PermitBody",
+			"path": "formal/solidcore/inv39/Inv39PermitBody.lean",
+			"model_relative_path": null,
+			"sha256": "119352d353a7cd2257a7863abedfd2d2c7933fcc4ec089f5dd64334261e51458",
+			"imports": ["Inv39Grant"]
+		},
+		{
+			"module": "Inv39PermitLink",
+			"path": "formal/solidcore/inv39/Inv39PermitLink.lean",
+			"model_relative_path": null,
+			"sha256": "ff977f7d2549d71704fad7e2d1a97fef348f17fb12eed861bbc15f0f9ccd4ac8",
+			"imports": ["Inv39PermitEvidence"]
+		},
+		{
+			"module": "Inv39DecimalBoundRun",
+			"path": "formal/solidcore/inv39/Inv39DecimalBoundRun.lean",
+			"model_relative_path": null,
+			"sha256": "2635d9da4baaf65456fd36aa5e824c5fdd55d2fb46d96d0c33615cb55a927bb5",
+			"imports": ["Inv45DecimalCall", "Inv39Model", "Inv45DigitScan", "Inv45Allocation", "Inv39DecimalBoundAlloc"]
+		},
+		{
+			"module": "Inv39PublicPermit",
+			"path": "formal/solidcore/inv39/Inv39PublicPermit.lean",
+			"model_relative_path": null,
+			"sha256": "85f8fb01b1a634ebd7c12faeda14d67d5b769a4ba63105ba69e8412ba3382740",
+			"imports": ["Inv39PermitBody", "Inv39PermitLink", "Inv39ObservedEntry"]
+		},
+		{
+			"module": "Inv39DecimalBoundExec",
+			"path": "formal/solidcore/inv39/Inv39DecimalBoundExec.lean",
+			"model_relative_path": null,
+			"sha256": "e655e234ae8b8faaa188ca4c7187b70c09471da7713bdc758a6b567000645a88",
+			"imports": ["Inv39DecimalBoundRun", "Inv39DecimalFrame"]
+		},
+		{
+			"module": "Inv39SignedBooks",
+			"path": "formal/solidcore/inv39/Inv39SignedBooks.lean",
+			"model_relative_path": null,
+			"sha256": "28aa150f0889503cb88a3fbd424a413db9efaf6eaa7ffdfa4fb8efd11bf1f2a2",
+			"imports": ["Inv39PublicCancel", "Inv39PublicPermit", "Inv39DelegatedBooks"]
+		},
+		{
+			"module": "Inv39SignedMovement",
+			"path": "formal/solidcore/inv39/Inv39SignedMovement.lean",
+			"model_relative_path": null,
+			"sha256": "55b965b131bc383b94d7d7b393f5358d90d4636791d7ddd7abc42af093f4becf",
+			"imports": ["Inv39SignedBooks", "Inv39TransferRejected", "Inv39DeniedPrep"]
+		},
+		{
+			"module": "Inv39SignedTerms",
+			"path": "formal/solidcore/inv39/Inv39SignedTerms.lean",
+			"model_relative_path": null,
+			"sha256": "77e611e10e91438590392db709791f406e67d43b72931e6c5d3868b5cb1febd0",
+			"imports": ["Inv39SignedMovement", "Inv39CleanParameters"]
+		},
+		{
+			"module": "Inv39SignedTemps",
+			"path": "formal/solidcore/inv39/Inv39SignedTemps.lean",
+			"model_relative_path": null,
+			"sha256": "64b3b9bdf8e01b2b2b92dfb6615e1476e7201c3d4970a53cd0a467ead903611c",
+			"imports": ["Inv39SignedTerms"]
+		},
+		{
+			"module": "Inv39SignedBody",
+			"path": "formal/solidcore/inv39/Inv39SignedBody.lean",
+			"model_relative_path": null,
+			"sha256": "ee13d5f052d0c78e037231faf3ea3b3db9893acec570bc850823225f7421ca66",
+			"imports": ["Inv39SignedTerms", "Inv39Grant"]
+		},
+		{
+			"module": "Inv39SignedEvidence",
+			"path": "formal/solidcore/inv39/Inv39SignedEvidence.lean",
+			"model_relative_path": null,
+			"sha256": "96acab500aa0da47ebcc318afbc76fd2e996ec96bd0bea126936cf9988d0e61f",
+			"imports": ["Inv39SignedTerms"]
+		},
+		{
+			"module": "Inv39WrapperTerms",
+			"path": "formal/solidcore/inv39/Inv39WrapperTerms.lean",
+			"model_relative_path": null,
+			"sha256": "51a7d6586013282ed0036115ca1adf7ac2ede731b72cd8507b0c922df85e58ae",
+			"imports": ["Inv39SignedTemps"]
+		},
+		{
+			"module": "Inv39SignedLink",
+			"path": "formal/solidcore/inv39/Inv39SignedLink.lean",
+			"model_relative_path": null,
+			"sha256": "8313b7cc3db5c68d8af62590d957ee457c621747a57bd4226ed774e8a0dec10a",
+			"imports": ["Inv39SignedEvidence"]
+		},
+		{
+			"module": "Inv39SignedInputs",
+			"path": "formal/solidcore/inv39/Inv39SignedInputs.lean",
+			"model_relative_path": null,
+			"sha256": "d996696b429a783f3998942c2e3a9e6d152fc870d4ba8e9353c9267830bfad2d",
+			"imports": ["Inv39WrapperTerms"]
+		},
+		{
+			"module": "Inv39LoadTemps",
+			"path": "formal/solidcore/inv39/Inv39LoadTemps.lean",
+			"model_relative_path": null,
+			"sha256": "8316420f7b69ce93a083c985670aa2d1141795eec851d3f6d1da680802658ce2",
+			"imports": ["Inv39WrapperTerms"]
+		},
+		{
+			"module": "Inv39WrapperEvidence",
+			"path": "formal/solidcore/inv39/Inv39WrapperEvidence.lean",
+			"model_relative_path": null,
+			"sha256": "6412598b49099163621e2c12f374c59ede186c8c5bd6cca605869963d0e98acf",
+			"imports": ["Inv39WrapperTerms"]
+		},
+		{
+			"module": "Inv39SignedCall",
+			"path": "formal/solidcore/inv39/Inv39SignedCall.lean",
+			"model_relative_path": null,
+			"sha256": "62b88ea58dcf4610eba694ffbc2e8892857b6ab12be4205727ba18e5b5c5c6f2",
+			"imports": ["Inv39SignedInputs", "Inv39SignedBody", "Inv39SignedLink"]
+		},
+		{
+			"module": "Inv39WrapperLink",
+			"path": "formal/solidcore/inv39/Inv39WrapperLink.lean",
+			"model_relative_path": null,
+			"sha256": "e6e6f75e7a71f7afc0af6060bc42d7d2819eb59b9ce4f5ada3650d157b19c95a",
+			"imports": ["Inv39WrapperEvidence"]
+		},
+		{
+			"module": "Inv39SignedEntry",
+			"path": "formal/solidcore/inv39/Inv39SignedEntry.lean",
+			"model_relative_path": null,
+			"sha256": "aa3415a48ba2d37c7b33530adbed2ba75c1613641c141868771681400770dd5c",
+			"imports": ["Inv39SignedCall", "Inv39LoadTemps", "Inv39WrapperLink", "Inv39ObservedEntry"]
+		},
+		{
+			"module": "Inv39CheckedHistory",
+			"path": "formal/solidcore/inv39/Inv39CheckedHistory.lean",
+			"model_relative_path": null,
+			"sha256": "21407d250feec81dc18ade220a5297912274ba93d0e061b76fa131eb6c8eef83",
+			"imports": ["Inv39SignedEntry", "Inv39SignedBooks", "Inv39DelegateSuccess", "Inv39PublicApprove", "Inv39TransferRejected", "Inv39BurnRejected", "Inv39Denial"]
+		},
+		{
+			"module": "Inv39Initialize",
+			"path": "formal/solidcore/inv39/Inv39Initialize.lean",
+			"model_relative_path": null,
+			"sha256": "56c0127511d42ba94190d999222a3cd102977ba000386f66b105cff2671a4152",
+			"imports": ["Inv39EntryWrites", "Inv39InitBinding", "Inv39InitBounds", "Inv39CheckedHistory"]
+		},
+		{
+			"module": "Inv39RepeatBinding",
+			"path": "formal/solidcore/inv39/Inv39RepeatBinding.lean",
+			"model_relative_path": null,
+			"sha256": "0684f87685256a2b40a065b74567c7f0f6bf5171fc8ebf2a919e7a4c635dfcc1",
+			"imports": ["Inv39Initialize", "Inv39GuardSyntax"]
+		},
+		{
+			"module": "Inv39FullPublicBounds",
+			"path": "formal/solidcore/inv39/Inv39FullPublicBounds.lean",
+			"model_relative_path": null,
+			"sha256": "9a060d8e84709c49fb0caf7d0dad25b0b64d3bd54037eb6ad7e31f9d028983c1",
+			"imports": ["Inv39Initialize"]
+		},
+		{
+			"module": "Inv39RepeatMarker",
+			"path": "formal/solidcore/inv39/Inv39RepeatMarker.lean",
+			"model_relative_path": null,
+			"sha256": "0cf994aabc22272c30bb95d1f5280cfe88cbc051e4f801aa27485a3c4f44e06c",
+			"imports": ["Inv39RepeatBinding"]
+		},
+		{
+			"module": "Inv39RepeatPrefix",
+			"path": "formal/solidcore/inv39/Inv39RepeatPrefix.lean",
+			"model_relative_path": null,
+			"sha256": "b43c5c7981769865b39c5bba6b62f4606edd7e427f3e663387ab79d66d0ee88d",
+			"imports": ["Inv39RepeatMarker"]
+		},
+		{
+			"module": "Inv39RepeatExclusion",
+			"path": "formal/solidcore/inv39/Inv39RepeatExclusion.lean",
+			"model_relative_path": null,
+			"sha256": "0888bb76353ad0a8cf6956253e374aee316f54729555a3055a998e5da23258e2",
+			"imports": ["Inv39RepeatPrefix"]
+		},
+		{
+			"module": "Inv39MarkerSeparation",
+			"path": "formal/solidcore/inv39/Inv39MarkerSeparation.lean",
+			"model_relative_path": null,
+			"sha256": "e1a0add1c977a33ed5a7a3f66f9ca54986699a43d3bb4e13bd0939095028f433",
+			"imports": ["Inv39RepeatExclusion"]
+		},
+		{
+			"module": "Inv39MarkerHistory",
+			"path": "formal/solidcore/inv39/Inv39MarkerHistory.lean",
+			"model_relative_path": null,
+			"sha256": "bb2c60db4807bc6705df6abae2f3f24a662cba13bbb7ab55d3365bf0def33762",
+			"imports": ["Inv39CheckedHistory", "Inv39RepeatExclusion"]
+		},
+		{
+			"module": "Inv39MarkerSteps",
+			"path": "formal/solidcore/inv39/Inv39MarkerSteps.lean",
+			"model_relative_path": null,
+			"sha256": "ea37683419e788587541ea74a5fd9e3235f1da214e70324ee79965d7386824bf",
+			"imports": ["Inv39MarkerSeparation", "Inv39CleanParameters"]
+		},
+		{
+			"module": "Inv39MarkerBounds",
+			"path": "formal/solidcore/inv39/Inv39MarkerBounds.lean",
+			"model_relative_path": null,
+			"sha256": "8af694ee34c3594e46ae368f5ff7786c91f742704cc236b7d32cad6edc8cc000",
+			"imports": ["Inv39MarkerSeparation"]
+		},
+		{
+			"module": "Inv39MarkerHistoryReads",
+			"path": "formal/solidcore/inv39/Inv39MarkerHistoryReads.lean",
+			"model_relative_path": null,
+			"sha256": "4e1bd0007078b7e09e13f804b779760b9d055c8f3f0369d5765e274fb23f3ed8",
+			"imports": ["Inv39MarkerHistory", "Inv39Getters"]
+		},
+		{
+			"module": "Inv39MovementMarkerCore",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerCore.lean",
+			"model_relative_path": null,
+			"sha256": "03a161b2bc50c8ccb697780308e4f9e57a7f1c03eba493316223e679f7defe00",
+			"imports": ["Inv39MarkerHistory", "Inv39TransferCore"]
+		},
+		{
+			"module": "Inv39MarkerBinding",
+			"path": "formal/solidcore/inv39/Inv39MarkerBinding.lean",
+			"model_relative_path": null,
+			"sha256": "25cf0d495ff3f816645b8bc5ad38f3938138db3cd32ec35b81938904d22af2c6",
+			"imports": ["Inv39MarkerSteps"]
+		},
+		{
+			"module": "Inv39MarkerTail",
+			"path": "formal/solidcore/inv39/Inv39MarkerTail.lean",
+			"model_relative_path": null,
+			"sha256": "3342b0df60040558d67433b3ce03d9904bf1d28e2f2bff91a0947f3e5c7d3276",
+			"imports": ["Inv39MarkerBounds", "Inv39MarkerSteps"]
+		},
+		{
+			"module": "Inv39MovementMarkerMint",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerMint.lean",
+			"model_relative_path": null,
+			"sha256": "a88c42d1b27879f5c7b9a0f81332e78ca871290fda03cbaeac933543bd7b533c",
+			"imports": ["Inv39MovementMarkerCore", "Inv39PublicMint"]
+		},
+		{
+			"module": "Inv39MovementMarkerBurnBody",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerBurnBody.lean",
+			"model_relative_path": null,
+			"sha256": "989e97564e798426b95a261a6ea232689467eb4c42154a271e0ff2d4b76753c3",
+			"imports": ["Inv39MovementMarkerCore", "Inv39BurnEffect"]
+		},
+		{
+			"module": "Inv39MovementMarkerTransferBody",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerTransferBody.lean",
+			"model_relative_path": null,
+			"sha256": "1725eab0a4f09f3c8724fef62383886284bc565d014fef16fb64f666d00f8f54",
+			"imports": ["Inv39MovementMarkerCore", "Inv39TransferBody"]
+		},
+		{
+			"module": "Inv39MovementMarkerSignedMovement",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerSignedMovement.lean",
+			"model_relative_path": null,
+			"sha256": "4bb0ce2a8c229c556da0335c5c49fd341cd966af6c67fee13ca08f2d0577c46c",
+			"imports": ["Inv39MovementMarkerCore", "Inv39SignedMovement"]
+		},
+		{
+			"module": "Inv39MarkerPublic",
+			"path": "formal/solidcore/inv39/Inv39MarkerPublic.lean",
+			"model_relative_path": null,
+			"sha256": "5fb51bd91216801417fc59a51aae07b3408d7f4ba456b3826e3c7939fa938fe1",
+			"imports": ["Inv39MarkerBinding", "Inv39MarkerTail"]
+		},
+		{
+			"module": "Inv39DecimalBoundReject",
+			"path": "formal/solidcore/inv39/Inv39DecimalBoundReject.lean",
+			"model_relative_path": null,
+			"sha256": "67ccc88105c6fb6518efc5087d4619b5306bb8df8dea4ddb99b737e931df7654",
+			"imports": ["Inv39DecimalBoundExec", "Inv45FuelMonotonicity", "Inv39MarkerTail"]
+		},
+		{
+			"module": "Inv39MovementMarkerBurn",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerBurn.lean",
+			"model_relative_path": null,
+			"sha256": "21b9e12edf93b5a0a3bce3085e3964b7c2565e439f2f458bc8e994887ca0f14f",
+			"imports": ["Inv39MovementMarkerBurnBody"]
+		},
+		{
+			"module": "Inv39MovementMarkerTransfer",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerTransfer.lean",
+			"model_relative_path": null,
+			"sha256": "b836e24b4f05eb0aeec23bc64358dcec734bf3cc2fbe3cc4dcfd1594c835cf77",
+			"imports": ["Inv39MovementMarkerTransferBody"]
+		},
+		{
+			"module": "Inv39MovementMarkerSignedBody",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerSignedBody.lean",
+			"model_relative_path": null,
+			"sha256": "84791822fba9731c85eaacfb87158c8dbfc0ecf34e2af1a7384db400844693f9",
+			"imports": ["Inv39MovementMarkerSignedMovement", "Inv39SignedBody"]
+		},
+		{
+			"module": "Inv39MarkerPublicEntry",
+			"path": "formal/solidcore/inv39/Inv39MarkerPublicEntry.lean",
+			"model_relative_path": null,
+			"sha256": "25ae7abffc6e602928b8695305d971c9d3b0585f9f8b746c6f5509f2e53ff022",
+			"imports": ["Inv39MarkerPublic"]
+		},
+		{
+			"module": "Inv39DecimalBound",
+			"path": "formal/solidcore/inv39/Inv39DecimalBound.lean",
+			"model_relative_path": null,
+			"sha256": "83b5266c31202d3e99d9f7df3619e280eba877243116fd59bd613e405cb9ae99",
+			"imports": ["Inv39DecimalBoundReject", "Inv39InitDecimal"]
+		},
+		{
+			"module": "Inv39MovementMarkerDelegateBody",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerDelegateBody.lean",
+			"model_relative_path": null,
+			"sha256": "b50fe5f51988c1375e65b666fb60fe7f20d3fdbc69655f84a2a78261e88285a8",
+			"imports": ["Inv39MovementMarkerTransfer", "Inv39DelegateBody"]
+		},
+		{
+			"module": "Inv39MovementMarkerSignedCall",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerSignedCall.lean",
+			"model_relative_path": null,
+			"sha256": "d672c69efbe7d6d091431f008c6773e0584c7f15a13b8dedc835264be6921496",
+			"imports": ["Inv39MovementMarkerSignedBody", "Inv39SignedCall"]
+		},
+		{
+			"module": "Inv39MarkerExecution",
+			"path": "formal/solidcore/inv39/Inv39MarkerExecution.lean",
+			"model_relative_path": null,
+			"sha256": "07f858a6d19aa1e2499f2453d64a37821f59a6282aaaa9d78ac9cf299aa23768",
+			"imports": ["Inv39MarkerPublicEntry", "Inv39DecimalBound"]
+		},
+		{
+			"module": "Inv39MovementMarkerDelegate",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerDelegate.lean",
+			"model_relative_path": null,
+			"sha256": "a81e2acf3bc7adcca817af879d4d1348b543b5e9d46580ad20a4006e3c80973c",
+			"imports": ["Inv39MovementMarkerDelegateBody", "Inv39PublicDelegate"]
+		},
+		{
+			"module": "Inv39MovementMarkerSignedEntry",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerSignedEntry.lean",
+			"model_relative_path": null,
+			"sha256": "f8ee14b73f5cc3a3af47d14812248bdaefd5196646e6b9168f0d223699e94f1a",
+			"imports": ["Inv39MovementMarkerSignedCall", "Inv39SignedEntry"]
+		},
+		{
+			"module": "Inv39PublicViewFrame",
+			"path": "formal/solidcore/inv39/Inv39PublicViewFrame.lean",
+			"model_relative_path": null,
+			"sha256": "21b68f1cd7b58bf1163977b21d6f6d26b9246fe730fc29d721f0219923e6fe0d",
+			"imports": ["Inv39MarkerExecution"]
+		},
+		{
+			"module": "Inv39MarkerPrefixTools",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixTools.lean",
+			"model_relative_path": null,
+			"sha256": "1bbcc4d0704e2f3d8b9bed447a36ab8a6ab4f19e3db2e164681c86794bb49408",
+			"imports": ["Inv39MarkerExecution"]
+		},
+		{
+			"module": "Inv39MarkerSuffixCertificate",
+			"path": "formal/solidcore/inv39/Inv39MarkerSuffixCertificate.lean",
+			"model_relative_path": null,
+			"sha256": "69b2cc02268217322540b00bf6a70b4ca5ab33fa2ea34a6777e0ac8747461710",
+			"imports": ["Inv39MarkerExecution"]
+		},
+		{
+			"module": "Inv39MarkerObserved",
+			"path": "formal/solidcore/inv39/Inv39MarkerObserved.lean",
+			"model_relative_path": null,
+			"sha256": "742175edc9c3e229c45f54e704d3517932cbac3cb6fd4ee69e22cc70fabf0729",
+			"imports": ["Inv39MarkerExecution"]
+		},
+		{
+			"module": "Inv39MovementMarkerDelegateActual",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerDelegateActual.lean",
+			"model_relative_path": null,
+			"sha256": "906911c29920f28931145ab002b343d9bf2371f13959d8abecc0f3f86ad78f3f",
+			"imports": ["Inv39MovementMarkerDelegate", "Inv39DelegateSuccess"]
+		},
+		{
+			"module": "Inv39ReadPaths",
+			"path": "formal/solidcore/inv39/Inv39ReadPaths.lean",
+			"model_relative_path": null,
+			"sha256": "e37c170b8fc4e17211f21e45b4532143a0a04f37fa7dadec1c1611f680fe676a",
+			"imports": ["Inv39PublicViewFrame", "Inv39MarkerHistoryReads", "Inv39AuthReads", "Inv39ReturnStorage"]
+		},
+		{
+			"module": "Inv39MarkerPrefixLocals",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixLocals.lean",
+			"model_relative_path": null,
+			"sha256": "dca532c563d053a3fd49c2586c85007af12225d57315fc6790cf0b831c3d193d",
+			"imports": ["Inv39MarkerPrefixTools"]
+		},
+		{
+			"module": "Inv39MarkerSuffixSyntax",
+			"path": "formal/solidcore/inv39/Inv39MarkerSuffixSyntax.lean",
+			"model_relative_path": null,
+			"sha256": "d852a4f1d162074f9ba07d747c9b6ecab9a24f242c1dce66fc825322a145a96b",
+			"imports": ["Inv39MarkerSuffixCertificate"]
+		},
+		{
+			"module": "Inv39MovementMarkerChecked",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerChecked.lean",
+			"model_relative_path": null,
+			"sha256": "7504235f4af12c77480d1677372764bd95930c3d233aaf4b33217c59b98bc1c4",
+			"imports": ["Inv39MovementMarkerMint", "Inv39MovementMarkerBurn", "Inv39MovementMarkerTransfer", "Inv39MovementMarkerDelegateActual", "Inv39MovementMarkerSignedEntry"]
+		},
+		{
+			"module": "Inv39ReadStorage",
+			"path": "formal/solidcore/inv39/Inv39ReadStorage.lean",
+			"model_relative_path": null,
+			"sha256": "d1a8bf6c97548fc208029e571631ccbb833ab271ac3e4c04aabc6be3735ea787",
+			"imports": ["Inv39ReadPaths", "Inv39RawAuth"]
+		},
+		{
+			"module": "Inv39MarkerPrefixBody",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixBody.lean",
+			"model_relative_path": null,
+			"sha256": "663e47165ac528dd8a1a015b35813c891a919cffe92f29e81ee09e2287809f2e",
+			"imports": ["Inv39MarkerPrefixLocals"]
+		},
+		{
+			"module": "Inv39MarkerPrefixCertificate",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixCertificate.lean",
+			"model_relative_path": null,
+			"sha256": "a5577302d97c69eae543617ef1cab1f73bc8e8a3a3fb5e44e8894781c6ddfaf3",
+			"imports": ["Inv39MarkerPrefixLocals"]
+		},
+		{
+			"module": "Inv39MarkerSuffixConversion",
+			"path": "formal/solidcore/inv39/Inv39MarkerSuffixConversion.lean",
+			"model_relative_path": null,
+			"sha256": "4afa8171e3d7ef8ccad160873efca773c74b3e74e5b355df832de944ae167061",
+			"imports": ["Inv39MarkerSuffixSyntax"]
+		},
+		{
+			"module": "Inv39MarkerSuffixEffects",
+			"path": "formal/solidcore/inv39/Inv39MarkerSuffixEffects.lean",
+			"model_relative_path": null,
+			"sha256": "ba5d46fe3cff80d34a0f82be54bc3d6917d685d54a4bc5dda3feff360cc52a9b",
+			"imports": ["Inv39MarkerSuffixSyntax"]
+		},
+		{
+			"module": "Inv39MovementMarkerLocal",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerLocal.lean",
+			"model_relative_path": null,
+			"sha256": "cce646b269709173292fe3ca0de25586390a61ba8e63a3822bec27556f55dc3e",
+			"imports": ["Inv39MovementMarkerChecked"]
+		},
+		{
+			"module": "Inv39ReadDomainRegion",
+			"path": "formal/solidcore/inv39/Inv39ReadDomainRegion.lean",
+			"model_relative_path": null,
+			"sha256": "d980bde4bdd4d59784fc0bbea46704fea07620bb3daeae0e0d8c507c3af62452",
+			"imports": ["Inv39ReadStorage", "Inv39SigDomain"]
+		},
+		{
+			"module": "Inv39MarkerPrefixCleanup",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixCleanup.lean",
+			"model_relative_path": null,
+			"sha256": "a2e338ded85c93763084f218232995d9f45f201593680ebccbfd4ae66e6fe8eb",
+			"imports": ["Inv39MarkerPrefixBody"]
+		},
+		{
+			"module": "Inv39MarkerPrefixSyntax",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixSyntax.lean",
+			"model_relative_path": null,
+			"sha256": "83752583212a76efad03bd784ff65ad88ac9ccb569142868b5d55ae4890ec38a",
+			"imports": ["Inv39MarkerPrefixCertificate"]
+		},
+		{
+			"module": "Inv39MarkerSuffix",
+			"path": "formal/solidcore/inv39/Inv39MarkerSuffix.lean",
+			"model_relative_path": null,
+			"sha256": "940440517554d009d6564ba00196692121f7e6e064edc740fce5880cd548309d",
+			"imports": ["Inv39MarkerSuffixConversion", "Inv39MarkerSuffixEffects"]
+		},
+		{
+			"module": "Inv39MovementMarkerLocalHistory",
+			"path": "formal/solidcore/inv39/Inv39MovementMarkerLocalHistory.lean",
+			"model_relative_path": null,
+			"sha256": "eb7a49c1b5a79e07c11386f9b42039d292c96e1c93fa6b26d37f3d1359d7edba",
+			"imports": ["Inv39MovementMarkerLocal"]
+		},
+		{
+			"module": "Inv39ReadDomain",
+			"path": "formal/solidcore/inv39/Inv39ReadDomain.lean",
+			"model_relative_path": null,
+			"sha256": "6527d7e20f7b88b2eb5a8aca765635e4e9e77b4303379dc08b90a9137cec4aa3",
+			"imports": ["Inv39ReadDomainRegion"]
+		},
+		{
+			"module": "Inv39MarkerPrefixStore",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefixStore.lean",
+			"model_relative_path": null,
+			"sha256": "90072218157a26299c22a7be2e93a988a4217b7e268f0d34fffc3761d61f325b",
+			"imports": ["Inv39MarkerPrefixSyntax"]
+		},
+		{
+			"module": "Inv39ReadDomainCalls",
+			"path": "formal/solidcore/inv39/Inv39ReadDomainCalls.lean",
+			"model_relative_path": null,
+			"sha256": "e1d6c29825047ba958168aacf7abbd2826f437c6ca5f7b4a8270ba92420c284b",
+			"imports": ["Inv39ReadDomain"]
+		},
+		{
+			"module": "Inv39MarkerPrefix",
+			"path": "formal/solidcore/inv39/Inv39MarkerPrefix.lean",
+			"model_relative_path": null,
+			"sha256": "dfdbab98e52c28f78421bdd5acd46c5364194a34b6c6a88a41a7186b5df6cc45",
+			"imports": ["Inv39MarkerPrefixCleanup", "Inv39MarkerPrefixStore"]
+		},
+		{
+			"module": "Inv39ReadCertificates",
+			"path": "formal/solidcore/inv39/Inv39ReadCertificates.lean",
+			"model_relative_path": null,
+			"sha256": "5859d1e2bb89a79adfd368d5a511e91a9e9e8ab7c9d4b28717529ab0efec1d20",
+			"imports": ["Inv39ReadDomainCalls", "Inv39Coverage"]
+		},
+		{
+			"module": "Inv39InstalledMarker",
+			"path": "formal/solidcore/inv39/Inv39InstalledMarker.lean",
+			"model_relative_path": null,
+			"sha256": "d791fe2c62c566232c2ef0d96d4e385ae3769d4033e047b760c04def2c847108",
+			"imports": ["Inv39MarkerPrefix", "Inv39MarkerSuffix", "Inv39MarkerObserved", "Inv39RepeatExclusion"]
+		},
+		{
+			"module": "Inv39PublicReads",
+			"path": "formal/solidcore/inv39/Inv39PublicReads.lean",
+			"model_relative_path": null,
+			"sha256": "388d208ae38e313c6028b68df12f02d9eae2edbfc0d68f3fa5fa676973bec612",
+			"imports": ["Inv39ReadCertificates"]
+		},
+		{
+			"module": "Inv39FullPublicRollback",
+			"path": "formal/solidcore/inv39/Inv39FullPublicRollback.lean",
+			"model_relative_path": null,
+			"sha256": "e6e5d3d9306c842b9806c37adce056a811feb51792ff4fd5d66c262d9add203e",
+			"imports": ["Inv39InstalledMarker", "Inv39MovementMarkerLocalHistory", "Inv39MarkerHistoryReads", "Inv39Coverage"]
+		},
+		{
+			"module": "Inv39FullPublicHistory",
+			"path": "formal/solidcore/inv39/Inv39FullPublicHistory.lean",
+			"model_relative_path": null,
+			"sha256": "0b20a2b877777fd6c867b819cca48aef2955feb1ca5f73d2ac2d9c517ae68bae",
+			"imports": ["Inv39PublicReads", "Inv39FullPublicRollback"]
+		},
+		{
+			"module": "Inv39TraceEmbedding",
+			"path": "formal/solidcore/inv39/Inv39TraceEmbedding.lean",
+			"model_relative_path": null,
+			"sha256": "c97b3cf76c5f5e2e894b200ce9e26de2bec4b3806747f627679a4a3123d14cb2",
+			"imports": ["Inv39FullPublicHistory", "Inv39Coverage"]
+		},
+		{
+			"module": "Inv39FullPublicInitialized",
+			"path": "formal/solidcore/inv39/Inv39FullPublicInitialized.lean",
+			"model_relative_path": null,
+			"sha256": "83c74ac4c709b9f40d7a03c44cc3c707ef273b9dcd412c9e9703fee7027bbe60",
+			"imports": ["Inv39FullPublicHistory", "Inv39FullPublicBounds"]
+		},
+		{
+			"module": "Inv39FullPublicBefore",
+			"path": "formal/solidcore/inv39/Inv39FullPublicBefore.lean",
+			"model_relative_path": null,
+			"sha256": "5906b3715b9ff460a218e6beba6c32b4d1176fe9b43b849bbb3e1fe69044581a",
+			"imports": ["Inv39PublicReads", "Inv39FullPublicInitialized"]
+		},
+		{
+			"module": "Inv39FullPublicReachable",
+			"path": "formal/solidcore/inv39/Inv39FullPublicReachable.lean",
+			"model_relative_path": null,
+			"sha256": "51e55d0f37c0074829ce3deba9b880fdd928992ec78f7f936bc5d5eedecf36a1",
+			"imports": ["Inv39FullPublicBefore"]
+		},
+		{
+			"module": "Inv39CommittedMints",
+			"path": "formal/solidcore/inv39/Inv39CommittedMints.lean",
+			"model_relative_path": null,
+			"sha256": "fd8c4f9045c5f8386a1f169717d4dcc1d0cda1aafa721ab821f6e36d82685c9d",
+			"imports": ["Inv39TraceEmbedding", "Inv39FullPublicReachable"]
+		},
+		{
+			"module": "Inv39UniversalGenesisCore",
+			"path": "formal/solidcore/inv39/Inv39UniversalGenesisCore.lean",
+			"model_relative_path": null,
+			"sha256": "997d59b6cf340dc8a46c69a7697afc9d91dd108958e77450be5e05b543f609a5",
+			"imports": ["Inv39FullPublicReachable"]
+		},
+		{
+			"module": "Inv39UniversalGenesisFacts",
+			"path": "formal/solidcore/inv39/Inv39UniversalGenesisFacts.lean",
+			"model_relative_path": null,
+			"sha256": "87ab259ca1c207a4dca32e98fd252e7ade2d305e8f7d14013f97b9e48eb26fe7",
+			"imports": ["Inv39FullPublicReachable"]
+		},
+		{
+			"module": "Inv39UniversalGenesisBody",
+			"path": "formal/solidcore/inv39/Inv39UniversalGenesisBody.lean",
+			"model_relative_path": null,
+			"sha256": "8c472ab725efa4996aa2358cb3df231ff0cdf5b0f9aca1ad9e9157684d290a43",
+			"imports": ["Inv39UniversalGenesisFacts"]
+		},
+		{
+			"module": "Inv39UniversalGenesisShort",
+			"path": "formal/solidcore/inv39/Inv39UniversalGenesisShort.lean",
+			"model_relative_path": null,
+			"sha256": "47cc7134914a1db9835fc45108a701be481ec460b5f39189b6d88465bbcf7f80",
+			"imports": ["Inv39UniversalGenesisFacts"]
+		},
+		{
+			"module": "Inv39UniversalGenesisStorage",
+			"path": "formal/solidcore/inv39/Inv39UniversalGenesisStorage.lean",
+			"model_relative_path": null,
+			"sha256": "415d9048610ab433ba7930c6d6384580c454055d313b146ca21841f65706ecc1",
+			"imports": ["Inv39UniversalGenesisBody", "Inv39UniversalGenesisShort"]
+		},
+		{
+			"module": "Inv39UniversalGenesisExecution",
+			"path": "formal/solidcore/inv39/Inv39UniversalGenesisExecution.lean",
+			"model_relative_path": null,
+			"sha256": "97614f438a942538aec9ee9e6bebbe18867041fbded54f3f7113b25af05d92ef",
+			"imports": ["Inv39UniversalGenesisCore", "Inv39UniversalGenesisStorage"]
+		},
+		{
+			"module": "Inv39ChildMintSupply",
+			"path": "formal/solidcore/inv39/Inv39ChildMintSupply.lean",
+			"model_relative_path": null,
+			"sha256": "014758e15e5e0f8b3fdfec9a27763cdefe5e3e2c26ff75df9c0ac9a05a59f717",
+			"imports": ["Inv39TraceEmbedding", "Inv39CommittedMints", "Inv39UniversalGenesisExecution"]
+		},
+		{
+			"module": "Inv39Proved",
+			"path": "formal/solidcore/inv39/Inv39Proved.lean",
+			"model_relative_path": null,
+			"sha256": "e1f0db24bb33da74509d0d768fe38320c3aba1133d11d241b66b10268d535e6a",
+			"imports": ["Inv39ChildMintSupply", "Inv39PublicMint"]
+		},
+		{
+			"module": "CheckedWordCall",
+			"path": "formal/solidcore/inv32/CheckedWordCall.lean",
+			"model_relative_path": null,
+			"sha256": "dfedbea604da59e1b8cc4aedb4c905f4f4e8ab27a1152015c6662bd849f32d36",
+			"imports": ["Inv32Internal"]
+		}
+	],
+	"topological_order": [
+		"Inv32Generated",
+		"Inv39Generated",
+		"Inv39History",
+		"Inv40Thresholds",
+		"Inv27Generated",
+		"Inv39PrecompileEcho",
+		"Inv45Generated",
+		"Inv08Generated",
+		"Inv08Schedule",
+		"Inv32Loop",
+		"Inv45FuelMonotonicity",
+		"Inv32Source",
+		"Inv39Model",
+		"Inv39Balances",
+		"Inv45Model",
+		"Inv08Model",
+		"Inv08Expired",
+		"Inv08Prefix",
+		"Inv32ExecutionBridge",
+		"Inv32Dispatch",
+		"Inv39EventLayout",
+		"Inv39RawAuthShape",
+		"Inv39Coverage",
+		"Inv32Division",
+		"Inv32Shapes",
+		"Inv32CoreBodies",
+		"Inv32Rounding",
+		"Inv45Arithmetic",
+		"Inv32ExactMul512",
+		"Inv32ExactFloor",
+		"Inv32ExactCeil",
+		"Inv32ExactComparison",
+		"Inv32ExactForward",
+		"Inv32ExactInverse",
+		"Inv32ExactRatio",
+		"Inv32ExactPanic",
+		"Inv32ExactTernary",
+		"Inv32ExactRoundsUp",
+		"Inv32ExactToUint",
+		"Inv32Eval",
+		"Inv32Guards",
+		"Inv39WordField",
+		"Inv32Scalar",
+		"Inv39Slots",
+		"Inv39SupplyFields",
+		"Inv32Writes",
+		"Inv32RoundingHelper",
+		"Inv39Frame",
+		"Inv39StringFrame",
+		"Inv39BalanceSlots",
+		"Inv32Choice",
+		"Inv32Assign",
+		"Inv39FrameReads",
+		"Inv39ReturnStorage",
+		"Inv39Fold",
+		"Inv39MappingLayout",
+		"Inv32Arithmetic",
+		"Inv32Blocks",
+		"Inv39FrameControl",
+		"Inv39Mapping",
+		"Inv32Actions",
+		"Inv32BoolHelper",
+		"Inv39PlainFrames",
+		"Inv39AllowanceLayout",
+		"Inv32ConditionalAction",
+		"Inv39FrameMemory",
+		"Inv39AllowanceSlots",
+		"Inv32Product",
+		"Inv39SafeTemplates",
+		"Inv39FrameNumeric",
+		"Inv39AuthSlots",
+		"Inv32ProductValues",
+		"Inv39FrameIndex",
+		"Inv32High",
+		"Inv39FrameTyped",
+		"Inv32Mul512",
+		"Inv39FrameAssign",
+		"Inv32Internal",
+		"Inv39FrameStatements",
+		"Inv32ProductCall",
+		"CheckedWordCall",
+		"Inv39FrameGrammar",
+		"Inv32Temps",
+		"Inv39InputReads",
+		"Inv39DecimalFrame",
+		"Inv32FloorStart",
+		"Inv39DecimalCall",
+		"Inv32FloorNarrow",
+		"Inv32FloorFastPath",
+		"Inv32Compound",
+		"Inv32NewtonBody",
+		"Inv32NewtonSeed",
+		"Inv32WideWords",
+		"Inv32WideGuards",
+		"Inv32Borrow",
+		"Inv32BorrowRun",
+		"Inv32Factor",
+		"Inv32FactorRun",
+		"Inv32WideFinish",
+		"Inv32WideEntry",
+		"Inv32MathParts",
+		"Inv32WideAdapters",
+		"Inv32WideExecution",
+		"Inv32WidePath",
+		"Inv32FloorSuccess",
+		"Inv32FloorCall",
+		"Inv32Library",
+		"Inv32Revert",
+		"Inv32RejectionLinks",
+		"Inv32FlagCalls",
+		"Inv32PanicChoice",
+		"Inv03SettlementMath",
+		"Inv32TernaryCall",
+		"Inv32PanicCall",
+		"Inv32OverflowBody",
+		"Inv32FloorRejection",
+		"Inv32FloorOverflow",
+		"Inv32Hoist",
+		"Inv32OneArg",
+		"Inv32CeilFlags",
+		"Inv32FloorHoist",
+		"Inv32CeilAdd",
+		"Inv32Exit",
+		"Inv32CeilBody",
+		"Inv32CeilCall",
+		"Inv32QuoteExpr",
+		"Inv32QuoteGuard",
+		"Inv32CeilHoist",
+		"Inv32Normal",
+		"Inv03Bodies",
+		"Inv32InverseSteps",
+		"Inv45MulShape",
+		"Inv08SearchBinding",
+		"Inv45AbsoluteShape",
+		"Inv32InverseBody",
+		"Inv32InverseCall",
+		"Inv32Wrapper",
+		"Inv32WrapperExec",
+		"Inv32CompareProducts",
+		"Inv32CompareValues",
+		"Inv40Evaluation",
+		"Inv03Expressions",
+		"Inv32CompareBody",
+		"Inv39SupplyWrites",
+		"Inv08ReleaseQuote",
+		"Inv32CompareCall",
+		"Inv39Terms",
+		"Inv39Sites",
+		"Inv39SupplyDelta",
+		"Inv08Storage",
+		"Inv32Midpoint",
+		"Inv39BalanceExecution",
+		"Inv39SupplyEvents",
+		"Inv39Authority",
+		"Inv39UpdateBody",
+		"Inv39GetterBinding",
+		"Inv08StorageUpdate",
+		"Inv08StoredQuote",
+		"Inv08Middle",
+		"Inv32RatioTest",
+		"Inv39Debit",
+		"Inv39Getters",
+		"Inv08ReleaseWrites",
+		"Inv08SearchBody",
+		"Inv32RatioStep",
+		"Inv39Assignment",
+		"Inv08Compound",
+		"Inv08SearchExpressions",
+		"Inv39Branches",
+		"Inv08CursorExecution",
+		"Inv08LoopStep",
+		"Inv39DebitBranch",
+		"Inv08Integral",
+		"Inv08Loop",
+		"Inv39UpdateStores",
+		"Inv08Members",
+		"Inv39EventEffect",
+		"Inv08ExpiryStorage",
+		"Inv39Emit",
+		"Inv39LogInputs",
+		"Inv08SearchTable",
+		"Inv39UpdateExecution",
+		"Inv08SearchGuards",
+		"Inv39EmitSuccess",
+		"Inv08AuthorityShapes",
+		"Inv39UpdateCall",
+		"Inv39LogEmissions",
+		"Inv08AuthorityBytes",
+		"Inv39Ledger",
+		"Inv39SupplyEventSuccess",
+		"Inv08AuthorityMemory",
+		"Inv39InitWrites",
+		"Inv39Movement",
+		"Inv08AuthorityExpressions",
+		"Inv39InitState",
+		"Inv39InitDescriptors",
+		"Inv39InitBounds",
+		"Inv39MotionArgs",
+		"Inv45Signed",
+		"Inv39InitMemory",
+		"Inv39InitLayout",
+		"Inv39MotionExecution",
+		"Inv45Comparisons",
+		"Inv39InitControl",
+		"Inv39InitStores",
+		"Inv39MotionCall",
+		"Inv39ZeroGuard",
+		"Inv45WordOps",
+		"Inv39InitLocal",
+		"Inv39ChildBody",
+		"Inv39ZeroCall",
+		"Inv45Expressions",
+		"Inv39InitDeclarations",
+		"Inv39ChildGo",
+		"Inv39GuardNumbers",
+		"Inv39TransferBinding",
+		"Inv39GuardBinding",
+		"Inv45MulExpressions",
+		"Inv45AbsExpressions",
+		"Inv39InitDecimal",
+		"Inv39ChildWrapper",
+		"Inv39BurnEffect",
+		"Inv39AllowanceRead",
+		"Inv39Shortage",
+		"Inv39AllowanceTerms",
+		"Inv39Fetch",
+		"Inv45Product",
+		"Inv45Absolute",
+		"Inv39InitHoist",
+		"Inv39Public",
+		"Inv39FailedUpdate",
+		"Inv39ApprovalEvent",
+		"Inv39AllowanceBindings",
+		"Inv39SpendShape",
+		"Inv39Sender",
+		"Inv39Guard",
+		"Inv45DivisionState",
+		"Inv39InitSyntax",
+		"Inv39RawAuth",
+		"Inv39DenyEntry",
+		"Inv39FailedMotionArgs",
+		"Inv39ApproveBody",
+		"Inv39SpendMath",
+		"Inv39ApprovalShape",
+		"Inv39AllowanceGetter",
+		"Inv39PublicMint",
+		"Inv39GuardReject",
+		"Inv45Factor",
+		"Inv39EntryWrites",
+		"Inv39InitBinding",
+		"Inv39AuthReads",
+		"Inv39AuthResolve",
+		"Inv39AuthScopes",
+		"Inv39MotionRejected",
+		"Inv39ApproveCall",
+		"Inv39SpendFetch",
+		"Inv39TransferCore",
+		"Inv39GuardOverflow",
+		"Inv45DivideTwos",
+		"Inv39RecoverExpr",
+		"Inv39AuthLocals",
+		"Inv39ScalarTemplates",
+		"Inv39RejectedCall",
+		"Inv39ApprovalHoist",
+		"Inv39ApproveDenied",
+		"Inv39TransferBody",
+		"Inv39CapNecessity",
+		"Inv45Newton",
+		"Inv39GuardControl",
+		"Inv39SpendBranch",
+		"Inv39DeniedHoist",
+		"Inv39PublicTransfer",
+		"Inv39BurnRejected",
+		"Inv39Denial",
+		"Inv45Wide",
+		"Inv39GuardDecl",
+		"Inv39SpendBody",
+		"Inv39DelegatedBooks",
+		"Inv39SpendDenied",
+		"Inv39TransferRejected",
+		"Inv45MulExecution",
+		"Inv39GuardWrite",
+		"Inv39SpendCall",
+		"Inv39DirectApproveBody",
+		"Inv39DeniedSpendBody",
+		"Inv45Calls",
+		"Inv39GuardAssign",
+		"Inv39SpendPrep",
+		"Inv39DirectApproveCall",
+		"Inv39DeniedSpendCall",
+		"Inv45AddShape",
+		"Inv39GuardReturn",
+		"Inv39DelegateBody",
+		"Inv39DeniedPrep",
+		"Inv45AddReads",
+		"Inv39GuardLocalize",
+		"Inv39PublicDelegate",
+		"Inv39DirectApprove",
+		"Inv39DelegateFailure",
+		"Inv45Declarations",
+		"Inv39GuardSyntax",
+		"Inv39PublicApprove",
+		"Inv39DelegateDenied",
+		"Inv45AddPositive",
+		"Inv39SigArguments",
+		"Inv39SigLeaves",
+		"Inv39DelegateSuccess",
+		"Inv45Magnitude",
+		"Inv39SigEnter",
+		"Inv45AddCross",
+		"Inv39SigFinish",
+		"Inv45AddHoist",
+		"Inv39SafeCall",
+		"Inv45AddBranches",
+		"Inv39SigCalls",
+		"Inv45AddExecution",
+		"Inv39SigDomain",
+		"Inv45Interpolation",
+		"Inv39AuthFlag",
+		"Inv45Decimal",
+		"Inv39AuthWorld",
+		"Inv45DecimalShape",
+		"Inv39AuthBind",
+		"Inv45DecimalActions",
+		"Inv39AuthSeq",
+		"Inv45ByteRead",
+		"Inv39UnusedAuth",
+		"Inv39ObservedEntry",
+		"Inv39AuthNonce",
+		"Inv39CleanParameters",
+		"Inv45ByteStore",
+		"Inv39CancelTerms",
+		"Inv45DigitScan",
+		"Inv45Allocation",
+		"Inv39UseFlag",
+		"Inv39CancelEvidence",
+		"Inv39PermitTerms",
+		"Inv45DecimalRun",
+		"Inv39DecimalBoundAlloc",
+		"Inv39CancelBody",
+		"Inv39CancelShape",
+		"Inv39Grant",
+		"Inv39PermitEvidence",
+		"Inv45DecimalCall",
+		"Inv39PublicCancel",
+		"Inv39PermitBody",
+		"Inv39PermitLink",
+		"Inv39DecimalBoundRun",
+		"Inv39PublicPermit",
+		"Inv39DecimalBoundExec",
+		"Inv39SignedBooks",
+		"Inv39SignedMovement",
+		"Inv39SignedTerms",
+		"Inv39SignedTemps",
+		"Inv39SignedBody",
+		"Inv39SignedEvidence",
+		"Inv39WrapperTerms",
+		"Inv39SignedLink",
+		"Inv39SignedInputs",
+		"Inv39LoadTemps",
+		"Inv39WrapperEvidence",
+		"Inv39SignedCall",
+		"Inv39WrapperLink",
+		"Inv39SignedEntry",
+		"Inv39CheckedHistory",
+		"Inv39Initialize",
+		"Inv39RepeatBinding",
+		"Inv39FullPublicBounds",
+		"Inv39RepeatMarker",
+		"Inv39RepeatPrefix",
+		"Inv39RepeatExclusion",
+		"Inv39MarkerSeparation",
+		"Inv39MarkerHistory",
+		"Inv39MarkerSteps",
+		"Inv39MarkerBounds",
+		"Inv39MarkerHistoryReads",
+		"Inv39MovementMarkerCore",
+		"Inv39MarkerBinding",
+		"Inv39MarkerTail",
+		"Inv39MovementMarkerMint",
+		"Inv39MovementMarkerBurnBody",
+		"Inv39MovementMarkerTransferBody",
+		"Inv39MovementMarkerSignedMovement",
+		"Inv39MarkerPublic",
+		"Inv39DecimalBoundReject",
+		"Inv39MovementMarkerBurn",
+		"Inv39MovementMarkerTransfer",
+		"Inv39MovementMarkerSignedBody",
+		"Inv39MarkerPublicEntry",
+		"Inv39DecimalBound",
+		"Inv39MovementMarkerDelegateBody",
+		"Inv39MovementMarkerSignedCall",
+		"Inv39MarkerExecution",
+		"Inv39MovementMarkerDelegate",
+		"Inv39MovementMarkerSignedEntry",
+		"Inv39PublicViewFrame",
+		"Inv39MarkerPrefixTools",
+		"Inv39MarkerSuffixCertificate",
+		"Inv39MarkerObserved",
+		"Inv39MovementMarkerDelegateActual",
+		"Inv39ReadPaths",
+		"Inv39MarkerPrefixLocals",
+		"Inv39MarkerSuffixSyntax",
+		"Inv39MovementMarkerChecked",
+		"Inv39ReadStorage",
+		"Inv39MarkerPrefixBody",
+		"Inv39MarkerPrefixCertificate",
+		"Inv39MarkerSuffixConversion",
+		"Inv39MarkerSuffixEffects",
+		"Inv39MovementMarkerLocal",
+		"Inv39ReadDomainRegion",
+		"Inv39MarkerPrefixCleanup",
+		"Inv39MarkerPrefixSyntax",
+		"Inv39MarkerSuffix",
+		"Inv39MovementMarkerLocalHistory",
+		"Inv39ReadDomain",
+		"Inv39MarkerPrefixStore",
+		"Inv39ReadDomainCalls",
+		"Inv39MarkerPrefix",
+		"Inv39ReadCertificates",
+		"Inv39InstalledMarker",
+		"Inv39PublicReads",
+		"Inv39FullPublicRollback",
+		"Inv39FullPublicHistory",
+		"Inv39TraceEmbedding",
+		"Inv39FullPublicInitialized",
+		"Inv39FullPublicBefore",
+		"Inv39FullPublicReachable",
+		"Inv39CommittedMints",
+		"Inv39UniversalGenesisCore",
+		"Inv39UniversalGenesisFacts",
+		"Inv39UniversalGenesisBody",
+		"Inv39UniversalGenesisShort",
+		"Inv39UniversalGenesisStorage",
+		"Inv39UniversalGenesisExecution",
+		"Inv39ChildMintSupply",
+		"Inv39Proved"
+	]
+}

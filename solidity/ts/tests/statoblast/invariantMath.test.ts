@@ -18,6 +18,14 @@ beforeAll(async () => {
 	await node.setBaselineSnapshot()
 })
 const unitScale = 10n ** 9n
+test('the first settlement mint redeems the full deposit from an empty book', async () => {
+	for (const deposit of [0n, 1n, 11n, ((1n << 128n) - 1n) / unitScale]) {
+		const added = await client.readContract({ abi: artifact.abi, address, functionName: 'mintUnits', args: [deposit, 0n, 0n] })
+		expect(added).toBe(deposit * unitScale)
+		const paid = await client.readContract({ abi: artifact.abi, address, functionName: 'cashForUnits', args: [deposit, added, 0n, added] })
+		expect(paid).toBe(deposit)
+	}
+})
 test('an immediate mint and redemption of new settlement units returns the cash deposited within one raw unit', async () => {
 	let roundedDown = 0
 	let exact = 0
@@ -146,4 +154,14 @@ test('oracle conservative bounds reject exactly unrepresentable prices', async (
 	for (const uncertainty of [D, D + 1n, maximum]) {
 		for (const functionName of ['conservativePrice', 'liquidationPrice'] as const) await expect(client.readContract({ abi: artifact.abi, address, functionName, args: [1n, uncertainty] })).rejects.toThrow('Invalid oracle uncertainty')
 	}
+})
+
+test('INV-04 carry can change the minimum raw cash or overflow the scaled intermediate', async () => {
+	const quote = (units: bigint, remainder: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'requiredCash', args: [units, 1n, 1n, remainder] })
+	expect(await quote(unitScale, 0n)).toBe(1n)
+	expect(await quote(unitScale, 1n)).toBe(2n)
+
+	const maxWord = (1n << 256n) - 1n
+	expect(await quote(maxWord, 0n)).toBe((maxWord + unitScale - 1n) / unitScale)
+	await expect(quote(maxWord, 1n)).rejects.toThrow(/overflow|0x11/i)
 })
