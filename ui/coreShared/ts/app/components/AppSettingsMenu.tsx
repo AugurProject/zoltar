@@ -9,7 +9,7 @@ import * as appCopy from '../../copy/app.js'
 import type { ComponentChildren } from 'preact'
 import { ThemeSetting } from './ThemeSetting.js'
 
-export function AppSettingsMenu({ onEnvironmentChanged, settingsContent, triggerId }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren; triggerId?: string | undefined }) {
+export function AppSettingsMenu({ accountContent, onEnvironmentChanged, settingsContent, triggerId }: { accountContent?: ComponentChildren; onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren; triggerId?: string | undefined }) {
 	const [selectedNetwork, setSelectedNetwork] = useState<RpcNetworkId>(getActiveNetworkProfile().id)
 	const [rpcUrls, setRpcUrls] = useState(() => readNetworkRpcUrls())
 	const [error, setError] = useState<string | undefined>(undefined)
@@ -50,6 +50,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent, trigger
 			</button>
 			{open ? (
 				<div className='app-settings-menu' role='dialog' aria-label={appCopy.applicationSettings}>
+					{accountContent}
 					<label>
 						<span>{appCopy.rpcNetwork}</span>
 						<select
