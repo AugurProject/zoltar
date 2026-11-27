@@ -294,7 +294,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	}
 	function addQuestion(uint256 questionId) public returns (IQuestionLedger pool) {
 		require(setupStage == SETUP_COMPLETE, 'Security pool setup incomplete');
-		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
+		_requireAdmitted(questionId);
 		bytes32 origin = questionOriginIds[questionId];
 		if (origin != bytes32(0)) return factory.getQuestionLedger(origin, originUniverseId);
 		require(zoltar.getForkTime(originUniverseId) == 0, 'Origin universe forked');
@@ -307,6 +307,9 @@ contract SecurityPool is ISecurityPoolSettlement {
 		_registerPool(pool);
 		emit QuestionRegistered(questionId, origin, pool);
 	}
+	function _requireAdmitted(uint256 questionId) private view {
+		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
+	}
 	function _registerPool(IQuestionLedger pool) private {
 		require(factory.securityPoolOf(pool) == address(this), 'Pool belongs to another security pool');
 		require(address(getQuestionLedger(pool.questionId(), pool.universeId())) == address(pool), 'Pool is not canonical');
@@ -317,12 +320,10 @@ contract SecurityPool is ISecurityPoolSettlement {
 	}
 	function registerChildQuestionLedger(IQuestionLedger pool) external {
 		ISecurityPoolForkCoordinator(forkController).ensureReady(pool.universeId());
-		require(ISecurityPoolForkCoordinator(forkController).isReady(pool.universeId()), 'Child settlement not ready');
 		_registerPool(pool);
 	}
 	function prepareQuestionUniverse(uint248 universeId) external {
 		ISecurityPoolForkCoordinator(forkController).ensureReady(universeId);
-		require(ISecurityPoolForkCoordinator(forkController).isReady(universeId), 'Child settlement not ready');
 	}
 	function _pool(address caller) private view returns (IQuestionLedger pool) {
 		require(registeredLedgers[caller], 'Unknown question callback');
@@ -353,9 +354,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (IQuestionLedger pool) {
 		require(setupStage == SETUP_COMPLETE, 'Security pool setup incomplete');
 		ISecurityPoolForkCoordinator(forkController).ensureReady(universeId);
-		require(ISecurityPoolForkCoordinator(forkController).isReady(universeId), 'Universe is not ready');
-		if (universeId != originUniverseId)
-			require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
+		if (universeId != originUniverseId) _requireAdmitted(questionId);
 		pool = universeId == originUniverseId ? addQuestion(questionId) : getQuestionLedger(questionId, universeId);
 	}
 
@@ -384,9 +383,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 	function quoteQuestionMint(address pool, uint256 cash) external view returns (uint256) {
 		_pool(pool);
 		return settlement.quoteMint(pool, cash);
-	}
-	function feesEnabled(uint248 universeId) external view returns (bool) {
-		return services.feesEnabled(universeId);
 	}
 	function onSharedPriceAccepted(uint248 universeId, uint256 price, uint48 validUntil) external {
 		require(msg.sender == factory.sharedPriceFeeds(address(this), universeId), 'Only canonical shared feed');

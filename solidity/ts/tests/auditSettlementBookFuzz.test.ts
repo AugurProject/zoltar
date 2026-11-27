@@ -529,11 +529,11 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 				const b = BigInt(op.b)
 				switch (op.k) {
 					case 'mint':
-						await transact(encodeFunctionData({ abi: artifact.abi, functionName: 'mint', args: [b, BigInt(op.q), op.cash, 0n, op.ts] }))
+						await transact(encodeFunctionData({ abi: artifact.abi, functionName: 'mintWithRecoveryRep', args: [b, BigInt(op.q), op.cash, 0n, op.ts] }))
 						return { reverted: undefined }
 					case 'redeem': {
-						const quote = await client.simulateContract({ ...target, functionName: 'redeem', args: [b, BigInt(op.q), op.shares, 0n, op.ts] })
-						await transact(encodeFunctionData({ abi: artifact.abi, functionName: 'redeem', args: [b, BigInt(op.q), op.shares, 0n, op.ts] }))
+						const quote = await client.simulateContract({ ...target, functionName: 'redeem', args: [b, BigInt(op.q), op.shares, op.ts] })
+						await transact(encodeFunctionData({ abi: artifact.abi, functionName: 'redeem', args: [b, BigInt(op.q), op.shares, op.ts] }))
 						return { reverted: undefined, returned: [quote.result[0], quote.result[1], quote.result[2]] }
 					}
 					case 'fee':

@@ -36,7 +36,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		forks: [50n, 40n, 30n, 30n, 2n, 10n, 0n, 0n, true, false, true],
 		choices: [7n, true],
 		getChildUniverseId: 42n,
-		branches: [8n, 7n, 20n, 16n, 10n, 32n, true, false, false],
+		branches: [8n, 7n, 20n, 16n, 10n, 32n, true, false, false, zeroAddress, 0n],
 		getRepToken: owner,
 		capitalLedger: capital,
 		...overrides,
@@ -85,11 +85,11 @@ describe('bounded security pool fork SDK', () => {
 		expect(snapshot.fork.recoveryAttoRep).toBe(2n)
 	})
 	test('unprepared arbitrary outcomes do not require child deployment and foreign branches are rejected', async () => {
-		const unborn = fixture({ choices: [0n, false], branches: [0n, 0n, 0n, 0n, 0n, 0n, false, false, false] })
+		const unborn = fixture({ choices: [0n, false], branches: [0n, 0n, 0n, 0n, 0n, 0n, false, false, false, zeroAddress, 0n] })
 		const snapshot = await loadSecurityPoolForkSnapshot({ client: unborn.client, securityPool, owner, universeId: 8n, outcomeIndex: 2n ** 200n })
 		expect(snapshot.branch).toMatchObject({ prepared: false, capitalLedger: zeroAddress })
 		expect(unborn.calls.some(call => call.functionName === 'capitalLedger')).toBe(false)
-		await expect(loadSecurityPoolForkSnapshot({ client: fixture({ branches: [9n, 7n, 0n, 0n, 0n, 32n, true, false, false] }).client, securityPool, owner, universeId: 8n })).rejects.toThrow('different fork')
+		await expect(loadSecurityPoolForkSnapshot({ client: fixture({ branches: [9n, 7n, 0n, 0n, 0n, 32n, true, false, false, zeroAddress, 0n] }).client, securityPool, owner, universeId: 8n })).rejects.toThrow('different fork')
 		await expect(loadSecurityPoolForkSnapshot({ client: fixture({ securityPool: owner }).client, securityPool, owner, universeId: 8n })).rejects.toThrow('different security pool')
 	})
 	test('malformed deadlines, inconsistent accounting and reorgs fail closed', async () => {

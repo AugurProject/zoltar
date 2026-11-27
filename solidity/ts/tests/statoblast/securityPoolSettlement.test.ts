@@ -25,8 +25,14 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 	const otherPool = addressString(TEST_ADDRESSES[4])
 	const finalPool = addressString(TEST_ADDRESSES[5])
 	const register = (pool: Address, universe: bigint, question: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'registerQuestion', args: [pool, universe, question] }))
-	const mint = (pool: Address, cash: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [pool, cash, 0n, timestamp] }))
-	const redeem = (pool: Address, shares: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [pool, addressString(TEST_ADDRESSES[1]), shares, 0n, timestamp] }))
+	// Services funds custody before minting; this client is the security pool authority.
+	const fund = (cash: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: collateralArtifact.abi, address: collateral, functionName: 'transfer', args: [address, cash] }))
+	const mint = async (pool: Address, cash: bigint, timestamp = 0) => {
+		await fund(cash)
+		return await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [pool, client.account.address, cash, 0n, timestamp] }))
+	}
+	const redeem = (pool: Address, shares: bigint, timestamp = 0) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [pool, addressString(TEST_ADDRESSES[1]), shares, timestamp] }))
+	const bindSelfAsServices = () => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'authorizeServices', args: [client.account.address] }))
 	const checkpoint = (universe: bigint, timestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointUniverse', args: [universe, timestamp] }))
 
 	const deployRecoveryToken = async (rep: bigint) => {
@@ -63,19 +69,30 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('earned fees are transferred once and redemptions pay the exact actual cash', async () => {
+	test('earned fees are accounted once and redemptions pay the exact actual cash', async () => {
+		await bindSelfAsServices()
 		await mint(nativePool, 100n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n * 1_000_000_000n, 10, 0] }))
 		await checkpoint(0n, 5)
-		expect(await collateralBalance(address)).toBe(90n)
+		expect(await client.readContract({ ...target(), functionName: 'pendingServiceFees' })).toBe(10n)
 		expect((await client.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [1n] })).slice(0, 3)).toEqual([90n, 90n, 0n])
 		const before = await collateralBalance(addressString(TEST_ADDRESSES[1]))
 		await redeem(nativePool, 50n, 5)
 		expect(await collateralBalance(addressString(TEST_ADDRESSES[1]))).toBe(before + 45n)
 		await checkpoint(0n, 10)
-		expect(await collateralBalance(address)).toBe(40n)
+		expect(await client.readContract({ ...target(), functionName: 'pendingServiceFees' })).toBe(15n)
 		await redeem(nativePool, 50n, 10)
+		expect(await collateralBalance(address)).toBe(15n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'withdrawServiceFees' }))
 		expect(await collateralBalance(address)).toBe(0n)
+	})
+
+	test('a non-service caller cannot collect earned fees it has no way to credit', async () => {
+		await mint(nativePool, 100n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n * 1_000_000_000n, 10, 0] }))
+		await expect(checkpoint(0n, 5)).rejects.toThrow('Uncollected settlement fees')
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 5] }))).rejects.toThrow('Uncollected settlement fees')
+		expect(await collateralBalance(address)).toBe(100n)
 	})
 
 	test('only the bound service can account for questions and retrieve its deferred fees once', async () => {
@@ -85,7 +102,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'authorizeServices', args: [client.account.address] }))).rejects.toThrow('Settlement services initialized')
 		await expect(writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'authorizeServices', args: [client.account.address] }))).rejects.toThrow('Only security pool')
 		await writeContractAndWait(service, () => service.writeContract({ abi: collateralArtifact.abi, address: collateral, functionName: 'transfer', args: [address, 100n] }))
-		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'mint', args: [nativePool, 100n, 0n, 0] }))
+		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [nativePool, service.account.address, 100n, 0n, 0] }))
 		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, 2n * 1_000_000_000n, 10, 0] }))
 		const rootBefore = await collateralBalance(client.account.address)
 		const serviceBefore = await collateralBalance(service.account.address)
@@ -101,10 +118,8 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await writeContractAndWait(service, () => service.writeContract({ ...target(), functionName: 'withdrawServiceFees' }))
 		expect(await collateralBalance(service.account.address)).toBe(serviceBefore + 10n)
 		expect(await collateralBalance(client.account.address)).toBe(rootBefore)
-		const serviceAfter = await collateralBalance(service.account.address)
-		await checkpoint(0n, 10)
-		expect(await collateralBalance(service.account.address)).toBe(serviceAfter)
-		expect(await collateralBalance(address)).toBe(80n)
+		await expect(checkpoint(0n, 10)).rejects.toThrow('Uncollected settlement fees')
+		expect(await collateralBalance(address)).toBe(90n)
 	})
 
 	test('fork source cash, final parent claims and child funding cannot spend each other', async () => {
@@ -115,7 +130,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await mint(finalPool, 100n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'scheduleFinality', args: [finalPool, 99, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 100] }))
-		expect(await client.readContract({ ...target(), functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(500n)
+		expect((await client.readContract({ ...target(), functionName: 'universes', args: [0n] }))[2]).toBe(500n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 200n, zeroAddress, 0n, 0n] }))
 		await register(childPool, 1n, 1n)
 		await register(addressString(TEST_ADDRESSES[6]), 1n, 2n)
@@ -162,7 +177,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		expect(await client.getBalance({ address })).toBe(1_000n)
 		expect(await collateralBalance(address)).toBe(0n)
 		const outsider = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
-		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'mint', args: [nativePool, 100n, 0n, 0] }))).rejects.toThrow('Only security pool')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [nativePool, outsider.account.address, 100n, 0n, 0] }))).rejects.toThrow('Only security pool')
 		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'registerQuestion', args: [childPool, 0n, 99n] }))).rejects.toThrow('Only security pool')
 	})
 
@@ -174,13 +189,14 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildUniverse', args: [0n, 1n, 100n, token, 200n, 0n] }))
 		await register(childPool, 1n, 1n)
-		const funded = parseAbi(['function mintWithRecoveryRep(address,address,uint256,uint256,uint256,uint48)'])
-		const request = (maximum: bigint) => ({ abi: funded, address, functionName: 'mintWithRecoveryRep' as const, args: [childPool, payer.account.address, 50n, 0n, maximum, 0] as const })
+		const funded = parseAbi(['function mintWithRecoveryRep(address,address,uint256,uint256,uint48)'])
+		const request = (maximum: bigint) => ({ abi: funded, address, functionName: 'mintWithRecoveryRep' as const, args: [childPool, payer.account.address, 50n, maximum, 0] as const })
 		await expect(mint(childPool, 50n)).rejects.toThrow('Recovery REP exceeds budget')
 		await expect(client.writeContract(request(99n))).rejects.toThrow('Recovery REP exceeds budget')
 		await expect(client.writeContract(request(100n))).rejects.toThrow()
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [payer.account.address] })).toBe(100n)
 		await writeContractAndWait(payer, () => payer.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [address, 100n] }))
+		await fund(50n)
 		await writeContractAndWait(client, () => client.writeContract(request(100n)))
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [payer.account.address] })).toBe(0n)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })).toBe(300n)
@@ -195,6 +211,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		const shares = 10n ** 18n
 		const rep = 1_000n * shares
 		const token = await deployRecoveryToken(rep)
+		await bindSelfAsServices()
 		await mint(nativePool, shares)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [nativePool, (shares - 1n) * 1_000_000_000n, 1, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealUniverse', args: [0n, 1] }))
@@ -209,6 +226,7 @@ describe('Statoblast: central settlement ERC20 custody', () => {
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] })).toBe(rep)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [address] })).toBe(0n)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'withdrawForkRecoveryCash', args: [0n, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'withdrawServiceFees' }))
 		expect(await collateralBalance(address)).toBe(0n)
 	})
 })

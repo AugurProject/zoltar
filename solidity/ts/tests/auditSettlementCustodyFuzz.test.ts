@@ -96,6 +96,8 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 		const ledgerTarget = { abi: bookArtifact.abi, address: ledger }
 		const call = (data: Hex) => transact(custody, data)
 		await call(encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'initialize', args: [ledger] }))
+		// The owner acts as both security pool and Services: earned fees accrue as pending service income in custody.
+		await call(encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'authorizeServices', args: [owner] }))
 		await transact(collateral, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'mint', args: [owner, 1n << 200n] }))
 		await transact(collateral, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'approve', args: [custody, (1n << 256n) - 1n] }))
 		await call(encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'registerUniverse', args: [0n, START] }))
@@ -113,20 +115,20 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 		const checkCustody = async (): Promise<string | undefined> => {
 			const frozenCount = Number(await client.readContract({ ...ledgerTarget, functionName: 'lastFrozenBookId' }))
 			const frozen = await Promise.all(Array.from({ length: frozenCount }, (_unused, index) => client.readContract({ ...ledgerTarget, functionName: 'frozenBooks', args: [BigInt(index + 1)] })))
-			let owedCash = 0n
+			let owedCash = await client.readContract({ ...custodyTarget, functionName: 'pendingServiceFees' })
 			for (const entry of frozen) owedCash += entry[0]
 			for (const universe of universes) {
 				const book = await readBook(universe.bookId)
 				if (book.feeCash !== 0n) return `universe ${universe.id}: fee escrow ${book.feeCash} was not forwarded`
 				if (book.isSealed !== universe.isSealed) return `universe ${universe.id}: sealed flag differs`
-				const available = await client.readContract({ ...custodyTarget, functionName: 'availableForkCashAttoEth', args: [universe.id] })
+				const available = (await client.readContract({ ...custodyTarget, functionName: 'universes', args: [universe.id] }))[2]
 				if (book.isSealed && available > book.cash) return `universe ${universe.id}: unassigned fork cash ${available} exceeds sealed book cash ${book.cash}`
 				owedCash += book.isSealed ? available : book.cash
 				if (universe.token === undefined) {
 					if (book.rec !== 0n) return `universe ${universe.id}: recovery REP ${book.rec} without a recovery token`
 					continue
 				}
-				let owedRep = book.isSealed ? await client.readContract({ ...custodyTarget, functionName: 'availableForkRecoveryAttoRep', args: [universe.id] }) : book.rec
+				let owedRep = book.isSealed ? (await client.readContract({ ...custodyTarget, functionName: 'universes', args: [universe.id] }))[3] : book.rec
 				for (const entry of frozen) if (entry[2] === universe.bookId) owedRep += entry[3]
 				const heldRep = await balance(universe.token, custody)
 				if (heldRep !== owedRep) return `universe ${universe.id}: REP CUSTODY holds ${heldRep} but owes ${owedRep}`
@@ -160,8 +162,8 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 				client.readContract({ ...custodyTarget, functionName: 'quoteRecoveryRep', args: [pool(universe.id, question), shares] }).catch(() => undefined),
 				readBook(universe.bookId),
 			])
-			const data = encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'redeem', args: [pool(universe.id, question), RECIPIENT, shares, 0n, ts] })
-			const simulated = await client.simulateContract({ ...custodyTarget, functionName: 'redeem', args: [pool(universe.id, question), RECIPIENT, shares, 0n, ts] }).then(
+			const data = encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'redeem', args: [pool(universe.id, question), RECIPIENT, shares, ts] })
+			const simulated = await client.simulateContract({ ...custodyTarget, functionName: 'redeem', args: [pool(universe.id, question), RECIPIENT, shares, ts] }).then(
 				value => value.result[0],
 				() => undefined,
 			)
@@ -188,7 +190,7 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 			let problem: string | undefined
 			if (universe.isSealed) {
 				const choice = random.int(20)
-				const available = await client.readContract({ ...custodyTarget, functionName: 'availableForkCashAttoEth', args: [universe.id] })
+				const available = (await client.readContract({ ...custodyTarget, functionName: 'universes', args: [universe.id] }))[2]
 				if (choice < 7 && universes.length < 7 && universe.children < 3) {
 					const childId = BigInt(universes.length)
 					const token = await deployToken()
@@ -228,7 +230,13 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 				const choice = random.int(100)
 				if (choice < 20) {
 					const cash = random.pick([1n, 7n, 1000n, 10n ** 9n, 10n ** 18n, 3n * 10n ** 20n]) + random.big(1000n)
-					problem = await attempt(`mint u${universe.id} q${question} ${cash} ts ${ts}`, encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'mint', args: [poolAddress, cash, 0n, ts] }))
+					// Services funds custody only for a mint the ledger accepts.
+					const accepts = await client.simulateContract({ ...custodyTarget, functionName: 'mintWithRecoveryRep', args: [poolAddress, owner, cash, 0n, ts] }).then(
+						() => true,
+						() => false,
+					)
+					if (accepts) await transact(collateral, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'transfer', args: [custody, cash] }))
+					problem = await attempt(`mint u${universe.id} q${question} ${cash} ts ${ts}`, encodeFunctionData({ abi: custodyArtifact.abi, functionName: 'mintWithRecoveryRep', args: [poolAddress, owner, cash, 0n, ts] }))
 				} else if (choice < 38) problem = await redeem(universe, question, supply === 0n ? 1n : random.pick([supply, random.big(supply - 1n) + 1n, random.big(supply - 1n) + 1n, 1n]), random.int(3) === 0 ? book.ts : ts)
 				else if (choice < 54) {
 					const floor = (supply * minimum + SCALE - 1n) / SCALE
@@ -251,7 +259,7 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 			}
 			if (problem !== undefined) return `seed ${seed} (minimum rate ${minimum}): ${problem}`
 		}
-		// Drain: every payable claim is redeemed; custody must then hold only unassigned fork cash.
+		// Drain: every payable claim is redeemed; custody must then hold only unassigned fork cash and pending service fees.
 		for (const universe of universes) {
 			const book = await readBook(universe.bookId)
 			let ts = book.ts
@@ -272,10 +280,10 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 				if (accepted === acceptedBefore) return `seed ${seed}: LOCKED FUNDS: payable claim u${universe.id} q${question} could not be redeemed\n    ${history.slice(-25).join('\n    ')}`
 			}
 		}
-		let unassigned = 0n
-		for (const universe of universes) if (universe.isSealed) unassigned += await client.readContract({ ...custodyTarget, functionName: 'availableForkCashAttoEth', args: [universe.id] })
+		let unassigned = await client.readContract({ ...custodyTarget, functionName: 'pendingServiceFees' })
+		for (const universe of universes) if (universe.isSealed) unassigned += (await client.readContract({ ...custodyTarget, functionName: 'universes', args: [universe.id] }))[2]
 		const left = await balance(collateral, custody)
-		if (left !== unassigned) return `seed ${seed}: after the drain custody holds ${left} but only ${unassigned} is unassigned fork cash`
+		if (left !== unassigned) return `seed ${seed}: after the drain custody holds ${left} but only ${unassigned} is unassigned fork cash or pending service fees`
 		return undefined
 	}
 

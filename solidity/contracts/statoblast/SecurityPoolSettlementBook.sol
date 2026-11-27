@@ -193,21 +193,13 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		emit SettlementBookRepaired(bookId, cashAttoEth);
 	}
 
-	function mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 securityPoolTimestamp) external onlySecurityPool returns (uint256) {
-		return _mint(bookId, questionId, cashAttoEth, minimumShares, 0, securityPoolTimestamp);
-	}
-
-	function mintWithRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 securityPoolTimestamp) external onlySecurityPool returns (uint256) {
-		return _mint(bookId, questionId, cashAttoEth, minimumShares, recoveryAttoRep, securityPoolTimestamp);
-	}
-
-	function _mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 securityPoolTimestamp) private returns (uint256 outcomeShares) {
+	function mintWithRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 recoveryAttoRep, uint48 securityPoolTimestamp) external onlySecurityPool returns (uint256 outcomeShares) {
 		Book storage book = _activeBook(bookId);
 		_accrueFees(bookId, book, securityPoolTimestamp);
 		require(cashAttoEth > 0, 'Zero settlement funding');
 		outcomeShares = quoteMint(bookId, questionId, cashAttoEth);
 		(Question memory state, ) = scaledQuestion(bookId, questionId);
-		require(outcomeShares > 0 && outcomeShares >= minimumShares, 'Insufficient outcome shares');
+		require(outcomeShares > 0, 'Insufficient outcome shares');
 		require(recoveryAttoRep == _mintRecoveryRep(bookId, book, questionId, state, outcomeShares), 'Recovery REP funding mismatch');
 		uint256 entitlement = _mintEntitlement(bookId, book, questionId, state);
 		// The quote keeps the funded custody below the REP precision bound.
@@ -230,7 +222,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	/// @notice Burn authenticated complete sets or winning outcomes and return their funded cash.
-	function redeem(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint256 minimumCashAttoEth, uint48 securityPoolTimestamp) public onlySecurityPool returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
+	function redeem(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 securityPoolTimestamp) public onlySecurityPool returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
 		Book storage book = _book(bookId);
 		if (!book.isSealed) _accrueFees(bookId, book, securityPoolTimestamp);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
@@ -256,7 +248,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			frozen.recoveryAttoRep -= recoveryAttoRep;
 			frozen.units -= unitsBurned;
 		}
-		require(cashAttoEth >= minimumCashAttoEth, 'Insufficient settlement cash');
 		state.units -= unitsBurned;
 		state.feePrincipalAttoEth = Math.mulDiv(state.feePrincipalAttoEth, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
 		if (state.feeRateAttoEthPerSecond != 0) {

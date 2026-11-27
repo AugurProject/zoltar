@@ -15,11 +15,10 @@ const artifacts = {
 	openOracle: artifact(5),
 	sharedPoolPriceFeedFactory: artifact(6),
 	sharedPoolPriceFeedDeploymentWorker: artifact(8),
-	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,address,bytes32,address[9]'),
+	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,bytes32,address[9]'),
 	securityPool: artifact(26),
 	questionForker: artifact(10, 'address'),
-	questionLedgerOperationsDelegate: artifact(12),
-	questionLedgerEventEmitter: artifact(13),
+	questionLedgerDelegate: artifact(12),
 	shareTokenFactory: artifact(15, 'address'),
 	securityPoolCapitalLedgerDeployer: artifact(17),
 	securityPoolCommitmentIndexDeployer: artifact(18),
@@ -76,7 +75,7 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolRepairAuctionDeployer,
 		] as const
 		expect(constructorArgs(factoryCode)).toBe(
-			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,address,bytes32,address[9]'), [
+			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,bytes32,address[9]'), [
 				addresses.questionForker,
 				addresses.zoltarQuestionData,
 				addresses.escalationGameFactory,
@@ -84,8 +83,7 @@ describe('shared capital infrastructure init codes', () => {
 				addresses.zoltar,
 				addresses.shareTokenFactory,
 				addresses.sharedPoolPriceFeedFactory,
-				addresses.questionLedgerOperationsDelegate,
-				addresses.questionLedgerEventEmitter,
+				addresses.questionLedgerDelegate,
 				keccak256(builders.getSecurityPoolCreationCode()),
 				deployers,
 			]),

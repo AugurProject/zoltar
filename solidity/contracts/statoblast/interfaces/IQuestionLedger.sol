@@ -80,7 +80,6 @@ interface IQuestionLedger {
 	function setAwaitingForkContinuation(bool shouldAwait) external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
-	function setShareTokenSupplyAttoShares(uint256 newShareTokenSupplyAttoShares) external;
 	function authorizeChildQuestionLedger(IQuestionLedger pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
 

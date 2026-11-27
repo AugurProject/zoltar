@@ -28,7 +28,7 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 			createMockWriteClient(send, async request => {
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
 				if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
-				if (request.functionName === 'recoveryTokens') return pool
+				if (request.functionName === 'universes') return [1n, pool, 0n, 0n]
 				if (request.address === pool && request.functionName === 'balanceOf') return recovery.balance
 				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
@@ -42,7 +42,7 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 				if (request.functionName === 'getQuestionLedger') return pool
 				if (request.functionName === 'purchaseQuote') return [0n, 0n]
 				if (request.functionName === 'quoteMintRecoveryRep') return recovery.required
-				if (request.functionName === 'recoveryTokens') return pool
+				if (request.functionName === 'universes') return [1n, pool, 0n, 0n]
 				if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 				if (request.functionName === 'questionData') return pool
 				if (request.functionName === 'getQuestionEndDate') return questionEndDate
@@ -101,7 +101,7 @@ test.each(['winning shares', 'complete sets'] as const)('%s redemption allows bo
 				if (['collateralToken', 'services', 'securityPoolFactory', 'securityPoolOf', 'isSecurityPool'].includes(request.functionName)) identityReads += 1
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
 				if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
-				if (request.functionName === 'recoveryTokens') return pool
+				if (request.functionName === 'universes') return [1n, pool, 0n, 0n]
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'universeId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
@@ -238,7 +238,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
 					if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
-					if (request.functionName === 'recoveryTokens') return pool
+					if (request.functionName === 'universes') return [1n, pool, 0n, 0n]
 					if (request.functionName === 'balanceOf') return walletBalance
 					if (request.functionName === 'allowance') return 10n ** 21n
 					reads.push(request.functionName)

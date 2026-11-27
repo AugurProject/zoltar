@@ -7,8 +7,7 @@ import { createStatoblastInitCodes } from '@zoltar/statoblast-shared/deployment/
 import { statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import {
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
-	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+	statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
@@ -52,8 +51,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer,
 		securityPoolForkCoordinatorDeployer: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
 		securityPoolRepairAuctionDeployer: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
-		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+		questionLedgerDelegate: statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	},
 	{ proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS, zeroSalt: ZERO_SALT },
@@ -74,20 +72,18 @@ const {
 	getSecurityPoolReporterLedgerDeployerByteCode,
 	getSecurityPoolForkCoordinatorDeployerByteCode,
 	getSecurityPoolRepairAuctionDeployerByteCode,
-	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerAccountingModuleByteCode,
+	getQuestionLedgerDelegateByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
-export { getEscalationGameFactoryByteCode, getSharedPoolPriceFeedFactoryByteCode, getSharedPoolPriceFeedDeploymentWorkerByteCode, getSecurityPoolFactoryByteCode, getQuestionForkerByteCode, getQuestionLedgerOperationsDelegateByteCode, getQuestionLedgerAccountingModuleByteCode, getShareTokenFactoryByteCode }
+export { getEscalationGameFactoryByteCode, getSharedPoolPriceFeedFactoryByteCode, getSharedPoolPriceFeedDeploymentWorkerByteCode, getSecurityPoolFactoryByteCode, getQuestionForkerByteCode, getQuestionLedgerDelegateByteCode, getShareTokenFactoryByteCode }
 
 /** The linked creation code the canonical factory pins by hash and deploys for every security pool. */
 export const getSecurityPoolCreationCode = statoblastInitCodes.getSecurityPoolCreationCode
 
 export const getSecurityPoolRuntimeCode = (): Hex => `0x${statoblast_SecurityPool_SecurityPool.evm.deployedBytecode.object}`
 
-export const getQuestionLedgerAccountingModuleRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.deployedBytecode.object}`
-export const getQuestionLedgerOperationsDelegateRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.deployedBytecode.object}`
+export const getQuestionLedgerDelegateRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate.evm.deployedBytecode.object}`
 
 export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()) {
 	const zoltarAddresses = getZoltarContractAddresses(profile)
@@ -103,8 +99,7 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 export function getInfraStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
 	const addresses = getInfraContractAddresses(profile)
 	return {
-		questionLedgerEventEmitter: constructorArgumentsFromInitCode(getQuestionLedgerAccountingModuleByteCode(), statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.bytecode.object),
-		questionLedgerOperationsDelegate: constructorArgumentsFromInitCode(getQuestionLedgerOperationsDelegateByteCode(), statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.bytecode.object),
+		questionLedgerDelegate: constructorArgumentsFromInitCode(getQuestionLedgerDelegateByteCode(), statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate.evm.bytecode.object),
 		openOracle: '',
 		sharedPoolPriceFeedDeploymentWorker: '',
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),

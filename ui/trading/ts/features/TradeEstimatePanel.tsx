@@ -119,7 +119,7 @@ export function TradeEstimatePanel({
 	const { side, quote } = estimate
 	const opposite = side === 'YES' ? 'NO' : 'YES'
 	// A buy also keeps Invalid shares, which pay if the question resolves Invalid, so the headline states what each resolution pays.
-	const entryInvalid = estimate.kind === 'entry' ? estimate.quote.invalidInsurance : 0n
+	const entryInvalid = estimate.kind === 'entry' ? estimate.quote.completeSetShares : 0n
 	// A sale's own ETH figure is what it pays, so its share rows name quantities only; a conditional payout beside them would read as a second price.
 	const primary =
 		estimate.kind === 'entry'
@@ -151,7 +151,7 @@ export function TradeEstimatePanel({
 		{ label: ticketCopy.tradingFee, value: ticketCopy.formatTradingFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market), market), collateralAsset(market).symbol) },
 		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(quote.completeSetShares, market) },
 		// Swapped shares pass through the pool and are never held, so they have no payout to state.
-		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite, 4, 'nearest', market) } : { label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side, 4, 'nearest', market) },
+		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.completeSetShares, opposite, 4, 'nearest', market) } : { label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side, 4, 'nearest', market) },
 	]
 	return (
 		<section className='trade-estimate' aria-label={ticketCopy.estimateHeading}>

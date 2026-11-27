@@ -204,9 +204,9 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 					address: readStringField(infraContractAddresses, 'securityPoolFactory', 'infraContractAddresses.securityPoolFactory'),
 				},
 				{
-					id: 'questionLedgerOperationsDelegate',
-					label: 'Question Ledger Operations Delegate',
-					address: readStringField(infraContractAddresses, 'questionLedgerOperationsDelegate', 'infraContractAddresses.questionLedgerOperationsDelegate'),
+					id: 'questionLedgerDelegate',
+					label: 'Question Ledger Delegate',
+					address: readStringField(infraContractAddresses, 'questionLedgerDelegate', 'infraContractAddresses.questionLedgerDelegate'),
 				},
 				{
 					id: 'escalationGameProofVerifier',

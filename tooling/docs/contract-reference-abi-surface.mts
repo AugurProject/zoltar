@@ -57,7 +57,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		resumeForkedEscalationGame: ['external()'],
 		setAwaitingForkContinuation: ['external(bool)'],
 		setSystemState: ['external(SystemState)'],
-		setShareTokenSupplyAttoShares: ['external(uint256)'],
 		authorizeChildQuestionLedger: ['external(IQuestionLedger)'],
 	},
 	'solidity/contracts/statoblast/QuestionForker.sol': {
@@ -88,7 +87,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	'solidity/contracts/statoblast/SharedPoolPriceFeed.sol': {
 		requestSecurityPoolPrice: ['external(uint256,uint256,uint256)'],
 		requestSecurityPoolPriceWithOperations: ['external(uint256,uint256,uint256,IReportOperations.Batch)'],
-		syncExposure: ['external()'],
 		createReportEscrow: ['external(address,address,uint256,uint256,uint256,uint256,uint32)'],
 		settleReport: ['external(uint256,uint256,uint256)'],
 		recoverReport: ['public(uint256)'],
@@ -134,8 +132,8 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'd74a5944d10743e0804ba120722aef4dba4361eb8942afcf140264f0cc2c1941',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/SharedPoolPriceFeed.sol': 'f36b4f222b2e9bcbcbe25e4e417433ece937f640fdbae3c51d04396d33bd1729',
-	'solidity/contracts/statoblast/QuestionLedger.sol': 'd5ee68293a6702fd7c319a15eb2eae627d384ae7bf178eb3fb9bf472021b4dd4',
+	'solidity/contracts/statoblast/SharedPoolPriceFeed.sol': 'f6f6deedaecdd082a765b58de7b631187371fd64cb621bb62bfa7f3ecf024bde',
+	'solidity/contracts/statoblast/QuestionLedger.sol': 'c30f08b4a623ddf3cfd1da31d6c31e9bd943e183366ae2f38af01f7e811f0d01',
 	'solidity/contracts/statoblast/QuestionForker.sol': '04e488e9cd2e23d2a7b9a0a052180fdd7ec2dfa1cded5445bf142ae78e8af15b',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '24a5c8cc53cbe4c2c3a9ad75e52d462010f1f91f40172fd416a2d3573849aa18',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': 'b844f1985ddaa7d364d1fa2a4a145a8f8ea1c2506dc625a4c68a485d5148da21',

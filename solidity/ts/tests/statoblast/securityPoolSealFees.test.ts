@@ -43,7 +43,8 @@ describe('#1560 sealing after capital freeze collects no remaining fees', () => 
 		expect((await snapshot()).questionCashAttoEth).toBeLessThan(cashBeforeFreeze)
 		const time = await owner.readContract({ ...securityPool, functionName: 'forkSecurityPoolTime', args: [fixture.base.genesisUniverse] })
 		const { result } = await authority.simulateContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'sealUniverse', args: [fixture.base.genesisUniverse, time] })
-		expect(result[2]).toBe(0n)
+		// Sealing reverts with 'Uncollected settlement fees' if any earned fee remained uncredited.
+		expect(result).toHaveLength(2)
 		const balance = () => owner.readContract({ abi: tokenArtifact.abi, address: collateral, functionName: 'balanceOf', args: [fixture.securityPool] })
 		const before = await balance()
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'freeze', args: [fixture.base.genesisUniverse] }))

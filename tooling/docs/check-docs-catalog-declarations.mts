@@ -105,7 +105,8 @@ export async function assertCoordinatorParameterTableValues(openOracleReferenceH
 		return BigInt(duration[1]) * (duration[2] === 'hours' ? 3600n : 60n)
 	}
 	const feed = await readFile('solidity/contracts/statoblast/SharedPoolPriceFeed.sol', 'utf8')
-	const callbackGasLimit = readInteger(feed, /FEED_SETTLEMENT_GAS_OVERHEAD = ([0-9_]+);/, 'FEED_SETTLEMENT_GAS_OVERHEAD')
+	assert.match(feed, /FEED_SETTLEMENT_GAS_OVERHEAD = FEED_SETTLEMENT_CALLBACK_GAS;/)
+	const callbackGasLimit = readInteger(priceCoordinatorTypes, /FEED_SETTLEMENT_CALLBACK_GAS = ([0-9_]+);/, 'FEED_SETTLEMENT_CALLBACK_GAS')
 	const bountyOffset = readInteger(priceCoordinatorTypes, /REQUEST_BOUNTY_OFFSET_ATTO_ETH = ([0-9_]+);/, 'REQUEST_BOUNTY_OFFSET_ATTO_ETH')
 	assert.match(feed, /function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{\s*return _minimumSettlementBounty\(getSettlementCallbackGasLimit\(\)\);/)
 	const grouped = (value: bigint): string => value.toLocaleString('en-US')

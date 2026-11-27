@@ -829,13 +829,6 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(report.protocolFee, BigInt(ORACLE_PROTOCOL_FEE))
 	})
 
-	test('exposure checkpoint rejects an unauthenticated caller without changing canonical exposure', async () => {
-		const target = { abi: feedArtifact.abi, address: priceFeed }
-		const before = await client.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })
-		await assert.rejects(client.writeContract({ ...target, functionName: 'syncExposure' }), /Wrong exposure security pool/)
-		assert.strictEqual(await client.readContract({ ...target, functionName: 'aggregateExposureAttoEth' }), before)
-	})
-
 	test('funding, report widths, and forged callbacks fail atomically while concurrent candidates remain available', async () => {
 		const target = { abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceOracle }
 		const cost = await getRequestPriceCostAttoEth(client, priceOracle)

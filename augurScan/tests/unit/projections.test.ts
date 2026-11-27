@@ -95,7 +95,6 @@ describe('state projections', () => {
 	})
 
 	test('normalizes every share supply event to the same logical field', () => {
-		const [explicitSupply] = projectionsFrom(log('ShareTokenSupplySet', { shareTokenSupplyAttoShares: atomic(80n) }))
 		const [createdSupply] = projectionsFrom(
 			log('CompleteSetCreated', {
 				resultingShareTokenSupplyAttoShares: atomic(100n),
@@ -109,7 +108,6 @@ describe('state projections', () => {
 			}),
 		)
 
-		expect(explicitSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(80n) } })
 		expect(createdSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(100n) } })
 		expect(redeemedSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(60n) } })
 	})

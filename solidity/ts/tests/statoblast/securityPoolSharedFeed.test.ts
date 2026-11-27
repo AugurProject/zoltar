@@ -343,7 +343,6 @@ describe('Statoblast: central capital shared price feed', () => {
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
 			const coordinator = fixture.poolFor(question).priceFeed
 			expect(await fixture.owner().readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'minimumToken1ReportAttoEth' })).toBe(await minimum())
-			await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: shared, functionName: 'syncExposure' })).rejects.toThrow('Wrong exposure security pool')
 		}
 		expect(await exposure()).toBe(200n * unit)
 	})
@@ -571,7 +570,9 @@ describe('Statoblast: central capital shared price feed', () => {
 			)
 			const questionId = 1n << BigInt(i * 2)
 			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'registerQuestion', args: [pool, universe, questionId] }))
-			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'mint', args: [pool, unit, 0n, now], value: 0n }))
+			// Services funds custody before minting; the authority mirrors that order here.
+			await writeContractAndWait(root, () => root.writeContract({ abi: tokenArtifact.abi, address: collateral, functionName: 'transfer', args: [settlement, unit] }))
+			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'mintWithRecoveryRep', args: [pool, fixture.securityPool, unit, 0n, now] }))
 			if (i % 3 === 0) {
 				await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'scheduleFinality', args: [pool, now + 500n + (1n << BigInt(i % 47)), now] }))
 			} else {
@@ -622,11 +623,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.register(fixture.base.questionId, second)
 		const secondFeed = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: second, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		expect(secondFeed).not.toBe(await feed())
-		const foreignLedger = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, second).questionLedger
-		const foreignCaller = createWriteClient(fixture.base.mockWindow, BigInt(foreignLedger))
-		await expect(foreignCaller.simulateContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'syncExposure' })).rejects.toThrow('Wrong exposure security pool')
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
-		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'syncExposure' })).rejects.toThrow('Wrong exposure security pool')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
 		const implementation = (securityPool: typeof second) => fixture.owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().sharedPoolPriceFeedFactory, functionName: 'sharedPriceFeedImplementations', args: [factory.address, securityPool] })
 		const [firstImplementation, secondImplementation] = await Promise.all([implementation(fixture.securityPool), implementation(second)])

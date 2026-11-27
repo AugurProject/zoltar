@@ -394,7 +394,7 @@ describe('factory, pair, and router integration', () => {
 				shareTokenSupplyAttoShares: await client.readContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
 			}
 		}
-		const expectDepositMatches = (estimate: LiquidityPreview | undefined, result: Readonly<{ completeSetShares: bigint; yesUsed: bigint; noUsed: bigint; yesReturned: bigint; noReturned: bigint; invalidInsurance: bigint; liquidity: bigint }>) => {
+		const expectDepositMatches = (estimate: LiquidityPreview | undefined, result: Readonly<{ completeSetShares: bigint; yesUsed: bigint; noUsed: bigint; yesReturned: bigint; noReturned: bigint; liquidity: bigint }>) => {
 			if (estimate === undefined || estimate.operation === 'remove') throw new Error('Expected a deposit estimate')
 			expect({ completeSets: estimate.completeSets, yesUsed: estimate.yesUsed, noUsed: estimate.noUsed, yesReturned: estimate.yesReturned, noReturned: estimate.noReturned, invalidReturned: estimate.invalidReturned, liquidity: estimate.liquidity }).toEqual({
 				completeSets: result.completeSetShares,
@@ -402,7 +402,7 @@ describe('factory, pair, and router integration', () => {
 				noUsed: result.noUsed,
 				yesReturned: result.yesReturned,
 				noReturned: result.noReturned,
-				invalidReturned: result.invalidInsurance,
+				invalidReturned: result.completeSetShares,
 				liquidity: result.liquidity,
 			})
 		}
@@ -746,7 +746,6 @@ describe('factory, pair, and router integration', () => {
 		const request = { abi: routerArtifact.abi, address: router, functionName: 'enterPosition' as const, args: [pair, 1000n, 1, 1n, account, NO_DEADLINE] as const, value: 1000n }
 		const result = (await client.simulateContract(request)).result
 		expect(result.completeSetShares).toBe(2000n)
-		expect(result.invalidInsurance).toBe(2000n)
 		await writeContractAndWait(client, () => client.writeContract(request))
 	})
 

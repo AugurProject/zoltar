@@ -50,6 +50,11 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
+		name: 'ChildReputationTokenInitialized',
+		parameters: 'uint248 indexed universeId,ReputationToken indexed reputationToken,uint256 indexed repNumber',
+		sourcePath: 'solidity/contracts/Zoltar.sol',
+	},
+	{
 		name: 'QuestionLedgerRegistered',
 		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,IQuestionLedger questionLedger',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
@@ -65,8 +70,18 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
+		name: 'TheoreticalSupplySet',
+		parameters: 'uint256 totalTheoreticalSupplyAttoRep',
+		sourcePath: 'solidity/contracts/ReputationToken.sol',
+	},
+	{
 		name: 'ReputationTokenInitialized',
 		parameters: 'uint248 indexed universeId,uint256 indexed repNumber,string name,string symbol,uint256 totalTheoreticalSupplyAttoRep',
+		sourcePath: 'solidity/contracts/ReputationToken.sol',
+	},
+	{
+		name: 'Mint',
+		parameters: 'address indexed account,uint256 valueAttoRep',
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
 	},
 	{
@@ -116,4 +131,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = 'cf34fd9f6ca522f7c75643f76381897974bd010577078beb7b53ff2a36e30413'
+export const referencedEventAbiFingerprint = '7ec7b28fe8c0632043ea7da6d955800e1959ae25b8f562abb6b10923eeac8959'

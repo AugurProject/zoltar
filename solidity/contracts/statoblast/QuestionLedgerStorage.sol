@@ -12,7 +12,6 @@ import { ISecurityPoolAccounting } from './interfaces/ISecurityPoolAccounting.so
 abstract contract QuestionLedgerStorage {
 	EscalationGame public escalationGame;
 	uint256 public settlementCollateralAttoEth;
-	uint256 public statoblastSecurityMultiplierBps;
 	uint256 public shareTokenSupplyAttoShares;
 	/// @dev Security pool time returned by central settlement, not an accumulated fee amount.
 	uint256 public lastSettlementSecurityPoolTime;

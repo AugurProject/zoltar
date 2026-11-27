@@ -29,10 +29,9 @@ describe('exact-input quotes', () => {
 describe('position estimates', () => {
 	test('an entry sells the opposite outcome and moves the price toward the long outcome', () => {
 		const yes = quoteEnterPosition('YES', 1_000n, reserves)
-		expect(yes.oppositeSharesSwapped).toBe(1_000n)
+		expect(yes.completeSetShares).toBe(1_000n)
 		expect(yes.additionalLongShares).toBe(906n)
 		expect(yes.totalLongShares).toBe(1_906n)
-		expect(yes.invalidInsurance).toBe(1_000n)
 		expect(yes.feeAmount).toBe(3n)
 		expect(yes.conditionalYesBpsBefore).toBe(5_000n)
 		// YES reserve 9094, NO reserve 11000.

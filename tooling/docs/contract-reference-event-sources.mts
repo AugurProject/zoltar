@@ -7,7 +7,6 @@ export const eventSourceByName: Record<string, string> = {
 	SecurityPoolRecoveryRightsConsumed: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	SecurityPoolRecoveryRightsTransferred: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	ReportFundingAssigned: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
-	ExposureCheckpoint: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	Approval: 'solidity/contracts/IERC20.sol',
 	ApprovalForAll: 'solidity/contracts/statoblast/interfaces/IERC1155.sol',
 	AwaitingForkContinuationSet: 'solidity/contracts/statoblast/QuestionLedger.sol',

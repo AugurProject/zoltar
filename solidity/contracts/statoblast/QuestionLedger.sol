@@ -25,14 +25,10 @@ import { CarriedDepositProof } from './EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { IQuestionForker } from './interfaces/IQuestionForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { QuestionLedgerAccountingModule } from './QuestionLedgerAccountingModule.sol';
 import { QuestionLedgerStorage } from './QuestionLedgerStorage.sol';
-import { QuestionLedgerOperationsDelegate } from './QuestionLedgerOperationsDelegate.sol';
-import { QuestionLedgerSettlementDelegate } from './QuestionLedgerSettlementDelegate.sol';
+import { QuestionLedgerDelegate } from './QuestionLedgerDelegate.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { IQuestionLedgerDeploymentWorkerConfiguration } from './interfaces/IQuestionLedgerDeploymentWorkerConfiguration.sol';
-import { QuestionLedgerSettlementSync } from './QuestionLedgerSettlementSync.sol';
-import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
 import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
 interface IQuestionAdmissionHost {
@@ -55,6 +51,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;
 	uint256 public immutable initialEscalationGameDepositAttoRep;
+	uint256 public immutable statoblastSecurityMultiplierBps;
 
 	Zoltar public immutable zoltar;
 	IQuestionLedger public immutable parent;
@@ -67,13 +64,12 @@ contract QuestionLedger is QuestionLedgerStorage {
 	address public immutable questionForker;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
-	QuestionLedgerAccountingModule public immutable accountingModule;
-	address private immutable operationsDelegate;
+	/// @dev Fixed delegatecall target for accounting and operations; it shares this contract's storage layout.
+	address private immutable delegate;
 
 	event EscalationGameSet(EscalationGame escalationGame);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event SystemStateSet(SystemState systemState);
-	event ShareTokenSupplySet(uint256 shareTokenSupplyAttoShares);
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event SharesRedeemed(address indexed redeemer, uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
@@ -96,8 +92,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 		universeId = _universeId;
 		IQuestionLedgerDeploymentWorkerConfiguration worker = IQuestionLedgerDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
-		accountingModule = worker.accountingModule();
-		operationsDelegate = worker.operationsDelegate();
+		delegate = worker.delegate();
 		questionId = _questionId;
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		repToken = _zoltar.getRepToken(_universeId);
@@ -134,40 +129,39 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	/// @notice Active-game-only burn of REP already transferred for settlement.
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.burnEscalationWinnerHaircut, (amountAttoRep)));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.burnEscalationWinnerHaircut, (amountAttoRep)));
 	}
 	/// @notice Binds the canonical security pool's central capital ledger once.
 	function setSecurityPoolCustody(address custody) external {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.setSecurityPoolCustody, (custody)));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.setSecurityPoolCustody, (custody)));
 	}
 	/// @notice Credit irrevocable REP surplus already transferred by the active game.
 	function creditEscalationSurplus(uint256 amountAttoRep) external {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.creditEscalationSurplus, (amountAttoRep)));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.creditEscalationSurplus, (amountAttoRep)));
 	}
 
-	/// @dev The fixed accountingModule target also owns security pool accounting and fee mutations.
-	/// Delegatecall preserves the original caller; authorization lives in each named target method.
-	function _delegateAccounting(bytes memory callData) private {
-		DelegateCall.invoke(address(accountingModule), callData);
+	/// @dev Delegatecall preserves the original caller; authorization lives in each named target method.
+	function _delegate(bytes memory callData) private returns (bytes memory) {
+		return DelegateCall.invoke(delegate, callData);
 	}
 
 	/// @notice Factory-only: initializes the question fee clock.
 	function setStartingParams() external {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingModule.setStartingParams, ()));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.setStartingParams, ()));
 	}
 
 	/// @notice Checkpoints the security pool settlement book; callable by anyone.
 	function updateSettlementCollateral() public {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.accrueSettlementCollateral, ()));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.accrueSettlementCollateral, ()));
 	}
 
 	/// @notice Refreshes the security pool's linear fee stream.
 	function refreshSecurityPoolFees() public {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerSettlementSync.refreshSettlement, ()));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.refreshSettlement, ()));
 	}
 
 	function _emitQuestionLedgerAccountingCheckpoint(AccountingReason reason) private {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingModule.emitQuestionLedgerAccountingCheckpoint, (reason)));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.emitQuestionLedgerAccountingCheckpoint, (reason)));
 	}
 
 	/// @notice Additional collateral this question may mint, excluding its existing cash.
@@ -204,7 +198,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	// Complete Sets
 	/// @notice Mints complete sets through the authorized security pool purchase path for `cash` raw collateral units while no escalation game exists.
 	function createCompleteSet(uint256 cash, address recipient, uint256 minimumShares, uint256 fee, uint256 premium) external isOperational returns (uint256 completeSetsToMintAttoShares) {
-		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerSettlementDelegate.createCompleteSet, (cash)));
+		bytes memory result = _delegate(abi.encodeCall(QuestionLedgerDelegate.createCompleteSet, (cash)));
 		completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		require(completeSetsToMintAttoShares > 0 && completeSetsToMintAttoShares >= minimumShares, 'Minimum shares not met');
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
@@ -218,7 +212,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// accrual, preserving the exchange rate for remaining complete sets.
 	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
 		updateSettlementCollateral();
-		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
+		bytes memory result = _delegate(abi.encodeCall(QuestionLedgerDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
 		refreshSecurityPoolFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
@@ -229,7 +223,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	function redeemShares() external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
-		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
+		bytes memory result = _delegate(abi.encodeCall(QuestionLedgerDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
 		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
 		refreshSecurityPoolFees();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
@@ -238,22 +232,24 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	/// @notice Withdraws fork-carried escalation deposits after the question is final; all proofs must share one depositor.
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external {
+		require(_operationalQuestionOutcome() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
+		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
+		address beneficiary;
+		for (uint256 index = 0; index < proofs.length; index++) {
+			(address depositor, , ) = escalationGame.withdrawDeposit(proofs[index], withdrawalOutcome);
+			beneficiary = _requireOneDepositor(beneficiary, depositor);
+		}
+	}
+
+	function _operationalQuestionOutcome() private view returns (BinaryOutcomes.BinaryOutcome) {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
-		BinaryOutcomes.BinaryOutcome questionOutcome = IQuestionForker(questionForker).getQuestionOutcome(IQuestionLedger(payable(address(this))));
-		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
-		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
+		return IQuestionForker(questionForker).getQuestionOutcome(IQuestionLedger(payable(address(this))));
+	}
 
-		EscalationGame escalationGameContract = EscalationGame(payable(address(escalationGame)));
-		address beneficiary = address(0x0);
-		for (uint256 index = 0; index < proofs.length; index++) {
-			address depositor;
-			(depositor, , ) = escalationGameContract.withdrawDeposit(proofs[index], withdrawalOutcome);
-			if (beneficiary == address(0x0)) {
-				beneficiary = depositor;
-			}
-			require(depositor == beneficiary, 'One depositor');
-		}
+	function _requireOneDepositor(address beneficiary, address depositor) private pure returns (address) {
+		require(beneficiary == address(0x0) || depositor == beneficiary, 'One depositor');
+		return depositor;
 	}
 
 	// Wallet-funded reporting and fork continuation
@@ -261,23 +257,24 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// @notice Deposits REP from the caller's wallet directly into the escalation game on `outcome`, deploying the game if needed.
 	/// @dev Wallet-funded deposits never acquire pool backing or capacity.
 	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
-		if (hasInheritedForkOutcome) revert('Forked');
-		DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
+		_depositWalletRep(outcome, maximumDepositAttoRep, false);
 	}
 
 	/// @notice Reverts unless the deposit leads outright or fills its non-decision threshold.
 	function depositWalletRepToEscalationGameWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
+		_depositWalletRep(outcome, maximumDepositAttoRep, true);
+	}
+
+	function _depositWalletRep(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, bool requireLead) private {
 		if (hasInheritedForkOutcome) revert('Forked');
-		DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.depositWalletRepToEscalationGameWithLead, (outcome, maximumDepositAttoRep)));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.depositWalletRep, (outcome, maximumDepositAttoRep, requireLead)));
 	}
 
 	/// @notice Withdraws local escalation deposits after the question is final; all indexes must share one depositor.
 	/// @dev Reverts when the universe forked before the game ended without a non-decision.
 	function withdrawFromEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256[] calldata depositIndexes) external {
-		require(address(escalationGame) != address(0x0), 'Game missing');
-		require(systemState == SystemState.Operational, 'Pool inactive');
+		BinaryOutcomes.BinaryOutcome questionOutcome = _operationalQuestionOutcome();
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		BinaryOutcomes.BinaryOutcome questionOutcome = IQuestionForker(questionForker).getQuestionOutcome(IQuestionLedger(payable(address(this))));
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (
 			forkTime > 0 &&
@@ -287,14 +284,10 @@ contract QuestionLedger is QuestionLedgerStorage {
 			revert('Deposits carry to child games');
 		}
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
-		address beneficiary = address(0x0);
+		address beneficiary;
 		for (uint256 index = 0; index < depositIndexes.length; index++) {
-			address depositor;
-			(depositor, , ) = escalationGame.withdrawDeposit(depositIndexes[index], outcome);
-			if (beneficiary == address(0x0)) {
-				beneficiary = depositor;
-			}
-			require(depositor == beneficiary, 'One depositor');
+			(address depositor, , ) = escalationGame.withdrawDeposit(depositIndexes[index], outcome);
+			beneficiary = _requireOneDepositor(beneficiary, depositor);
 		}
 	}
 
@@ -323,7 +316,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	/// @notice Resumes a paused fork-continuation escalation game once its carry is funded; callable by anyone.
 	function resumeForkedEscalationGame() external {
-		DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.resumeForkedEscalationGame, ()));
+		_delegate(abi.encodeCall(QuestionLedgerDelegate.resumeForkedEscalationGame, ()));
 	}
 
 	/// @notice Forker-only: sets whether the pool awaits escalation fork continuation.
@@ -338,12 +331,6 @@ contract QuestionLedger is QuestionLedgerStorage {
 		systemState = newState;
 		emit SystemStateSet(systemState);
 		refreshSecurityPoolFees();
-	}
-
-	/// @notice Forker-only: sets the pool's share supply.
-	function setShareTokenSupplyAttoShares(uint256 newShareTokenSupplyAttoShares) external onlyForker {
-		shareTokenSupplyAttoShares = newShareTokenSupplyAttoShares;
-		emit ShareTokenSupplySet(shareTokenSupplyAttoShares);
 	}
 
 	/// @notice Forker-only: authorizes a child pool on the share token.

@@ -13,7 +13,7 @@ const abi = parseAbi([
 	'function getRepToken(uint248 universeId) view returns (address)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function forks(uint248 universeId) view returns (uint256 backing,uint256 commitment,uint256 cash,uint256 units,uint256 recoveryAttoRep,uint256 assignedCash,uint256 neutralCash,uint256 recoveredUnits,bool frozen,bool recoveryFunded,bool migrationPrepared)',
-	'function branches(uint248 child) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 recoveryAttoRep,bool prepared,bool started,bool ready)',
+	'function branches(uint248 child) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 recoveryAttoRep,bool prepared,bool started,bool ready,address repairAuction,uint64 fixedRoot)',
 	'function choices(uint248 source,address owner) view returns (uint256 outcome,bool recorded)',
 	'function freeze(uint248 source)',
 	'function choose(uint248 source,uint256 outcome)',
@@ -107,7 +107,7 @@ export async function loadSecurityPoolForkSnapshot(parameters: { client: Securit
 	let branch: { universeId: bigint; parent: bigint; outcomeIndex: bigint; chosenBacking: bigint; chosenCommitment: bigint; parentCash: bigint; recoveryAttoRep: bigint; prepared: boolean; started: boolean; ready: boolean; repToken: Address; capitalLedger: Address } | undefined
 	if (outcomeIndex !== undefined) {
 		const child = decodeUint(await read(zoltar, 'getChildUniverseId', [universeId, outcomeIndex]), 'Child universe', 248)
-		const b = decodeFields(await read(controller, 'branches', [child]), ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'recoveryAttoRep', 'prepared', 'started', 'ready'], 'Invalid security pool fork response.')
+		const b = decodeFields(await read(controller, 'branches', [child]), ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'recoveryAttoRep', 'prepared', 'started', 'ready', 'repairAuction', 'fixedRoot'], 'Invalid security pool fork response.')
 		const prepared = decodeBool(b[6], 'Invalid security pool fork state.')
 		const parent = decodeUint(b[0], 'Parent universe', 248)
 		const branchOutcome = decodeUint(b[1], 'Branch outcome')

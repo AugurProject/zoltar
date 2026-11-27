@@ -9,7 +9,6 @@ import { Zoltar } from '../../Zoltar.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
-import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
 import { CreationCodeDeployer } from '../CreationCodeStorage.sol';
 
 /// @dev Static fields follow the QuestionLedger constructor argument order.
@@ -31,13 +30,11 @@ struct QuestionLedgerConfiguration {
 /// and exposes the configuration each QuestionLedger constructor reads from its creator.
 contract QuestionLedgerDeployer is CreationCodeDeployer {
 	ISecurityPoolFactory public immutable factory;
-	QuestionLedgerAccountingModule public immutable accountingModule;
-	address public immutable operationsDelegate;
+	address public immutable delegate;
 
-	constructor(address _operationsDelegate, QuestionLedgerAccountingModule _accountingModule) CreationCodeDeployer(type(QuestionLedger).creationCode) {
+	constructor(address _delegate) CreationCodeDeployer(type(QuestionLedger).creationCode) {
 		factory = ISecurityPoolFactory(msg.sender);
-		accountingModule = _accountingModule;
-		operationsDelegate = _operationsDelegate;
+		delegate = _delegate;
 	}
 
 	function deploy(QuestionLedgerConfiguration calldata configuration) external returns (IQuestionLedger) {
