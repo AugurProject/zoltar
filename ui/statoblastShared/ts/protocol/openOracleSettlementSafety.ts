@@ -1,4 +1,5 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as openOracleCopy from '../copy/openOracle.js'
 
 /** EIP-7825 per-transaction gas limit; a settle transaction asking for more is never included. */
@@ -34,8 +35,8 @@ export function getOpenOracleSettlementGasLimit(game: Callback, trustedCallback:
 }
 
 export function getOpenOracleSettlementSafetyGuard(report: Callback & { settlementTime: bigint; timeType: boolean; trustedSettlementCallback: boolean }) {
-	if (conservativeOpenOracleSettlementGas(report, report.trustedSettlementCallback) > TRANSACTION_GAS_CAP) return 'This report exceeds the safe settlement gas limit. Disputing it could lock your dispute deposit.'
+	if (conservativeOpenOracleSettlementGas(report, report.trustedSettlementCallback) > TRANSACTION_GAS_CAP) return openOracleCopy.settlementGasUnsafe
 	const maximum = report.timeType ? OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS : OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS / 12n
-	if (report.settlementTime > maximum) return 'This report has a settlement duration longer than one year. Disputing it could lock your dispute deposit.'
+	if (report.settlementTime > maximum) return openOracleCopy.settlementDurationUnsafe(formatDuration(OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS))
 	return undefined
 }

@@ -12,7 +12,7 @@ const selector = (signature: string) => keccak256(stringToHex(signature)).slice(
 export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint, redemptionAttoEth?: bigint, redemptionAttoRep?: bigint, questionCapacityAttoEth?: bigint, mintRecoveryAttoRep = 0n, purchaseFeeAttoEth?: bigint, purchaseError?: string): Hex | undefined {
 	const signature = data.slice(0, 10)
 	if (signature === selector('refreshSecurityPoolFees()')) return '0x'
-	if (signature === selector('redeemShares(uint256,uint256)')) return '0x'
+	if (signature === selector('redeemShares(uint256)')) return '0x'
 	if (signature === selector('aggregate3((address,bool,bytes)[])')) {
 		const decoded = decodeFunctionData({ abi: aggregateAbi, data })
 		const calls = decoded.args[0]

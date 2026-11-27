@@ -9,10 +9,10 @@ import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import type { useZoltarOperations } from '../hooks/useZoltarOperations.js'
 
-type Props = { universeBrowserHref: string; accountState: { address: Address | undefined; chainId: string | undefined }; activeUniverseId: bigint; operations: ReturnType<typeof useZoltarOperations>; universeState: LoadableValueState }
+type Props = { universeBrowserHref?: string | undefined; singleForm?: boolean; actionDataNotice?: string | undefined; accountState: { address: Address | undefined; chainId: string | undefined }; activeUniverseId: bigint; operations: ReturnType<typeof useZoltarOperations>; universeState: LoadableValueState }
 
 /** The same wallet REP migration workflow in Zoltar and Statoblast. */
-export function ZoltarMigrationWorkflow({ universeBrowserHref, accountState, activeUniverseId, operations, universeState }: Props) {
+export function ZoltarMigrationWorkflow({ universeBrowserHref, singleForm = false, actionDataNotice, accountState, activeUniverseId, operations, universeState }: Props) {
 	return (
 		<>
 			{/* A pending fork or migration locks only this universe's actions. */}
@@ -20,6 +20,8 @@ export function ZoltarMigrationWorkflow({ universeBrowserHref, accountState, act
 				<SectionBlock variant='plain'>
 					<ZoltarMigrationSection
 						universeBrowserHref={universeBrowserHref}
+						singleForm={singleForm}
+						actionDataNotice={actionDataNotice}
 						accountAddress={accountState.address}
 						isOnActiveAppChain={isActiveAppChain(accountState.chainId)}
 						loadingZoltarForkAccess={operations.loadingZoltarForkAccess}

@@ -1,12 +1,16 @@
 export const loadingWalletEthBalance = 'Loading wallet ETH balance…'
-export const poolsViews = 'Questions views'
 export const createOracleReport = 'Create OpenOracle report'
 export const oracleReportDetails = 'OpenOracle report details'
 export const oracleReportViews = 'OpenOracle views'
-export const statoblastSecurityMultiplierBps = 'Security multiplier'
+export const changedSinceReview = 'Changed since you reviewed. Review the updated amounts before sending.'
+export const missingTokenSpender = 'Couldn’t identify the contract approved to spend these tokens.'
 
-export const securityPools = 'Security pools'
-
-export const questions = 'Questions'
-
-export const browseQuestions = 'Browse questions'
+export const approveSpendingTitle = 'Approve token spending'
+export const approveSpendingDescription = 'Authorize the listed spending limit; tokens stay in your wallet.'
+export const approvalInBaseUnits = (amount: bigint) => `${amount} token base units`
+export const transferEthTitle = 'Transfer ETH'
+export const contractTransactionTitle = 'Contract transaction'
+export const deployContractTitle = 'Deploy contract'
+export const universeDeploymentSection = 'Universe contracts'
+export const universeContract = 'Universe contract'
+export const questionDataContract = 'Question data contract'

@@ -973,6 +973,21 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 			}
 		}
 	})
+	test('an unrepresentable healthy-price boundary reverts while the forward quote succeeds', async () => {
+		const wordMax = (1n << 256n) - 1n
+		const scale = 10n ** 18n
+		const quotient = wordMax / scale
+		const maximumPrice = (rep: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'maximumHealthyPrice', args: [rep, 1n, 10000n] })
+		const required = (price: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'requiredRep', args: [1n, price, 10000n, 10000n] })
+		expect(await required(wordMax)).toBe(quotient + 1n)
+		expect(await maximumPrice(quotient)).toBe(quotient * scale)
+		expect(await required(quotient * scale)).toBe(quotient)
+		expect(await required(quotient * scale + 1n)).toBe(quotient + 1n)
+		await expect(maximumPrice(quotient + 1n)).rejects.toThrow('overflow')
+		// An exactly representable maximum has no uint256 successor to quote.
+		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'maximumHealthyPrice', args: [wordMax, scale, 10000n] })).toBe(wordMax)
+		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'requiredRep', args: [scale, wordMax, 10000n, 10000n] })).toBe(wordMax)
+	})
 	test('rep-grid alignment preserves the healthy price across identical winning lots', async () => {
 		for (const [multiplier, grid] of [
 			[10001n, 10001n],

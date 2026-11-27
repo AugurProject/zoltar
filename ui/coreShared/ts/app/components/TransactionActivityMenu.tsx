@@ -38,7 +38,7 @@ function getActivityTitle(entry: TransactionActivityEntry) {
 	return retenseInProgressTitle(entry.title, entry.status === 'confirmed' ? 'completed' : 'base')
 }
 
-function ActivityRow({ entry, onStopped }: { entry: TransactionActivityEntry; onStopped: () => void }) {
+function ActivityRow({ entry, onStopped, showWalletSpeedUp }: { entry: TransactionActivityEntry; onStopped: () => void; showWalletSpeedUp: boolean }) {
 	const status = getStatusPresentation(entry)
 	const title = getActivityTitle(entry)
 	const submittedSeconds = BigInt(Math.floor(entry.submittedAt / 1_000))
@@ -49,6 +49,7 @@ function ActivityRow({ entry, onStopped }: { entry: TransactionActivityEntry; on
 				<strong>{title}</strong>
 				<Badge tone={status.tone}>{status.label}</Badge>
 			</div>
+			{showWalletSpeedUp && entry.status === 'confirmed' && (entry.replacedHashes?.length ?? 0) > 0 ? <small>{copy.spedUpInWallet}</small> : undefined}
 			<div className='transaction-activity-item-meta'>
 				<time dateTime={new Date(entry.submittedAt).toISOString()} title={formatTimestamp(submittedSeconds)}>
 					{formatRelativeTimestamp(submittedSeconds, getWallClockTimestamp())}
@@ -132,7 +133,7 @@ function getSettledAnnouncement(entries: readonly TransactionActivityEntry[], un
 }
 
 /** Header control listing recent transactions of the connected account, with a count of those still pending. */
-export function TransactionActivityMenu() {
+export function TransactionActivityMenu({ showWalletSpeedUp = false }: { showWalletSpeedUp?: boolean | undefined } = {}) {
 	const { containerRef, open, toggle, triggerRef } = useDisclosurePopover()
 	const panelRef = useRef<HTMLDivElement>(null)
 	const titleId = useId()
@@ -186,7 +187,7 @@ export function TransactionActivityMenu() {
 					) : (
 						<ol className='transaction-activity-list'>
 							{entries.map(entry => (
-								<ActivityRow key={entry.hash} entry={entry} onStopped={() => panelRef.current?.focus()} />
+								<ActivityRow key={entry.hash} entry={entry} showWalletSpeedUp={showWalletSpeedUp} onStopped={() => panelRef.current?.focus()} />
 							))}
 						</ol>
 					)}

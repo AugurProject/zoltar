@@ -468,7 +468,7 @@ export type ClientRequestParameters = {
 	params?: unknown
 }
 
-export type BlockTag = 'earliest' | 'latest' | 'pending'
+export type BlockTag = 'earliest' | 'latest' | 'pending' | 'safe' | 'finalized'
 
 export type LogTopicFilter = Hex | readonly Hex[] | null
 
@@ -486,6 +486,7 @@ export type PublicClientShape<TTransport extends Transport, TChain extends Chain
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
 	getCode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
+	getStorageAt: (parameters: { address: Address; slot: Hash; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hash>
 	getBytecode: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getGasPrice: () => Promise<bigint>
 	getTransactionCount: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>

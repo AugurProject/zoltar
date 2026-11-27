@@ -1,12 +1,13 @@
 import { getTransactionReviewSignal } from './transactionReviewScope.js'
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
-import { transactionErrorMessages } from '../lib/errors.js'
+import { getErrorMessage, transactionErrorMessages } from '../lib/errors.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { transitionTransactionLifecycle, type TransactionFailure, type TransactionLifecycle, type TransactionLifecycleEvent, type TransactionPhase } from './transactionLifecycle.js'
 import { signal } from '@preact/signals'
 import { maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatValueWithUnit } from '../lib/formatters.js'
+import type { GlobalTransactionRow } from '../types/components.js'
 
 /** A token amount a step transfers from the wallet, kept as a fixed-point value so every surface formats it from the same source. */
 export type TokenFundingAmount = { amount: bigint; tokenSymbol: string; tokenUnits: number }
@@ -18,6 +19,8 @@ export type TransactionStepDetails = {
 	tokenFunding?: readonly TokenFundingAmount[]
 	optional?: boolean
 	paidFrom?: string
+	reviewRows?: readonly { label: string; value: string }[]
+	technicalRows?: GlobalTransactionRow[]
 	title: string
 	/** Explains the step when the title alone does not convey its consequence; omitted for self-describing actions. */
 	description: string | undefined
@@ -34,6 +37,8 @@ type TransactionStepPhase = 'skipped' | 'upcoming' | TransactionPhase
 type TransactionStep = TransactionStepDetails & {
 	phase: TransactionStepPhase
 	hash?: Hash
+	submittedAt?: number
+	repriced?: boolean
 	failure?: TransactionFailure
 	approvalAmount?: bigint | undefined
 }
@@ -72,6 +77,8 @@ function transitionStep(step: TransactionStep, event: TransactionLifecycleEvent)
 
 type TransactionSteps = {
 	showReviewDialog: boolean
+	showLifecycle: boolean
+	reviewCheck: { status: 'checking' } | { status: 'failed' | 'changed'; message: string; retry: () => void } | undefined
 	reviewSignal: AbortSignal | undefined
 	steps: TransactionStep[]
 	activeIndex: number
@@ -84,12 +91,13 @@ type TransactionSteps = {
 export const transactionSteps = signal<TransactionSteps | undefined>(undefined)
 export const transactionStepOutcome = signal<{ hash: Hash; title: string; tone: 'success' | 'error'; detail?: string } | undefined>(undefined)
 
-export function createTransactionStepController(signal = getTransactionReviewSignal(), showReviewDialog = true) {
+export function createTransactionStepController(signal = getTransactionReviewSignal(), showReviewDialog = true, showLifecycle = false) {
 	transactionStepOutcome.value = undefined
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
 	const steps: TransactionStep[] = []
 	let activeIndex = -1
+	let reviewCheck: TransactionSteps['reviewCheck']
 	const stop = () => {
 		canceled = true
 		rejectReview?.(new Error(transactionErrorMessages.reviewCanceled))
@@ -113,6 +121,8 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		if (canceled) return
 		transactionSteps.value = {
 			showReviewDialog,
+			showLifecycle,
+			reviewCheck,
 			reviewSignal: signal,
 			steps: [...steps],
 			activeIndex,
@@ -136,7 +146,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			current.cancel()
 		}
 	}
-	const reviewChoices = async (indices: readonly number[]) => {
+	const reviewChoices = async (indices: readonly number[], checked?: { check: (retrying: boolean) => Promise<void>; recheck?: (amount?: bigint) => Promise<void> | undefined; retryStatus?: (error: unknown) => 'failed' | 'changed' | undefined; initialError?: Error | undefined; deferWallet?: boolean }) => {
 		claimWorkflow()
 		const first = indices[0]
 		if (first === undefined || indices.some(index => steps[index] === undefined)) throw new Error('An unexpected transaction was blocked. Review the action again.')
@@ -148,9 +158,10 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		return await new Promise<{ index: number; amount: bigint | undefined }>((resolve, reject) => {
 			rejectReview = reject
 			let selected = false
-			publish((index, amount) => {
+			const accept = (index: number, amount?: bigint) => {
+				assertActive()
 				const step = steps[index]
-				if (selected || canceled || !indices.includes(index) || step?.phase !== 'review') return
+				if (step?.phase !== 'review') return
 				selected = true
 				activeIndex = index
 				for (const other of steps) if (other !== step && other.phase === 'review') other.phase = 'upcoming'
@@ -160,11 +171,63 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 					step.title = commonCopy.formatApproveTokenAmount(formattedAmount, step.approval.tokenSymbol)
 				}
 				step.approvalAmount = amount ?? step.approval?.requiredAmount
-				transitionStep(step, { type: 'review-confirmed' })
+				if (checked?.deferWallet === true) reviewCheck = { status: 'checking' }
+				else transitionStep(step, { type: 'review-confirmed' })
 				rejectReview = undefined
 				publish()
 				resolve({ index, amount })
-			})
+			}
+			const showRetry = (status: 'failed' | 'changed', error: unknown) => {
+				const message = status === 'changed' && error instanceof Error ? error.message : getErrorMessage(error, transactionCopy.currentStateCheckFailed)
+				reviewCheck = { status, message, retry: () => void runCheck(true) }
+			}
+			const runCheck = async (retrying = false) => {
+				if (checked === undefined || canceled || reviewCheck?.status === 'checking') return
+				reviewCheck = { status: 'checking' }
+				publish(confirmChoice)
+				try {
+					await checked.check(retrying)
+					if (canceled) return
+					reviewCheck = undefined
+				} catch (error) {
+					if (canceled) return
+					showRetry(checked.retryStatus?.(error) ?? 'failed', error)
+				}
+				publish(confirmChoice)
+			}
+			const confirmChoice = (index: number, amount?: bigint) => {
+				if (selected || canceled || reviewCheck !== undefined || !indices.includes(index) || steps[index]?.phase !== 'review') return
+				const recheck = checked?.recheck?.(amount)
+				if (recheck === undefined) {
+					accept(index, amount)
+					return
+				}
+				reviewCheck = { status: 'checking' }
+				publish(confirmChoice)
+				void recheck
+					.then(() => {
+						if (canceled) return
+						reviewCheck = undefined
+						accept(index, amount)
+					})
+					.catch(error => {
+						if (canceled) return
+						const status = checked?.retryStatus?.(error)
+						if (status !== undefined) {
+							showRetry(status, error)
+							publish(confirmChoice)
+							return
+						}
+						reviewCheck = undefined
+						rejectReview = undefined
+						reject(error)
+					})
+			}
+			if (checked?.initialError !== undefined) {
+				showRetry(checked.retryStatus?.(checked.initialError) ?? 'failed', checked.initialError)
+				publish(confirmChoice)
+			} else if (checked === undefined) publish(confirmChoice)
+			else void runCheck()
 		})
 	}
 	return {
@@ -172,6 +235,14 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		setPlan(details: TransactionStepDetails[]) {
 			if (steps.length > 0) throw new Error('The transaction plan has already started.')
 			steps.push(...details.map(step => ({ ...step, phase: 'upcoming' as const })))
+		},
+		setReviewRows(index: number, reviewRows: readonly { label: string; value: string }[]) {
+			const step = steps[index]
+			if (step !== undefined) step.reviewRows = reviewRows
+		},
+		setTechnicalRows(index: number, rows: GlobalTransactionRow[]) {
+			const step = steps[index]
+			if (step !== undefined) step.technicalRows = rows
 		},
 		startWithoutReview(index: number) {
 			claimWorkflow()
@@ -184,10 +255,10 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			publish()
 			return step.approvalAmount
 		},
-		async review(index = activeIndex + 1) {
-			return (await reviewChoices([index])).amount
+		async review(index = activeIndex + 1, checked?: Parameters<typeof reviewChoices>[1]) {
+			return (await reviewChoices([index], checked)).amount
 		},
-		async chooseFunding(indices: readonly number[], automatically = false) {
+		async chooseFunding(indices: readonly number[], automatically = false, checked?: Parameters<typeof reviewChoices>[1]) {
 			assertActive()
 			for (let index = 0; index < steps.length - 1; index += 1) {
 				const step = steps[index]
@@ -202,17 +273,28 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 				if (index === undefined) throw new Error('Missing funding transaction.')
 				return { index, amount: this.startWithoutReview(index) }
 			}
-			return await reviewChoices(indices)
+			return await reviewChoices(indices, checked)
+		},
+		openWallet() {
+			assertActive()
+			const step = steps[activeIndex]
+			if (step?.phase !== 'review') return
+			reviewCheck = undefined
+			transitionStep(step, { type: 'review-confirmed' })
+			publish()
 		},
 		skipped() {
 			const step = steps[activeIndex]
 			if (step !== undefined) step.phase = 'skipped'
+			reviewCheck = undefined
 			if (!canceled) publish()
 		},
-		submitted(hash: Hash) {
+		submitted(hash: Hash, repriced = false) {
 			const step = steps[activeIndex]
 			if (step === undefined) return
 			transitionStep(step, { type: 'submitted', hash })
+			step.submittedAt ??= Date.now()
+			if (repriced) step.repriced = true
 			if (!canceled) publish()
 		},
 		receipt(hash: Hash, status: 'success' | 'reverted') {
@@ -227,6 +309,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		failed(failure: TransactionFailure) {
 			const step = steps[activeIndex]
 			if (step === undefined) return
+			reviewCheck = undefined
 			transitionStep(step, { type: 'failed', failure })
 			if (!canceled) publish()
 		},

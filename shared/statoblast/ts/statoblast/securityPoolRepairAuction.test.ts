@@ -188,7 +188,7 @@ describe('security pool collateral repair auction SDK', () => {
 		expect(snapshot.auction).toBeUndefined()
 		expect(source.calls.some(call => call.address === zeroAddress || call.functionName === 'oracleExposure')).toBe(false)
 		expect(securityPoolAuctionOpeningReason(snapshot)).toContain('Start a branch')
-		expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('no collateral repair auction')
+		expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('no repair auction')
 	})
 	test('rejects mismatched route, ledger, engine and vault bindings before funding', async () => {
 		for (const [address, name, value] of [
@@ -218,8 +218,8 @@ describe('security pool collateral repair auction SDK', () => {
 	})
 	test('#1331 opening quotes reserve a full day for competing bidders', async () => {
 		const snapshot = await load(fixture({}, { opened: false, timestamp: 13_601n }))
-		expect(securityPoolAuctionOpeningReason(snapshot)).toContain('one day')
-		expect(() => buildSecurityPoolAuctionOpenRequest(snapshot)).toThrow('one day')
+		expect(securityPoolAuctionOpeningReason(snapshot)).toContain('1 day')
+		expect(() => buildSecurityPoolAuctionOpenRequest(snapshot)).toThrow('1 day')
 	})
 
 	test('#1371 better funded bids block both the quote and its approval amount', async () => {
@@ -350,7 +350,7 @@ test('#1634 opening coverage must include the final rounded lot product', async 
 
 test('#1652 preflight identifies cumulative escrow exhaustion before bid ranking', async () => {
 	const snapshot = await load(fixture({ depositedAttoEth: (1n << 128n) - 1n, maximumAdmissibleBidAttoRepPerLot: 0n }))
-	expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('Total auction bid escrow')
+	expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('Total bid collateral')
 })
 
 test('#1646 fallback searches lower grid bands when the largest affordable lot rounds poorly', async () => {

@@ -61,6 +61,7 @@ export type ZoltarUniverseSummary = {
 	earliestForkTime?: bigint
 	forkThresholdAttoRep: bigint
 	forkQuestionDetails: MarketDetails | undefined
+	forkRecapitalizationDeadline?: bigint
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
@@ -76,6 +77,7 @@ export type ZoltarUniverseSummary = {
 export type DeploymentStep = {
 	id: DeploymentStepId
 	label: string
+	verificationLabel?: string
 	address: Address
 	dependencies: DeploymentStepId[]
 	deploy: (client: ClientsWriteClient) => Promise<Hash>

@@ -66,6 +66,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined, universeE
 		loadingZoltarQuestion: false,
 		loadingZoltarQuestions: false,
 		loadingZoltarUniverse: false,
+		migrationBalancesReadAt: undefined,
 		migrateInternalRep: async () => undefined,
 		questionCreating: false,
 		questionError: undefined,

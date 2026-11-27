@@ -3,15 +3,15 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, zeroAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
+import { simulationBootstrapFailed } from '../../ui/coreShared/ts/copy/app.ts'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
-import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
-import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
+import { getStatoblastUiDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import { shareTokenAbi } from '../../ui/trading/ts/protocol/authorization.js'
 import { tradingContracts } from '../../ui/trading/ts/generated/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
-import * as collateralCopy from '../../ui/statoblastShared/ts/copy/collateral.js'
 import * as capitalCopy from '../../ui/statoblastShared/ts/copy/securityPoolCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium, writeViewportScreenshot } from './chromiumDevTools.mts'
@@ -25,6 +25,7 @@ const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS = 30_000
 const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
 const SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS = 600_000
+const SLOW_RPC_BROWSER_TIMEOUT_MILLISECONDS = 900_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server<undefined> | undefined
@@ -115,7 +116,7 @@ for (const appId of UI_APP_IDS) {
 	const expectedTitles: Record<UiAppId, string> = { openoracle: 'OpenOracle', statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
 	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast Trading'].filter(title => title !== expectedTitle)
-	const expectedRoutes: Record<UiAppId, string> = { openoracle: '#/open-oracle', statoblast: '#/pools', trading: '#/markets', zoltar: '#/zoltar' }
+	const expectedRoutes: Record<UiAppId, string> = { openoracle: '#/open-oracle', statoblast: '#/watchlist', trading: '#/markets', zoltar: '#/zoltar' }
 	const expectedRoute = expectedRoutes[appId]
 
 	test(`${appId} production includes the same stylesheets as development`, async () => {
@@ -284,12 +285,14 @@ type ProductionBrowserDriver = {
 	evaluate: (expression: string) => Promise<unknown>
 	evaluateAsync: (expression: string) => Promise<unknown>
 	navigate: (url: string) => Promise<void>
+	pressEscape: () => Promise<void>
 	pressTab: () => Promise<void>
 	resize: (viewport: { height: number; width: number }) => Promise<void>
 	setInputByLabel: (label: string, value: string) => Promise<void>
-	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
-	waitForBodyText: (text: string) => Promise<string>
+	waitForButtonEnabled: (label: string, occurrence?: number, timeoutMilliseconds?: number) => Promise<void>
+	waitForBodyText: (text: string, timeoutMilliseconds?: number) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
+	waitForExpression: (expression: string) => Promise<void>
 	waitForReady: () => Promise<void>
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
@@ -305,11 +308,12 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			if (typeof body !== 'string') throw new Error('Chromium body evaluation did not return text')
 			return body
 		}
-		const waitForBody = async (predicate: (body: string) => boolean, description: string) => {
+		const waitForBody = async (predicate: (body: string) => boolean, description: string, timeoutMilliseconds = 120_000) => {
 			let body = ''
-			for (let attempt = 0; attempt < 2400; attempt += 1) {
+			const deadline = performance.now() + timeoutMilliseconds
+			while (performance.now() < deadline) {
 				body = await readBody()
-				if (body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${body}`)
+				if (body.includes(simulationBootstrapFailed)) throw new Error(`Production simulation failed to bootstrap: ${body}`)
 				if (predicate(body)) return body
 				await Bun.sleep(50)
 			}
@@ -330,16 +334,40 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				return { startsNewDocument: typeof result === 'object' && result !== null && 'loaderId' in result && typeof result.loaderId === 'string' }
 			},
 			readDocument: async () => {
-				const document = await evaluate('({ body: document.body?.innerText ?? "", timeOrigin: performance.timeOrigin })')
-				if (typeof document !== 'object' || document === null || !('body' in document) || typeof document.body !== 'string' || !('timeOrigin' in document) || typeof document.timeOrigin !== 'number') throw new Error('Chromium did not return production document state')
-				return { body: document.body, timeOrigin: document.timeOrigin }
+				const document = await evaluate('({ body: document.body?.innerText ?? "", simulationStarting: document.querySelector(".simulation-strip-progress") !== null, timeOrigin: performance.timeOrigin })')
+				if (typeof document !== 'object' || document === null || !('body' in document) || typeof document.body !== 'string' || !('timeOrigin' in document) || typeof document.timeOrigin !== 'number' || !('simulationStarting' in document) || typeof document.simulationStarting !== 'boolean')
+					throw new Error('Chromium did not return production document state')
+				return { body: document.body, simulationStarting: document.simulationStarting, timeOrigin: document.timeOrigin }
 			},
 		})
 
 		await send('Runtime.enable')
 		await send('Page.enable')
 		await send('Page.addScriptToEvaluateOnNewDocument', {
-			source: `(() => { const NativeWorker = window.Worker; window.__zoltarProductionWorkers = []; window.Worker = class TrackedProductionWorker extends NativeWorker { constructor(...args) { super(...args); window.__zoltarProductionWorkers.push(this) } } })()`,
+			source: `(() => {
+				const NativeWorker = window.Worker;
+				window.__zoltarProductionWorkers = [];
+				window.__statoblastRpcMethods = [];
+				window.__delayedRpcMethods = [];
+				window.__rpcDelay = Number(new URLSearchParams(location.search).get('rpcDelay'));
+				window.Worker = class TrackedProductionWorker extends NativeWorker {
+					constructor(...args) {
+						super(...args);
+						window.__zoltarProductionWorkers.push(this);
+					}
+					postMessage(message, ...options) {
+						if (message?.type === 'rpc') {
+							window.__statoblastRpcMethods.push(message.method);
+							if (location.pathname.startsWith('/statoblast/') && message.method === 'eth_getLogs') throw new Error('Statoblast attempted to query event logs');
+							if (window.__rpcDelay > 0) {
+								window.__delayedRpcMethods.push(message.method);
+								return void setTimeout(() => super.postMessage(message, ...options), window.__rpcDelay);
+							}
+						}
+						return super.postMessage(message, ...options);
+					}
+				}
+			})()`,
 		})
 		await resize(viewport)
 		await navigation.navigate(pageUrl)
@@ -350,6 +378,10 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
 				await navigation.navigate(new URL(url, pageUrl).href)
+			},
+			pressEscape: async () => {
+				await send('Input.dispatchKeyEvent', { code: 'Escape', key: 'Escape', type: 'keyDown' })
+				await send('Input.dispatchKeyEvent', { code: 'Escape', key: 'Escape', type: 'keyUp' })
 			},
 			pressTab: async () => {
 				await send('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown' })
@@ -362,16 +394,18 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				)
 				if (updated !== true) throw new Error(`Unable to update browser input ${label}`)
 			},
-			waitForButtonEnabled: async (label, occurrence = 0) => {
-				for (let attempt = 0; attempt < 600; attempt += 1) {
+			waitForButtonEnabled: async (label, occurrence = 0, timeoutMilliseconds = 30_000) => {
+				const deadline = performance.now() + timeoutMilliseconds
+				while (performance.now() < deadline) {
 					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => ${browserButtonNameExpression} === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
 					if (enabled === true) return
 					await Bun.sleep(50)
 				}
 				throw new Error(`Timed out waiting for enabled browser button ${label}. Last body: ${await readBody()}`)
 			},
-			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
+			waitForBodyText: async (text, timeoutMilliseconds) => await waitForBody(body => body.includes(text), JSON.stringify(text), timeoutMilliseconds),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
+			waitForExpression: expression => page.waitFor(expression),
 			waitForReady: navigation.waitForReady,
 			waitForTransactionStatus: async (status, title) => {
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
@@ -383,6 +417,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 		}
 		await interact?.(driver)
+		if (new URL(pageUrl).pathname.startsWith('/statoblast/')) expect(await evaluate('window.__statoblastRpcMethods.filter(method => method === "eth_getLogs").length')).toBe(0)
 		return readEvaluationString(
 			await send('Runtime.evaluate', {
 				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: innerHeight, html: document.documentElement?.outerHTML ?? '', width: innerWidth })`,
@@ -441,7 +476,7 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/deploy?simulate=1&genesis=yes&simScenario=baseline',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=baseline',
 		expected: 'Deploy contracts',
 		workflow: false,
 		name: 'statoblast baseline deployment',
@@ -449,16 +484,24 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/pools?simulate=1&genesis=yes&simScenario=security-pool',
-		expected: 'Security pool questions',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=deployed',
+		expected: 'Watchlist',
+		workflow: false,
+		name: 'statoblast deployed protocol',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		appId: 'statoblast',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=security-pool',
+		expected: 'Saved questions',
 		workflow: false,
 		name: 'statoblast seeded pool at narrow width',
 		viewport: { height: 844, width: 390 },
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/pools?simulate=1&genesis=no&simScenario=security-pool',
-		expected: 'Security pool questions',
+		hash: '#/watchlist?simulate=1&genesis=no&simScenario=security-pool',
+		expected: 'Saved questions',
 		workflow: false,
 		name: 'statoblast No genesis seeded pool',
 		viewport: { height: 900, width: 1440 },
@@ -473,8 +516,8 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/security-pools?simulate=1&genesis=yes&simScenario=portfolio-auction',
-		expected: 'Fork choices and recovery',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=portfolio-auction',
+		expected: 'Saved questions',
 		workflow: true,
 		name: 'statoblast fork and auction',
 		viewport: { height: 900, width: 1440 },
@@ -486,12 +529,17 @@ for (const scenario of productionBrowserScenarios) {
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, undefined, scenario.workflow ? PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS : PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS))
+		const timeout = scenario.workflow ? PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS : PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS
+		const waitForScenario = async (driver: ProductionBrowserDriver) => {
+			await driver.waitForBodyText(scenario.expected)
+			if (scenario.workflow) await checkStatoblastForkAuction(driver)
+		}
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, waitForScenario, timeout))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
 		}
 		expect(state.html).toContain('<main')
-		expect(state.body).toContain(scenario.expected)
+		expect(state.body).toContain(scenario.workflow ? 'Lower asks already fill the auction' : scenario.expected)
 		const appNames = { zoltar: 'Zoltar', trading: 'Statoblast Trading', statoblast: 'Augur Statoblast', openoracle: 'OpenOracle' }
 		expect(state.body).toContain(appNames[scenario.appId])
 		expect(state.body).toContain('Browser simulation')
@@ -503,67 +551,60 @@ for (const scenario of productionBrowserScenarios) {
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
 }
 
+async function checkStatoblastForkAuction(driver: ProductionBrowserDriver) {
+	await openSavedStatoblastItem(driver, 'pool')
+	await driver.waitForBodyText('Fork & recovery')
+	await driver.waitForExpression(`Array.from(document.querySelectorAll('a')).some(link => link.textContent.includes('Fork & recovery'))`)
+	await driver.evaluate(`Array.from(document.querySelectorAll('a')).find(link => link.textContent.includes('Fork & recovery')).click()`)
+	const yesChoice = `Array.from(document.querySelectorAll('.statoblast-branch-choices label')).find(label => label.textContent.trim() === 'Yes')?.querySelector('input')`
+	await driver.waitForExpression(`Boolean(${yesChoice})`)
+	await driver.evaluate(`${yesChoice}.click()`)
+	await driver.waitForBodyText('Lower asks already fill the auction')
+	expect(await driver.evaluate(`document.querySelectorAll('.statoblast-fork-workflow > li').length`)).toBe(7)
+	expect(await driver.evaluate(`document.querySelectorAll('.statoblast-branch-recapitalization').length`)).toBe(1)
+	expect(await driver.evaluate(`Boolean(document.querySelector('.statoblast-fork-workflow > li:nth-child(5) .statoblast-auction-ask-scale'))`)).toBe(true)
+}
+
+async function openSavedStatoblastItem(driver: ProductionBrowserDriver, kind: 'pool' | 'question') {
+	await driver.waitForBodyText(kind === 'pool' ? 'Saved security pools' : 'Saved questions')
+	for (let attempt = 0; attempt < 800; attempt += 1) {
+		const href = await driver.evaluate(`[...document.querySelectorAll('a')].find(link => link.textContent.trim() === 'Open' && link.hash.startsWith('#/pool/') && link.hash.includes('/question/') === ${kind === 'question'})?.href`)
+		if (typeof href === 'string') {
+			await driver.navigate(href)
+			return
+		}
+		await Bun.sleep(50)
+	}
+	throw new Error(`No saved ${kind} link appeared`)
+}
+
 test(
-	'production bundle boots the authenticated Statoblast security pool and seeded question balances in Chromium',
+	'Statoblast seeded Capital loads account data and stays within the manual refresh and idle request budgets',
 	async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(
-			`${baseUrl}/statoblast/#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2`,
+			`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`,
 			{ height: 900, width: 1440 },
 			async driver => {
-				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
-				const body = await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
-				expect(body).toContain('Browser simulation')
-				expect(body).not.toContain('Could not load the security pool snapshot')
-				expect(body).toContain(capitalCopy.prepareProgress(4))
-				await driver.waitForButtonEnabled(capitalCopy.claim)
-				const seededPools = await createWorkflowActions(driver).loadSeededPools()
-				const questionIds = seededPools
-					.filter(pool => pool.universeId === 0n && pool.parent === zeroAddress)
-					.slice(0, 2)
-					.map(pool => String(pool.questionId))
-				expect(questionIds).toHaveLength(2)
-				expect(
-					await driver.evaluate(`(() => {
-			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
-			const section = title => [...document.querySelectorAll('section')].find(node => node.querySelector('h3')?.textContent === title);
-			const capital = section(${JSON.stringify(capitalCopy.title)});
-			const backing = section(${JSON.stringify(capitalCopy.poolTitle)});
-			const positions = section(${JSON.stringify(capitalCopy.positions)});
-			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
-			const questions = [...section(${JSON.stringify(securityPoolCopy.mint)}).querySelectorAll('select option')].filter(option => option.value !== '').map(option => String(BigInt(option.value)));
-			const manager = input(${JSON.stringify(securityPoolCopy.manager)});
-			return {
-				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
-				owner: input(${JSON.stringify(securityPoolCopy.owner)})?.toLowerCase(),
-				withdrawableRep: amounts(capital, ${JSON.stringify(capitalCopy.withdrawableRep)}),
-				principalRep: amounts(capital, ${JSON.stringify(capitalCopy.principalRep)}),
-				commitment: amounts(capital, ${JSON.stringify(capitalCopy.commitment)}),
-				poolPledgedRep: amounts(backing, ${JSON.stringify(capitalCopy.totalPledged)}),
-				positionPledgedRep: amounts(positions, ${JSON.stringify(capitalCopy.positionPledged)}),
-				healthyCommitment: amounts(backing, ${JSON.stringify(capitalCopy.healthyCommitment)}),
-				health: capital.textContent.includes('120%'),
-				positions: positions.querySelectorAll('.workflow-subsection').length,
-				feeMetrics: section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.ethEarnings)}) && section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.repEarnings)}),
-				questions: questions.toSorted()
-			};
-		})()`),
-				).toEqual({
-					managerLoaded: true,
-					owner: '0x00000000000000000000000000000000000000a1',
-					// The seeded 3 REP/WETH price, 5% oracle band and 2× multiplier retain 75.789473684210526336 REP at the saved 120% target.
-					withdrawableRep: ['4924.210526315789473664REP'],
-					principalRep: ['5000REP'],
-					commitment: ['10WETH'],
-					poolPledgedRep: ['5000REP'],
-					positionPledgedRep: ['5000REP'],
-					healthyCommitment: ['10WETH'],
-					health: true,
-					positions: 1,
-					feeMetrics: true,
-					questions: questionIds.toSorted(),
-				})
+				await driver.waitForBodyText('Saved questions')
+				await driver.waitForBodyWithoutText('Refreshing saved items…')
+				await driver.waitForButtonEnabled('Refresh')
+				await openSavedStatoblastItem(driver, 'pool')
+				await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				expect(await securityPoolMetric(driver, capitalCopy.commitment)).toBe('10WETH')
+				await driver.waitForExpression('Object.keys(sessionStorage).some(key => key.startsWith("zoltar-ui:statoblast:reads:"))')
+				await driver.waitForButtonEnabled('Refresh')
+				await Bun.sleep(500)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0')
+				await driver.clickButton('Refresh')
+				await driver.waitForExpression('window.__statoblastRpcMethods.length > 0')
+				await driver.waitForButtonEnabled('Refresh')
+				const methods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
+				if (!Array.isArray(methods) || methods.length === 0 || methods.length > 4) throw new Error(`Expected one to four RPCs for a warm Capital refresh, received ${JSON.stringify(methods)}`)
+				await Bun.sleep(35_000)
+				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(methods)
 			},
 			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
 		)
@@ -571,12 +612,180 @@ test(
 	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
 )
 
+test(
+	'Statoblast loads a cold question, refreshes Watchlist and sends with every RPC delayed ten seconds',
+	async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		const watchlist = '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2'
+		let discoveredQuestion: string | undefined
+		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${watchlist}`, { height: 844, width: 390 }, async driver => {
+			await openSavedStatoblastItem(driver, 'question')
+			const href = await driver.evaluate('location.href')
+			if (typeof href !== 'string') throw new Error('Missing seeded question link')
+			discoveredQuestion = href
+			await driver.evaluate('sessionStorage.setItem("production-link-discovery", "warm")')
+		})
+		if (discoveredQuestion === undefined) throw new Error('Could not discover the seeded question URL')
+		const coldQuestion = new URL(discoveredQuestion)
+		coldQuestion.searchParams.set('rpcDelay', '10000')
+		await loadProductionDocumentInChromium(
+			coldQuestion.href,
+			{ height: 844, width: 390 },
+			async driver => {
+				expect(await driver.evaluate('sessionStorage.getItem("production-link-discovery")')).toBeNull()
+				await driver.waitForExpression('document.querySelector(".statoblast-question-loading .skeleton-line") !== null')
+				expect(await driver.evaluate('document.body.innerText')).not.toContain('Resolution rules and details')
+				await driver.waitForBodyText('Resolution rules and details', 180_000)
+				await driver.waitForBodyText('1.00 sets')
+				expect(await driver.evaluate('document.querySelector(".statoblast-question-loading") === null')).toBe(true)
+				const coldMethods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
+				expect(coldMethods).toContain('eth_call')
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
+
+				await driver.waitForButtonEnabled('Redeem sets', 0, 180_000)
+				await driver.clickButton('Redeem sets')
+				const redeemInputBounds = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
+				const beforeRedeem = await driver.evaluate(redeemInputBounds)
+				await driver.setInputByLabel('Complete sets to redeem', '0.01')
+				await driver.waitForButtonEnabled('Redeem complete sets', 0, 120_000)
+				expect(await driver.evaluate(redeemInputBounds)).toEqual(beforeRedeem)
+				await driver.clickButton('Redeem complete sets')
+				await driver.waitForButtonEnabled('Continue in wallet', 0, 180_000)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
+				await driver.clickButton('Continue in wallet')
+				await driver.waitForBodyText('0.99 sets', 240_000)
+				const delayed = await driver.evaluate('window.__delayedRpcMethods.slice()')
+				expect(delayed).toContain('eth_sendTransaction')
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
+
+				await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
+				await driver.pressEscape()
+
+				await driver.navigate(`?rpcDelay=10000${watchlist}`)
+				await driver.waitForBodyText('Saved security pools')
+				await driver.waitForBodyText('Refreshing saved items…')
+				await driver.waitForBodyWithoutText('Refreshing saved items…')
+				await driver.waitForButtonEnabled('Refresh', 0, 120_000)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
+				await driver.clickButton('Refresh')
+				await driver.waitForExpression('window.__delayedRpcMethods.includes("eth_getBlockByNumber")')
+				await driver.waitForButtonEnabled('Refresh', 0, 120_000)
+				expect(await driver.evaluate('document.body.innerText')).not.toContain('Couldn’t refresh')
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
+			},
+			SLOW_RPC_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+		)
+	},
+	SLOW_RPC_BROWSER_TIMEOUT_MILLISECONDS,
+)
+
+test(
+	'Statoblast keeps Capital visible during a slow RPC read and offers recovery after a timeout',
+	async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		await loadProductionDocumentInChromium(
+			`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`,
+			{ height: 844, width: 390 },
+			async driver => {
+				await openSavedStatoblastItem(driver, 'pool')
+				await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				const intercept = (delay: number | undefined) =>
+					driver.evaluate(`(() => {
+				const worker = window.__zoltarProductionWorkers?.at(-1)
+				if (!(worker instanceof Worker)) return false
+				const original = worker.postMessage.bind(worker)
+				Object.defineProperty(worker, 'postMessage', { configurable: true, value: (message, ...args) => {
+					if (message?.type !== 'rpc' || message.method !== 'eth_getBlockByNumber') return original(message, ...args)
+					Object.defineProperty(worker, 'postMessage', { configurable: true, value: original })
+					const delay = ${delay}
+					if (delay !== undefined) setTimeout(() => original(message, ...args), delay)
+				} })
+				return true
+			})()`)
+				expect(await intercept(10_000)).toBe(true)
+				await driver.clickButton('Refresh')
+				await driver.waitForBodyText('Refreshing…')
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				expect(await driver.evaluate('document.querySelector("main")?.inert')).toBe(false)
+				await driver.waitForButtonEnabled('Refresh')
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				expect(await intercept(undefined)).toBe(true)
+				await driver.clickButton('Refresh')
+				await driver.waitForBodyText('Couldn’t refresh, showing data from')
+				expect(await driver.evaluate('document.body.innerText')).toMatch(/showing data from \d+s ago/)
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				await driver.clickButton('Try again')
+				await driver.waitForBodyWithoutText('Couldn’t refresh, showing data from')
+			},
+			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+		)
+	},
+	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
+)
+
+productionBrowserTest('Statoblast Watchlist refresh keeps every header control reachable on desktop and phone', async () => {
+	if (server === undefined) throw new Error('Production test server did not start')
+	const baseUrl = server.url.toString().replace(/\/$/, '')
+	await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`, { height: 900, width: 1440 }, async driver => {
+		await driver.waitForBodyText('Saved questions')
+		for (const viewport of [
+			{ height: 900, width: 1440 },
+			{ height: 844, width: 390 },
+		]) {
+			await driver.resize(viewport)
+			await driver.waitForButtonEnabled('Refresh')
+			await driver.evaluate('window.__rpcDelay = 1000')
+			await driver.clickButton('Refresh')
+			await driver.waitForBodyText('Refreshing saved items…')
+			expect(
+				await driver.evaluate(`(() => {
+					const controls = Array.from(document.querySelectorAll('.statoblast-universe-menu button, .header-toolbar-controls .account-menu, .header-toolbar-settings button')).map(control => control.getBoundingClientRect());
+					return controls.every((control, index) => controls.slice(index + 1).every(next => control.right <= next.left || control.left >= next.right || control.bottom <= next.top || control.top >= next.bottom));
+				})()`),
+			).toBe(true)
+			await driver.evaluate('window.__rpcDelay = 0')
+		}
+	})
+})
+
+productionBrowserTest('Statoblast mobile universe sheet traps focus, restores it on Escape, and closes on its scrim', async () => {
+	if (server === undefined) throw new Error('Production test server did not start')
+	const baseUrl = server.url.toString().replace(/\/$/, '')
+	await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=deployed`, { height: 844, width: 390 }, async driver => {
+		const trigger = '.statoblast-universe-menu > button'
+		await driver.evaluate(`document.querySelector(${JSON.stringify(trigger)}).click()`)
+		await driver.waitForBodyText('Universes')
+		await driver.pressTab()
+		expect(await driver.evaluate("document.activeElement?.closest('.statoblast-universe-panel') !== null")).toBe(true)
+		await driver.pressEscape()
+		await driver.waitForExpression(`document.activeElement?.matches(${JSON.stringify(trigger)}) && document.querySelector('.statoblast-universe-panel') === null`)
+		expect(await driver.evaluate("document.querySelector('.statoblast-universe-panel') === null")).toBe(true)
+		await driver.evaluate(`document.querySelector(${JSON.stringify(trigger)}).click()`)
+		await driver.waitForBodyText('Universes')
+		await driver.evaluate("document.querySelector('.statoblast-universe-scrim').click()")
+		await driver.waitForBodyWithoutText('Universes')
+		expect(await driver.evaluate("document.querySelector('.statoblast-universe-panel') === null")).toBe(true)
+	})
+})
+
 for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
 	productionBrowserTest(`production bundle requires a genesis choice before starting ${appId}`, async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(`${baseUrl}/${appId}/?simulate=1&simScenario=baseline`, { height: 844, width: 390 }, async driver => {
 			const body = await driver.waitForBodyText(AUGUR_GENESIS_FORK_QUESTION.title)
+			if (appId === 'statoblast') {
+				expect(body).toContain('Choose a universe')
+				expect(body).toContain('View question on Etherscan')
+				expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
+				await driver.clickButton('Open No universe')
+				await driver.waitForBodyText('Browser simulation')
+				expect(await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisOutcome')).toBe('no')
+				return
+			}
 			expect(body).toContain('Choose the truthful universe')
 			expect(body).toContain('If the rocket explodes on the launch pad while attempting to launch on a launch day, then this market will resolve as No.')
 			expect(body).toContain('2026-04-08 00:00:00 UTC')
@@ -612,22 +821,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		}
 		throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
-	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
-	const loadSeededPools = async () => {
-		await driver.waitForReady()
-		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
-		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
-		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
-		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
-		const { securityPoolFactory } = getInfraContractAddresses(profile)
-		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-		const readFixtureContract = (data: Hex) => readBrowserContract(driver, securityPoolFactory, data)
-		const count = decodeFunctionResult({ abi, functionName: 'questionLedgerDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'questionLedgerDeploymentCount' })) })
-		expect(count > 0n && count <= 10n).toBe(true)
-		const pools = decodeFunctionResult({ abi, functionName: 'questionLedgerDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'questionLedgerDeploymentsRange', args: [0n, count] })) })
-		return pools
-	}
-	return { completeTransactionReview, loadSeededPools }
+	return { completeTransactionReview }
 }
 
 function productionInteractionTest(scenario: ProductionWorkflowScenario, route: string, viewport: { height: number; width: number }, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -647,7 +841,8 @@ async function securityPoolMetric(driver: ProductionBrowserDriver, label: string
 	return driver.evaluate(`(() => { const field = [...document.querySelectorAll('.metric-label')].find(node => node.textContent === ${JSON.stringify(label)}); return field?.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, '') })()`)
 }
 
-productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
+productionInteractionTest('capital-recovery', '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
+	await openSavedStatoblastItem(driver, 'pool')
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const before = await securityPoolMetric(driver, capitalCopy.principalRep)
 	expect(before).toBe('5000REP')
@@ -655,6 +850,8 @@ productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genes
 	await driver.waitForButtonEnabled('Approve 1\u00a0REP')
 	await driver.clickButton('Approve 1\u00a0REP')
 	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
+	await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
+	await driver.pressEscape()
 	await driver.waitForButtonEnabled(capitalCopy.deposit)
 	await driver.clickButton(capitalCopy.deposit)
 	const failureInjected = await driver.evaluate(
@@ -667,41 +864,56 @@ productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genes
 	await driver.clickButton('Close')
 	await driver.waitForButtonEnabled(capitalCopy.deposit)
 	await driver.clickButton(capitalCopy.deposit)
+	await driver.waitForButtonEnabled('Continue in wallet')
 	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
 	await driver.waitForBodyText(securityPoolCopy.confirmed)
+	await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
 	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 
-productionInteractionTest('portfolio-purchase', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
-	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
-	const selected = await driver.evaluate(
-		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(securityPoolCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
-	)
-	expect(selected).toBe(true)
-	await driver.setInputByLabel(collateralCopy.amount(securityPoolCopy.mintAmount, collateralCopy.weth), '0.01')
-	await driver.setInputByLabel(collateralCopy.amount(securityPoolCopy.maximumPurchaseFee, collateralCopy.weth), '0.1')
-	await driver.setInputByLabel(securityPoolCopy.minimumShares, '0')
-	await driver.waitForButtonEnabled(securityPoolCopy.mint)
-	await driver.clickButton(securityPoolCopy.mint)
-	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
-	await driver.waitForBodyText(securityPoolCopy.confirmed)
-	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
-	expect(await securityPoolMetric(driver, capitalCopy.demand)).toContain('WETH')
-	expect(await securityPoolMetric(driver, capitalCopy.demand)).not.toBe('0WETH')
+productionInteractionTest('portfolio-purchase', '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+	await openSavedStatoblastItem(driver, 'question')
+	await driver.waitForButtonEnabled('Mint sets')
+	await driver.clickButton('Mint sets')
+	const mintInputSize = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
+	const beforeMint = await driver.evaluate(mintInputSize)
+	await driver.waitForButtonEnabled('Max')
+	await driver.clickButton('Max')
+	await driver.waitForExpression('Number(document.querySelector(".statoblast-share-action-form > .amount-field input").value) > 0')
+	await driver.setInputByLabel('Collateral amount', '0.01')
+	await driver.waitForButtonEnabled('Mint complete sets')
+	expect(await driver.evaluate(mintInputSize)).toEqual(beforeMint)
+	await driver.waitForBodyText('You pay')
+	await driver.evaluate('document.querySelector(".statoblast-share-mint-limits").open = true')
+	await driver.setInputByLabel('Min complete sets', '1')
+	await driver.waitForExpression('document.querySelector(".statoblast-share-action-form .tx-action-button")?.disabled === true')
+	await driver.setInputByLabel('Min complete sets', '0.0099')
+	await driver.waitForButtonEnabled('Mint complete sets')
+	await driver.clickButton('Mint complete sets')
+	await driver.waitForButtonEnabled('Continue in wallet')
+	const review = await driver.evaluate('document.querySelector(".transaction-step-content")?.innerText')
+	expect(review).toContain('Yes shares')
+	expect(review).toContain('No shares')
+	expect(review).toContain('Invalid shares')
+	await driver.clickButton('Continue in wallet')
+	await driver.waitForBodyText('1.01 sets')
+	await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
 })
 
-productionInteractionTest('deployment', '#/deploy?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
-	await driver.evaluate('document.body.focus()')
-	await driver.pressTab()
-	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
+productionInteractionTest('deployment', '#/watchlist?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
+	await driver.clickButton('Skip to main content')
+	expect(await driver.evaluate('document.activeElement?.closest("main") !== null')).toBe(true)
 	await driver.waitForButtonEnabled('Deploy next contract')
 	const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 	const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
 	if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
-	const steps = getDeploymentSteps(createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
+	const steps = getStatoblastUiDeploymentSteps(createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
 	await driver.waitForBodyText(`0 / ${steps.length}`)
 	await driver.clickButton('Deploy next contract')
-	expect(await driver.waitForBodyText(`1 / ${steps.length}`)).toContain('Proxy Deployer')
+	await createWorkflowActions(driver).completeTransactionReview()
+	const next = steps[1]
+	if (next === undefined) throw new Error('Expected a second deployment step.')
+	expect(await driver.waitForBodyText(`1 / ${steps.length}`)).toContain(next.label)
 })
 
 async function readBrowserContract(driver: ProductionBrowserDriver, address: string, data: Hex) {

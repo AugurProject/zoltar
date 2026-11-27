@@ -300,7 +300,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		if (request.questionLedger.securityPoolCustody() != address(0))
 			callbackSettlement = ITradingSecurityPoolSettlement(securityPool).settlement();
 		ethCallbackActive = true;
-		request.questionLedger.redeemCompleteSet(request.completeSetShares, 0, 0);
+		request.questionLedger.redeemCompleteSet(request.completeSetShares, 0);
 		ethCallbackActive = false;
 		callbackSettlement = address(0);
 		uint256 collateralOut = collateral.balanceOf(address(this)) - collateralBefore;

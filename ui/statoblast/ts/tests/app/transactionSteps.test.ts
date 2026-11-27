@@ -1,15 +1,20 @@
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
+import { changedSinceReview } from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, redeemCompleteSetInQuestionLedger, redeemSharesInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { reportOutcomeInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { forkTriggerChangedSinceReview } from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { afterEach, expect, mock, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
+import { createBlockWithTimestamp, createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { afterEach, expect, mock, spyOn, test } from 'bun:test'
+import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, parseAbi, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { runFundingTransactions } from '@zoltar/ui-statoblast-shared/protocol/fundingTransactions.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
@@ -25,7 +30,8 @@ function setup(replacementReason?: ReplacementReason) {
 		account,
 		chain: MAINNET_NETWORK_PROFILE.chain,
 		transport: custom({
-			request: async () => {
+			request: async ({ method }) => {
+				if (method === 'eth_call') return '0x'
 				throw new Error('Unexpected RPC')
 			},
 		}),
@@ -42,7 +48,7 @@ function setup(replacementReason?: ReplacementReason) {
 
 async function waitForTransactionStep(index: number) {
 	for (let attempt = 0; attempt < 100; attempt += 1) {
-		if (transactionSteps.value?.steps[index]?.phase === 'review') {
+		if (transactionSteps.value?.steps[index]?.phase === 'review' && transactionSteps.value.reviewCheck === undefined) {
 			return
 		}
 		await new Promise(resolve => setTimeout(resolve, 1))
@@ -197,7 +203,7 @@ for (const [functionName, title, args] of [
 	['depositWalletRepToEscalationGameWithLead', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
-	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
+	['withdrawFromEscalationGame', 'Claim reporting deposits', []],
 	['report', 'Create oracle report', []],
 	['withdrawTo', 'Withdraw oracle balance', []],
 ] satisfies Array<[string, string, bigint[]]>) {
@@ -861,27 +867,38 @@ test('broadcasts a prepared raw deployment transaction without app confirmation'
 	expect(transactionSteps.value?.showReviewDialog).toBe(false)
 })
 
-test('minting complete sets sends the transaction directly and tracks its receipt', async () => {
+function setupMintReview(alwaysReview: boolean) {
 	const { client, receipt, sendTransaction } = setup()
-	const reviewed = createReviewedClient({
+	let balanceReads = 0
+	const estimateGas = mock(async () => 100000n)
+	const call = mock(async () => ({ data: '0x' as const }))
+	const mintClient = {
 		...client,
 		sendTransaction,
-		estimateGas: async () => 100000n,
+		estimateGas,
+		call,
 		getBalance: async () => 10n ** 18n,
-		getBlock: async () => createBlockWithTimestamp(1n),
+		getBlock: async () => ({ ...createBlockWithTimestamp(1n), number: 1n }),
+		multicall: createMulticallStub(({ contracts }) => {
+			expect(contracts.map(contract => contract.functionName)).toEqual(['refreshSecurityPoolFees', 'attoEthToAttoShares'])
+			return [undefined, 10n ** 18n]
+		}),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
 			if (request.functionName === 'securityPoolOf' || request.functionName === 'getQuestionLedger') return account
 			if (request.functionName === 'isSecurityPool') return true
-			if (request.functionName === 'collateralToken') return MAINNET_NETWORK_PROFILE.wethAddress
+			if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
 			if (request.functionName === 'services') return account
-			if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 20n
+			if (request.functionName === 'balanceOf') return (balanceReads++ === 0 ? 100n : 90n) * 10n ** 18n
+			if (request.functionName === 'allowance') return 10n ** 20n
 			if (request.functionName === 'purchaseQuote') return [0n, 0n]
 			if (request.functionName === 'quoteMintRecoveryRep') return 0n
 			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 			if (request.functionName === 'questionData') return account
 			if (request.functionName === 'questionId') return 1n
+			if (request.functionName === 'shareToken') return account
+			if (request.functionName === 'balanceOfShares') return [2n, 3n, 4n].map(value => value * 10n ** 18n)
 			if (request.functionName === 'getQuestionEndDate') return 1000n
 			if (request.functionName === 'universeId') return 0n
 			if (request.functionName === 'priceFeed') return account
@@ -890,7 +907,12 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			throw new Error(`Unexpected read: ${request.functionName}`)
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
-	})
+	}
+	return { reviewed: createReviewedClient(mintClient, undefined, undefined, undefined, alwaysReview), sendTransaction, estimateGas, call }
+}
+
+test('minting complete sets sends the transaction directly and tracks its receipt', async () => {
+	const { reviewed, sendTransaction } = setupMintReview(false)
 	expect(await createCompleteSetInQuestionLedger(reviewed, account, 10n ** 18n)).toEqual({ action: 'createCompleteSet', hash, questionLedgerAddress: account, universeId: 0n })
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 0n }))
@@ -898,5 +920,520 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 })
 
-for (const _change of ['fresh price', 'pending request', 'queue fee'] as const) {
-}
+test('mint review shows the refreshed wallet collateral and free capacity', async () => {
+	const { reviewed, sendTransaction, estimateGas, call } = setupMintReview(true)
+	const sending = createCompleteSetInQuestionLedger(reviewed, account, 10n ** 18n)
+	await waitForTransactionStep(0)
+	const rows = transactionSteps.value?.steps[0]?.reviewRows
+	expect(call).toHaveBeenCalledTimes(1)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	transactionSteps.value?.confirmStep(0)
+	await expect(sending).resolves.toMatchObject({ hash })
+	expect(rows?.find(row => row.label === 'Wallet collateral')?.value).toMatch(/90.*WETH → 89.*WETH/)
+	expect(rows?.find(row => row.label === 'Free capacity')?.value).toMatch(/1.*WETH → 0.*WETH/)
+	expect(rows?.find(row => row.label === 'Yes shares')?.value).toMatch(/3.*→ 4/)
+	expect(rows?.find(row => row.label === 'No shares')?.value).toMatch(/4.*→ 5/)
+	expect(rows?.find(row => row.label === 'Invalid shares')?.value).toMatch(/2.*→ 3/)
+	expect(estimateGas).not.toHaveBeenCalled()
+	expect(call).toHaveBeenCalledTimes(1)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})
+
+test('a refreshed review shows verified rows and permits a changing simulation result', async () => {
+	const { client, sendTransaction } = setup()
+	let before = 'saved value'
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const call = mock(async (): Promise<{ data: `0x${string}` }> => ({ data: '0x01' }))
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call }, undefined, undefined, undefined, true)
+	try {
+		reviewed.onTransactionPlan?.([
+			{
+				functionName: 'claim',
+				contractAddress: account,
+				validateBeforeSubmit: async () => {
+					before = 'verified value'
+				},
+				readReviewRows: () => [{ label: 'Position', value: before }],
+			},
+		])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'claim', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		await waitForTransactionStep(0)
+		expect(transactionSteps.value?.steps[0]?.reviewRows).toEqual([{ label: 'Position', value: 'verified value' }])
+		now.mockReturnValue(31_000)
+		call.mockImplementationOnce(async () => ({ data: '0x02' }))
+		transactionSteps.value?.confirmStep(0)
+		await expect(sending).resolves.toBe(hash)
+		expect(call).toHaveBeenCalledTimes(2)
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		now.mockRestore()
+	}
+})
+
+test('a review allows successive slow requests that each finish within the request timeout', async () => {
+	const { client, sendTransaction } = setup()
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 40 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			readContract: createReadContractStub(async () => {
+				await Bun.sleep(25)
+				return 1n
+			}),
+			call: async () => {
+				await Bun.sleep(25)
+				return { data: '0x' }
+			},
+		},
+		undefined,
+		undefined,
+		undefined,
+		true,
+	)
+	try {
+		reviewed.onTransactionPlan?.([
+			{
+				functionName: 'claim',
+				contractAddress: account,
+				validateBeforeSubmit: async () => {
+					await reviewed.readContract({ abi: ABIS.mainnet.erc20, address: account, functionName: 'balanceOf', args: [account] })
+				},
+			},
+		])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'claim', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		void sending.catch(() => undefined)
+		await Promise.race([waitForTransactionStep(0), sending])
+		transactionSteps.value?.confirmStep(0)
+		await expect(sending).resolves.toBe(hash)
+	} finally {
+		timer.mockRestore()
+	}
+})
+
+test('opens review during the first simulation, blocks sending after a timeout, and rechecks on retry', async () => {
+	const { client, sendTransaction } = setup()
+	const simulation = createDeferred<{ data: '0x' }>()
+	const call = mock(async () => ({ data: '0x' as const }))
+	call.mockImplementationOnce(async () => await simulation.promise)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call }, undefined, undefined, undefined, true)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 50 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	void sending.catch(() => undefined)
+	try {
+		await waitForStarted()
+		expect(transactionSteps.value?.reviewCheck?.status).toBe('checking')
+		confirm()
+		await Bun.sleep(60)
+		expect(transactionSteps.value?.reviewCheck?.status).toBe('failed')
+		expect(sendTransaction).not.toHaveBeenCalled()
+		const status = transactionSteps.value?.reviewCheck
+		if (status?.status !== 'failed') throw new Error('Expected a failed check')
+		status.retry()
+		await waitForTransactionStep(0)
+		expect(call).toHaveBeenCalledTimes(2)
+		expect(sendTransaction).not.toHaveBeenCalled()
+		confirm()
+		await expect(sending).resolves.toBe(hash)
+	} finally {
+		simulation.resolve({ data: '0x' })
+		timer.mockRestore()
+		transactionSteps.value?.cancel()
+	}
+})
+
+test('Review again re-runs an initially changed check without sending', async () => {
+	const { client, sendTransaction } = setup()
+	const validateBeforeSubmit = mock(async () => undefined)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ contractAddress: account, functionName: 'Transfer ETH', value: 1n, validateBeforeSubmit }])
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	void sending.catch(() => undefined)
+	await waitForStarted()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	expect(check?.status).toBe('changed')
+	if (check?.status !== 'changed') throw new Error('Expected Review again')
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+})
+
+test('rebuilding a changed review checks the replacement call and sends it only after confirmation', async () => {
+	const { client, sendTransaction } = setup()
+	const call = mock(async () => ({ data: '0x' as const }))
+	const refreshReviewData = mock(async () => '0x5678' as const)
+	const validateBeforeSubmit = mock(async () => undefined)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
+	const reviewed = createReviewedClient({ ...client, call, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ contractAddress: account, functionName: 'Take over position', data: '0x1234', validateBeforeSubmit, refreshReviewData }])
+	reviewed.onTransactionPrepared?.({ account, contractAddress: account, functionName: 'Take over position', data: '0x1234', args: undefined, chainName: client.chain.name, value: undefined })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+	void sending.catch(() => undefined)
+	await waitForStarted()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	if (check?.status !== 'changed') throw new Error('Expected Review again')
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(refreshReviewData).toHaveBeenCalledTimes(1)
+	expect(call).toHaveBeenCalledWith(expect.objectContaining({ data: '0x5678' }))
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ data: '0x5678' }))
+})
+
+test('a timeout in the final preflight returns to a review that can retry without sending', async () => {
+	const { client, sendTransaction } = setup()
+	const validateBeforeSubmit = mock(async () => undefined)
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ contractAddress: account, functionName: 'Transfer ETH', value: 1n, validateBeforeSubmit }])
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	void sending.catch(() => undefined)
+	await waitForTransactionStep(0)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(currentStateCheckFailed))
+	confirm()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	expect(check?.status).toBe('failed')
+	if (check?.status !== 'failed') throw new Error('Expected retryable preflight')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	check.retry()
+	await waitForTransactionStep(0)
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})
+
+test('a timeout in the funding preflight can recheck and send the chosen approval', async () => {
+	const { client, sendTransaction, receipt } = setup()
+	const validate = mock(async () => undefined)
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
+			readContract: createReadContractStub(request => {
+				if (request.functionName === 'symbol') return 'REP'
+				if (request.functionName === 'decimals') return 0
+				return 0n
+			}),
+		},
+		validate,
+		undefined,
+		undefined,
+		true,
+	)
+	const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
+	const fundingStep = { functionName: 'approve', contractAddress: account, args: [account, 6n], data } as const
+	reviewed.onTransactionPlan?.([fundingStep, { functionName: 'report', contractAddress: account, tokenFunding: [{ tokenAddress: account, amount: 3n }] }])
+	if (reviewed.runFundingTransaction === undefined) throw new Error('Funding unavailable')
+	const funding = reviewed.runFundingTransaction([0], async () => {
+		reviewed.onTransactionPrepared?.({ ...fundingStep, account, chainName: client.chain.name, value: undefined })
+		await reviewed.sendTransaction({ to: account, data })
+		await reviewed.waitForTransactionReceipt({ hash })
+	})
+	void funding.catch(() => undefined)
+	await waitForTransactionStep(0)
+	validate.mockRejectedValueOnce(new Error(currentStateCheckFailed))
+	transactionSteps.value?.confirmStep(0, 5n)
+	await Bun.sleep(5)
+	const status = transactionSteps.value?.reviewCheck
+	expect(status?.status).toBe('failed')
+	if (status?.status !== 'failed') throw new Error('Expected retryable funding preflight')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	status.retry()
+	await waitForTransactionStep(0)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	transactionSteps.value?.confirmStep(0, 5n)
+	await expect(funding).resolves.toBe(true)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 5n] }) }))
+})
+
+test('a timeout while re-reading a game preparation requirement can retry without opening the wallet', async () => {
+	const { client, sendTransaction, receipt } = setup()
+	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) }, undefined, undefined, undefined, true)
+	const step = { functionName: 'prepareEscalationGame', contractAddress: account, data: '0x1234' } as const
+	const isRequired = mock(async () => true)
+	const funding = runFundingTransactions(
+		reviewed,
+		[
+			{
+				step,
+				isRequired,
+				execute: async () => {
+					reviewed.onTransactionPrepared?.({ ...step, account, args: [], chainName: client.chain.name, value: undefined })
+					await reviewed.sendTransaction({ to: account, data: step.data })
+					return await reviewed.waitForTransactionReceipt({ hash })
+				},
+			},
+		],
+		{ functionName: 'report', contractAddress: account },
+	)
+	void funding.catch(() => undefined)
+	await waitForTransactionStep(0)
+	isRequired.mockRejectedValueOnce(new Error(currentStateCheckFailed))
+	confirm()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	if (check?.status !== 'failed') throw new Error('Expected retryable game preparation check')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(funding).resolves.toBeUndefined()
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})
+
+test.each(['writeContract', 'sendTransaction'] as const)('%s sends the exact refreshed calldata and updates its technical arguments', async method => {
+	const { client, sendTransaction } = setup()
+	const writeContract = mock(async () => hash)
+	const call = mock(async () => ({ data: '0x' as const }))
+	const parameters = { abi: ABIS.mainnet.erc20, address: account, functionName: 'transfer', args: [account, 1n], gas: 50_000n } as const
+	const refreshed = encodeFunctionData({ ...parameters, args: [account, 2n] })
+	const validateBeforeSubmit = mock(async () => undefined)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
+	const reviewed = createReviewedClient({ ...client, call, writeContract, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ ...parameters, contractAddress: account, validateBeforeSubmit, refreshReviewData: async () => refreshed, readReviewArgs: data => decodeFunctionData({ abi: parameters.abi, data }).args }])
+	const sendRaw = () => {
+		const data = encodeFunctionData(parameters)
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: parameters.functionName, args: parameters.args, data, value: undefined })
+		return reviewed.sendTransaction({ to: account, data, gas: parameters.gas })
+	}
+	const sending = method === 'writeContract' ? reviewed.writeContract(parameters) : sendRaw()
+	void sending.catch(() => undefined)
+	await waitForStarted()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	if (check?.status !== 'changed') throw new Error('Expected Review again')
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(call).toHaveBeenCalledWith(expect.objectContaining({ data: refreshed }))
+	expect(transactionSteps.value?.steps[0]?.technicalRows).toContainEqual({ label: 'Arguments', value: `${account}, 2` })
+	expect(writeContract).not.toHaveBeenCalled()
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+	expect(writeContract).not.toHaveBeenCalled()
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ to: account, data: refreshed, gas: 50_000n }))
+})
+
+test.each(['complete sets', 'winning shares'] as const)('aged %s review accepts falling collateral and still blocks a recovery REP shortfall', async operation => {
+	const unit = 10n ** 18n
+	const { client, receipt, sendTransaction } = setup()
+	let cash = unit
+	let recovery = 2n * unit
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const createNativeClient = () =>
+		createReviewedClient(
+			{
+				...client,
+				sendTransaction,
+				call: async () => ({ data: '0x' }),
+				estimateGas: async () => 100_000n,
+				getBlock: async () => ({ ...createBlockWithTimestamp(1n), number: 1n }),
+				multicall: createMulticallStub(({ contracts }) => {
+					expect(contracts.map(contract => contract.functionName)).toEqual(['refreshSecurityPoolFees', 'attoSharesToAttoEth', 'attoSharesToAttoRep'])
+					return [undefined, cash, recovery]
+				}),
+				readContract: createReadContractStub(request => {
+					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
+					if (request.functionName === 'services' || request.functionName === 'settlement' || request.functionName === 'shareToken' || request.functionName === 'questionForker') return account
+					if (request.functionName === 'securityPoolFactory' || request.functionName === 'securityPoolOf') return account
+					if (request.functionName === 'isSecurityPool') return true
+					if (request.functionName === 'universeId') return 0n
+					if (request.functionName === 'balanceOfShares') return [unit, unit, unit]
+					if (request.functionName === 'getQuestionOutcome') return 1n
+					throw new Error(`Unexpected native redemption read: ${request.functionName}`)
+				}),
+				waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
+			},
+			undefined,
+			undefined,
+			undefined,
+			true,
+		)
+	const redeem = () => {
+		const reviewed = createNativeClient()
+		return operation === 'complete sets' ? redeemCompleteSetInQuestionLedger(reviewed, account, unit) : redeemSharesInQuestionLedger(reviewed, account)
+	}
+	try {
+		const sending = redeem()
+		void sending.catch(() => undefined)
+		await waitForTransactionStep(0)
+		cash = 0n
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		for (let attempt = 0; attempt < 100 && sendTransaction.mock.calls.length === 0 && transactionSteps.value?.reviewCheck?.status !== 'changed'; attempt += 1) await Bun.sleep(1)
+		expect(transactionSteps.value?.reviewCheck?.status).not.toBe('changed')
+		await expect(sending).resolves.toMatchObject({ hash })
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+		const data = sendTransaction.mock.calls[0]?.[0].data
+		if (data === undefined) throw new Error('Missing native redemption calldata')
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256)', 'function redeemCompleteSet(uint256,uint256)']), data }).args).toEqual(operation === 'complete sets' ? [unit, (2n * unit * 9950n) / 10000n] : [(2n * unit * 9950n) / 10000n])
+		transactionSteps.value?.cancel()
+		now.mockReturnValue(0)
+		// A new action uses a fresh controller and retains its reviewed positive REP floor.
+		const blocked = redeem()
+		void blocked.catch(() => undefined)
+		await waitForTransactionStep(0)
+		recovery = 0n
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		await expect(blocked).rejects.toThrow('Recovery REP payout changed')
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		now.mockRestore()
+	}
+})
+
+test('an aged review sends when only an explicitly variable estimate changes', async () => {
+	const { client, sendTransaction } = setup()
+	let collateral = '1 WETH'
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call: async () => ({ data: '0x01' }) }, undefined, undefined, undefined, true)
+	try {
+		reviewed.onTransactionPlan?.([
+			{
+				functionName: 'redeemShares',
+				contractAddress: account,
+				readReviewRows: () => [
+					{ label: 'Estimated collateral received', value: collateral, allowValueChange: true },
+					{ label: 'Minimum recovery REP', value: '0 REP' },
+				],
+			},
+		])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'redeemShares', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		void sending.catch(() => undefined)
+		await waitForTransactionStep(0)
+		collateral = '0 WETH'
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		for (let attempt = 0; attempt < 100 && sendTransaction.mock.calls.length === 0 && transactionSteps.value?.reviewCheck?.status !== 'changed'; attempt += 1) await Bun.sleep(1)
+		expect(transactionSteps.value?.reviewCheck?.status).not.toBe('changed')
+		await expect(sending).resolves.toBe(hash)
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		now.mockRestore()
+	}
+})
+
+test('an aged review exposes changed rows and requires a fresh review confirmation before sending', async () => {
+	const { client, sendTransaction } = setup()
+	let wallet = '10 REP → 8 REP'
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call: async () => ({ data: '0x01' }) }, undefined, undefined, undefined, true)
+	try {
+		reviewed.onTransactionPlan?.([{ functionName: 'report', contractAddress: account, readReviewRows: () => [{ label: 'Wallet REP', value: wallet }] }])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'report', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		void sending.catch(() => undefined)
+		await waitForTransactionStep(0)
+		wallet = '11 REP → 9 REP'
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		for (let attempt = 0; attempt < 100 && transactionSteps.value?.reviewCheck?.status !== 'changed'; attempt += 1) await Bun.sleep(1)
+		const status = transactionSteps.value?.reviewCheck
+		if (status?.status !== 'changed') throw new Error('Expected changed rows to require review again')
+		expect(status.message).toContain('Changed since you reviewed')
+		expect(transactionSteps.value?.steps[0]?.reviewRows).toEqual([{ label: 'Wallet REP', value: '11 REP → 9 REP' }])
+		expect(sendTransaction).not.toHaveBeenCalled()
+		status.retry()
+		await waitForTransactionStep(0)
+		expect(sendTransaction).not.toHaveBeenCalled()
+		confirm()
+		await expect(sending).resolves.toBe(hash)
+	} finally {
+		now.mockRestore()
+	}
+})
+
+test('a report that becomes fork-triggering during review requires new confirmation even when the amount is unchanged', async () => {
+	const { client, receipt, sendTransaction } = setup()
+	let noBalance = 10n
+	const threshold = 20n
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 1n }),
+			waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'universeId') return 0n
+				if (request.functionName === 'escalationGame' || request.functionName === 'repToken') return account
+				if (request.functionName === 'systemState') return 0
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				if (request.functionName === 'previewLeadingDepositOnOutcome') return [5n, threshold]
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return threshold
+				if (request.functionName === 'getOutcomeBalancesAttoRep') return [0n, 15n, noBalance]
+				if (request.functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') return 0n
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return maxUint256
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			}),
+		},
+		undefined,
+		undefined,
+		undefined,
+		true,
+	)
+	const sending = reportOutcomeInQuestionLedger(reviewed, account, 'yes', 5n, 5n, false, true)
+	await waitForTransactionStep(0)
+	noBalance = threshold
+	transactionSteps.value?.confirmStep(0)
+	await expect(sending).rejects.toThrow(forkTriggerChangedSinceReview)
+	expect(sendTransaction).not.toHaveBeenCalled()
+})
+
+test('report review shows the wallet and staked REP at the freshly checked block', async () => {
+	const { client, receipt, sendTransaction } = setup()
+	const rep = 10n ** 18n
+	const readContract = createReadContractStub(async request => {
+		if (request.functionName === 'universeId') return 0n
+		if (request.functionName === 'escalationGame' || request.functionName === 'repToken') return account
+		if (request.functionName === 'systemState') return 0
+		if (request.functionName === 'getEscalationGameEndDate') return 1000n
+		if (request.functionName === 'previewLeadingDepositOnOutcome') return [2n * rep, 15n * rep]
+		if (request.functionName === 'nonDecisionThresholdAttoRep') return 20n * rep
+		if (request.functionName === 'getOutcomeBalancesAttoRep') return [0n, 13n * rep, 14n * rep]
+		if (request.functionName === 'forkContinuation') return false
+		if (request.functionName === 'activationTime') return 1n
+		if (request.functionName === 'startBondAttoRep') return rep
+		if (request.functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') {
+			expect(request.blockNumber).toBe(1n)
+			return 4n * rep
+		}
+		if (request.functionName === 'balanceOf') return 10n * rep
+		if (request.functionName === 'allowance') return maxUint256
+		throw new Error(`Unexpected read: ${request.functionName}`)
+	})
+	const reviewed = createReviewedClient({ ...client, sendTransaction, getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 1n }), waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }), readContract }, undefined, undefined, undefined, true)
+	const sending = reportOutcomeInQuestionLedger(reviewed, account, 'yes', 2n * rep, 2n * rep, false, true)
+	await waitForTransactionStep(0)
+	const rows = transactionSteps.value?.steps[0]?.reviewRows
+	transactionSteps.value?.confirmStep(0)
+	await expect(sending).resolves.toMatchObject({ hash })
+	expect(rows?.find(row => row.label === 'Wallet REP')?.value).toMatch(/10.*REP → 8.*REP/)
+	expect(rows?.find(row => row.label === 'Your REP staked on Yes')?.value).toMatch(/4.*REP → 6.*REP/)
+	expect(rows?.find(row => row.label === 'Leader')?.value).toBe('No → Yes')
+	expect(rows?.find(row => row.label === 'Window ends')?.value).toContain(' → ')
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})

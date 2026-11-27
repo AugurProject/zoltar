@@ -26,7 +26,7 @@ describe('OverviewPanels', () => {
 	function getAccountMenuTrigger() {
 		const trigger = document.body.querySelector('.account-menu .account-menu-trigger')
 		if (!(trigger instanceof HTMLElement)) throw new Error('Expected the account menu trigger')
-		expect(trigger.getAttribute('aria-label')).toBe('Account menu 0x123456…567890')
+		expect(trigger.getAttribute('aria-label')).toBe('Wallet menu 0x123456…567890')
 		return trigger
 	}
 
@@ -258,7 +258,7 @@ describe('OverviewPanels', () => {
 		if (!(popover instanceof HTMLElement)) throw new Error('Expected the account popover')
 		expect(trigger.getAttribute('aria-expanded')).toBe('true')
 		expect(trigger.getAttribute('aria-controls')).toBe(popover.id)
-		expect(documentQueries.getByRole('group', { name: 'Account details' })).toBe(popover)
+		expect(documentQueries.getByRole('group', { name: 'Wallet details' })).toBe(popover)
 
 		fireEvent.keyDown(document, { key: 'Escape' })
 		await waitFor(() => expect(document.body.querySelector('.account-menu-popover')).toBeNull())

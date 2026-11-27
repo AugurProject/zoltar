@@ -13,19 +13,21 @@ export const formatMissingSavedStateError = (stateName: CopyTemplateValue) => `S
 export const savedStateUpdateError = 'Failed to update the saved simulation state.'
 export const simulationControlError = 'Failed to update the simulation.'
 export const stateExportError = 'Failed to export the current simulation state.'
-export const plus10Minutes = '+10 min'
-export const plus1Hour = '+1 hour'
-export const plus1Day = '+1 day'
-export const plus1Week = '+1 week'
-export const plus1Month = '+1 month'
-export const plus1Year = '+1 year'
-export const formatQaAccountNumber = (accountIndex: CopyTemplateValue) => `QA account ${accountIndex}`
+export const formatTimeAdvance = (amount: bigint, unit: 'min' | 'hour' | 'day' | 'week' | 'month' | 'year') => `+${amount} ${unit}`
+export const formatQaAccountNumber = (accountIndex: CopyTemplateValue) => `QA wallet ${accountIndex}`
 export const ready = 'Ready'
 export const readyWithWarningLabel = 'Ready with warning'
 export const warningLabel = 'Warning'
 export const formatOtherGenesisSavedStateLabel = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `${stateName} (${formatGenesisUniverse(genesisOutcome)})`
 export const formatSavedStateGenesisMismatchDetail = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `Saved simulation state "${stateName}" belongs to ${formatGenesisUniverse(genesisOutcome)}. Falling back to the baseline scenario.`
-export const bootstrapping = 'Bootstrapping'
+export const bootstrapping = 'Starting'
+export const startingSimulation = 'Starting simulation'
+export const loadingSavedSimulationState = 'Loading saved simulation state'
+export const scenarioSetupFailed = 'Could not prepare the simulation scenario.'
+export const formatGenesisRepTokenUpdateFailed = (expected: CopyTemplateValue, actual: CopyTemplateValue) => `Could not update the simulation genesis REP token. Expected ${expected}, received ${actual}.`
+export const exportBeforeScenarioReady = 'Wait for the simulation to finish starting before exporting its state.'
+export const mintBeforeScenarioReady = 'Wait for the simulation to finish starting before minting REP.'
+export const formatBlockOutsideActiveChain = (hash: string) => `Block ${hash} is no longer on the active chain.`
 export const formatSavedStateDetail = (stateName: CopyTemplateValue, scenarioLabel: CopyTemplateValue, savedAt: CopyTemplateValue) => `Custom state "${stateName}" based on ${scenarioLabel}. Saved ${savedAt}.`
 export const showSimulationDetails = 'Show details'
 export const hideSimulationDetails = 'Hide details'
@@ -34,8 +36,8 @@ export const preparingScenario = 'Preparing scenario…'
 export const simulationScenario = 'Simulation scenario'
 export const builtInScenarios = 'Built-in scenarios'
 export const savedStates = 'Saved states'
-export const qaAccount = 'QA account'
-export const simulationQaAccount = 'Simulation QA account'
+export const qaAccount = 'Selected address'
+export const simulationQaAccount = 'Simulation QA wallet address'
 export const blocks = 'Blocks'
 export const transactions = 'Transactions'
 export const blockchainTime = 'Blockchain time'

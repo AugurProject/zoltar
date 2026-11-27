@@ -1,18 +1,20 @@
+import { questionContractAddress } from '../../../copy/questionPage.js'
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
-import { getReportingContributionFunding, getReportingWalletDepositAmount } from '../../../lib/reportingFunding.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import { lostNoActionNeeded } from '../../../copy/reportingClaims.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { approveReportingRep, loadReportingDetails, reportOutcomeInQuestionLedger, withdrawEscalationFromQuestionLedger } from '../../../protocol/reporting.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome } from '../lib/reportingForm.js'
+import { getDefaultReportingFormState } from '../lib/reportingForm.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getEscalationDepositClaimAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -22,7 +24,7 @@ import { createReportingSuccessPresentation, createReportingTransactionIntent, c
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome } from '../../../types/app.js'
+import type { ReportingFormState } from '../../../types/app.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingActionResult, ReportingDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -30,11 +32,12 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 type UseReportingOperationsParameters = WriteOperationsParameters
 type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & {
 	selectedQuestionLedgerAddress?: string
+	includeSchedule?: boolean
 }
 
 export type UseReportingOperationsDependencies = {
 	approveReportingRep: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], questionLedgerAddress: Address, outcome: Parameters<typeof approveReportingRep>[2], amount: bigint) => ReturnType<typeof approveReportingRep>
-	loadReportingDetails: (questionLedgerAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadReportingDetails>
+	loadReportingDetails: (questionLedgerAddress: Address, accountAddress: Address | undefined, includeSchedule?: boolean) => ReturnType<typeof loadReportingDetails>
 	reportOutcomeInQuestionLedger: (
 		accountAddress: Address,
 		callbacks: Parameters<typeof createWalletWriteClient>[1],
@@ -42,7 +45,6 @@ export type UseReportingOperationsDependencies = {
 		outcome: Parameters<typeof reportOutcomeInQuestionLedger>[2],
 		amount: bigint,
 		reviewAmount?: bigint,
-		contributionFunding?: 'vault' | 'wallet',
 		triggersFork?: boolean,
 		requireLead?: boolean,
 	) => ReturnType<typeof reportOutcomeInQuestionLedger>
@@ -58,45 +60,16 @@ export type UseReportingOperationsDependencies = {
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount),
-	loadReportingDetails: async (questionLedgerAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), questionLedgerAddress, accountAddress),
-	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork, requireLead) =>
-		await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork, requireLead),
+	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(withStatoblastRequestTimeout(createConnectedReadClient(), reportingCopy.reportingRefreshTimedOut), questionLedgerAddress, accountAddress, includeSchedule),
+	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead) => await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead),
 	withdrawEscalationFromQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, depositIndexes, claimAmount),
 }
 
-function getAvailableWithdrawDepositIndexes(details: ReportingDetails, outcome: ReportingOutcomeKey) {
-	if (details.status !== 'active') return []
-	const side = details.sides.find(candidate => candidate.key === outcome)
-	return side?.userDeposits.map(deposit => deposit.depositIndex) ?? []
-}
-
-function filterAvailableWithdrawDepositIndexes(selectedDepositIndexes: bigint[], availableDepositIndexes: bigint[]) {
-	return selectedDepositIndexes.filter(index => availableDepositIndexes.includes(index))
-}
-
-function sameSelectedWithdrawDepositIndexes(left: bigint[], right: bigint[]) {
-	return left.length === right.length && left.every((value, index) => value === right[index])
-}
-
-function sameSelectedWithdrawDepositIndexesByOutcome(left: ReportingWithdrawDepositIndexesByOutcome, right: ReportingWithdrawDepositIndexesByOutcome) {
-	return sameSelectedWithdrawDepositIndexes(left.invalid, right.invalid) && sameSelectedWithdrawDepositIndexes(left.yes, right.yes) && sameSelectedWithdrawDepositIndexes(left.no, right.no)
-}
-
-function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: ReportingWithdrawDepositIndexesByOutcome, details: ReportingDetails) {
-	if (details.status !== 'active') return getDefaultReportingWithdrawDepositIndexesByOutcome()
-
-	return {
-		invalid: filterAvailableWithdrawDepositIndexes(currentSelections.invalid, getAvailableWithdrawDepositIndexes(details, 'invalid')),
-		yes: filterAvailableWithdrawDepositIndexes(currentSelections.yes, getAvailableWithdrawDepositIndexes(details, 'yes')),
-		no: filterAvailableWithdrawDepositIndexes(currentSelections.no, getAvailableWithdrawDepositIndexes(details, 'no')),
-	}
-}
-
 export function useReportingOperations(
-	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress }: ResolvedReportingOperationsParameters,
+	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress, includeSchedule = false }: ResolvedReportingOperationsParameters,
 	dependencies: UseReportingOperationsDependencies = defaultUseReportingOperationsDependencies,
 ) {
-	const reportingLoad = useLoadController()
+	const reportingLoad = useLoadController({ timeoutMilliseconds: false })
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())
@@ -121,12 +94,12 @@ export function useReportingOperations(
 		return actionName === 'reportOutcome' ? reportingCopy.submittingReportTitle : reportingCopy.settlingEscalationDepositsTitle
 	}
 	const getSuccessTitle = (actionName: ReportingActionResult['action']) => {
-		if (actionName === 'approveReportingRep') return 'Reporting REP approved'
-		return actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits settled'
+		if (actionName === 'approveReportingRep') return reportingCopy.repApproved
+		return actionName === 'reportOutcome' ? reportingCopy.reportSubmitted : reportingCopy.claimed
 	}
 	const getFailureTitle = (actionName: ReportingActionResult['action']) => {
-		if (actionName === 'approveReportingRep') return 'REP approval failed'
-		return actionName === 'reportOutcome' ? 'Report failed' : 'Settlement failed'
+		if (actionName === 'approveReportingRep') return reportingCopy.repApprovalFailed
+		return actionName === 'reportOutcome' ? reportingCopy.reportFailed : reportingCopy.claimFailed
 	}
 
 	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
@@ -135,28 +108,32 @@ export function useReportingOperations(
 	}
 	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey && currentAccountRef.current === accountAddress
 
-	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, 'Question ledger address')
+	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, questionContractAddress)
 
-	const loadReporting = async () => {
+	const readReporting = async (onReadError?: (error: unknown) => void) => {
 		const selectionKey = currentReportingSelectionKey
 		const isCurrentLoad = nextReportingLoad()
-		await reportingLoad.run({
+		return await reportingLoad.run({
 			isCurrent: () => isCurrentLoad() && isReportingSelectionCurrent(selectionKey),
 			onStart: () => {
 				reportingError.value = undefined
 			},
 			load: async () => {
 				const questionLedgerAddress = resolveReportingQuestionLedgerAddress()
-				return await dependencies.loadReportingDetails(questionLedgerAddress, accountAddress)
+				return await dependencies.loadReportingDetails(questionLedgerAddress, accountAddress, includeSchedule)
 			},
 			onSuccess: details => {
 				reportingDetails.value = details
 			},
-			onError: error => {
-				reportingDetails.value = undefined
-				reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
-			},
+			onError:
+				onReadError ??
+				(error => {
+					reportingError.value = getErrorMessage(error, reportingCopy.reportingReadFailed)
+				}),
 		})
+	}
+	const loadReporting = async () => {
+		await readReporting()
 	}
 
 	useEffect(() => {
@@ -224,7 +201,7 @@ export function useReportingOperations(
 					onWriteError: message => {
 						if (isCurrentSelection()) reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
-					refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
+					refreshErrorFallback: reportingCopy.postTransactionReportingRefreshFailed,
 					refreshState: async () => {
 						await refreshWalletStateOnly(refreshState)
 					},
@@ -242,17 +219,9 @@ export function useReportingOperations(
 					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					// A submitted report must not leave its amount behind for an accidental second report.
 					if (actionName === 'reportOutcome') setReportingForm(current => (current.reportAmount === '' ? current : { ...current, reportAmount: '' }))
-					const details = await dependencies.loadReportingDetails(result.questionLedgerAddress, accountAddress)
+					const details = await dependencies.loadReportingDetails(result.questionLedgerAddress, accountAddress, includeSchedule)
 					if (!isCurrentSelection()) return
 					reportingDetails.value = details
-					setReportingForm(current => {
-						const selectedWithdrawDepositIndexesByOutcome = pruneSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, details)
-						if (sameSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, selectedWithdrawDepositIndexesByOutcome)) return current
-						return {
-							...current,
-							selectedWithdrawDepositIndexesByOutcome,
-						}
-					})
 				},
 			)
 		} finally {
@@ -260,29 +229,27 @@ export function useReportingOperations(
 		}
 	}
 
-	const loadReportingContributionPreflight = async (walletAddress: Address, questionLedgerAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean, displayedDetails: ReportingDetails | undefined) => {
+	const loadReportingContributionPreflight = async (walletAddress: Address, questionLedgerAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => {
 		const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 		const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
-		if (reportAmount <= 0n) throw new Error('Invalid report amount.')
-		const displayedFunding = displayedDetails === undefined ? undefined : getReportingContributionFunding(displayedDetails, currentForm.contributionFunding)
+		if (reportAmount <= 0n) throw new Error(reportingCopy.invalidReportingAmount)
 		const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.reportingBlockedReason !== undefined) throw new Error(latestDetails.reportingBlockedReason)
-		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
+		if (latestDetails.systemState !== 'operational') throw new Error(reportingCopy.reportingUnavailable)
 		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
 		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
-		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would become dispute-staked for this report.')
+		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? reportingCopy.reportPreviewUnavailable)
 		const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)
 		if (contributionPreview.actualDepositAmount > remainingSelectedOutcomeCapacity) {
 			if (remainingSelectedOutcomeCapacity === 0n) throw new Error(reportingCopy.selectedSideCapacityEmpty)
-			throw new Error(`Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the non-decision threshold.`)
+			throw new Error(reportingCopy.reportingCapacityRemaining(formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')))
 		}
-		const contributionFunding = displayedFunding ?? getReportingContributionFunding(latestDetails, currentForm.contributionFunding)
 		const walletRepBalanceAttoRep = latestDetails.viewerWalletRepBalanceAttoRep ?? 0n
-		if (contributionPreview.actualDepositAmount > walletRepBalanceAttoRep) throw new Error(`Insufficient wallet REP. Add ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - walletRepBalanceAttoRep, 'REP')} before reporting.`)
+		if (contributionPreview.actualDepositAmount > walletRepBalanceAttoRep) throw new Error(reportingCopy.reportingBalanceShortfall(formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - walletRepBalanceAttoRep, 'REP')))
 		if (!isCurrentSelection()) return undefined
-		return { actualDepositAmount: contributionPreview.actualDepositAmount, walletDepositAmount: getReportingWalletDepositAmount(latestDetails, contributionPreview.actualDepositAmount), contributionFunding, latestDetails, reportAmount, selectedOutcome }
+		return { actualDepositAmount: contributionPreview.actualDepositAmount, latestDetails, reportAmount, selectedOutcome }
 	}
 
 	/** Approves the amount chosen in the approval control, or exactly this report's wallet deposit by default. */
@@ -290,16 +257,14 @@ export function useReportingOperations(
 		await runReportingAction(
 			'approveReportingRep',
 			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
-				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, reportingDetails.value)
+				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection)
 				if (preflight === undefined) return undefined
-				if (preflight.walletDepositAmount === undefined) throw new Error(reportingCopy.loadingVaultFunding)
-				if (preflight.contributionFunding !== 'wallet') throw new Error('This report uses vault backing and does not require wallet REP approval.')
-				const approvalAmountAttoRep = amountAttoRep ?? preflight.walletDepositAmount
+				const approvalAmountAttoRep = amountAttoRep ?? preflight.actualDepositAmount
 				const allowanceAttoRep = preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n
-				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.walletDepositAmount ? 'This question already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
+				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.actualDepositAmount ? reportingCopy.allowanceAlreadySufficient : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
-			'Failed to approve REP for reporting',
+			reportingCopy.reportingRepApprovalFailed,
 		)
 
 	const reportOutcome = async () => {
@@ -307,7 +272,7 @@ export function useReportingOperations(
 		await runReportingAction(
 			'reportOutcome',
 			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
-				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, displayedDetails)
+				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection)
 				if (preflight === undefined) return undefined
 				// The user confirmed the fork warning only if the displayed report already triggered the fork.
 				const triggersFork = reportingContributionTriggersFork(preflight.latestDetails, preflight.selectedOutcome, preflight.reportAmount)
@@ -315,7 +280,7 @@ export function useReportingOperations(
 					reportingDetails.value = preflight.latestDetails
 					throw new Error(reportingCopy.forkTriggerChangedSinceReview)
 				}
-				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < (preflight.walletDepositAmount ?? preflight.actualDepositAmount)) {
+				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < preflight.actualDepositAmount) {
 					throw new Error(reportingCopy.reportingRepApprovalRequired)
 				}
 				// Wallet deposits transferFrom the accepted amount against an approval sized to the preview, so cap the maximum at that previewed amount.
@@ -323,60 +288,49 @@ export function useReportingOperations(
 				// is submitted as the start bond the user offered; the pool still transfers only the previewed accepted amount.
 				const minimumOfferAttoRep = preflight.reportAmount < preflight.latestDetails.startBondAttoRep ? preflight.reportAmount : preflight.latestDetails.startBondAttoRep
 				const walletMaximumAttoRep = preflight.actualDepositAmount > minimumOfferAttoRep ? preflight.actualDepositAmount : minimumOfferAttoRep
-				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? walletMaximumAttoRep : preflight.reportAmount
 				const latestDetails = preflight.latestDetails
 				let requireLead = true
 				if (latestDetails.status === 'active') {
 					const selectedSide = latestDetails.sides.find(side => side.key === preflight.selectedOutcome)
-					if (selectedSide === undefined) throw new Error('The selected reporting outcome is unavailable.')
+					if (selectedSide === undefined) throw new Error(reportingCopy.reportingOutcomeUnavailable)
 					const resultingBalance = selectedSide.balance + preflight.actualDepositAmount
 					requireLead = triggersFork || latestDetails.sides.every(side => side.key === preflight.selectedOutcome || resultingBalance > side.balance)
 				}
 				return {
-					...(await dependencies.reportOutcomeInQuestionLedger(
-						walletAddress,
-						{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
-						questionLedgerAddress,
-						preflight.selectedOutcome,
-						maximumDepositAttoRep,
-						preflight.actualDepositAmount,
-						preflight.contributionFunding,
-						triggersFork,
-						requireLead,
-					)),
+					...(await dependencies.reportOutcomeInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, walletMaximumAttoRep, preflight.actualDepositAmount, triggersFork, requireLead)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},
-			'Failed to report on outcome',
+			reportingCopy.reportOutcomeFailed,
 		)
 	}
 
-	const withdrawEscalation = async (outcome: ReportingOutcomeKey, depositIndexesOverride?: bigint[]) =>
+	const withdrawEscalation = async (outcome: ReportingOutcomeKey, depositIndexes: bigint[]) =>
 		await runReportingAction(
 			'withdrawEscalation',
-			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
+			async (walletAddress, questionLedgerAddress, _currentForm, isCurrentSelection, context) => {
 				const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 				if (!isCurrentSelection()) return undefined
 				if (latestDetails.status !== 'active') {
-					throw new Error('Deposits cannot be settled until the first report starts the escalation game.')
+					throw new Error(reportingCopy.claimUnavailableBeforeReporting)
 				}
-				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
+				if (latestDetails.systemState === 'poolForked') throw new Error(reportingCopy.claimParentAfterResolution)
+				if (latestDetails.systemState === 'forkMigration') throw new Error(reportingCopy.forkMigrationRequiredDetail)
 				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
 				if (selectedSide === undefined) {
-					throw new Error('Unable to load deposits for the requested outcome side.')
+					throw new Error(reportingCopy.claimOutcomeUnavailable)
 				}
-				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
+				const availableDepositIndexes = selectedSide.userDeposits.map(deposit => deposit.depositIndex)
 
-				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning parent deposits in the child question after it finalizes; parent deposits do not need migration.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error(reportingCopy.claimParentAfterResolution)
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
+				if (latestDetails.questionOutcome !== outcome) throw new Error(lostNoActionNeeded)
 
-				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
-				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
+				const missingSelectedDepositIndex = depositIndexes.find(index => !availableDepositIndexes.includes(index))
 				if (missingSelectedDepositIndex !== undefined) {
-					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to settle on ${selectedSide.label}.`)
+					throw new Error(reportingCopy.claimDepositUnavailable(missingSelectedDepositIndex, selectedSide.label))
 				}
 
-				const depositIndexes = requestedDepositIndexes
 				if (depositIndexes.length === 0) {
 					throw new Error(reportingCopy.settlementSelectionRequired)
 				}
@@ -385,7 +339,7 @@ export function useReportingOperations(
 				const claimAmount = selectedSide.userDeposits.filter(deposit => depositIndexes.includes(deposit.depositIndex)).reduce((sum, deposit) => sum + (getEscalationDepositClaimAmount(latestDetails, outcome, deposit) ?? 0n), 0n)
 				return { ...(await dependencies.withdrawEscalationFromQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, outcome, depositIndexes, claimAmount)), amountAttoRep: claimAmount }
 			},
-			'Failed to settle escalation deposits',
+			reportingCopy.claimFailed,
 			outcome,
 		)
 
@@ -393,6 +347,7 @@ export function useReportingOperations(
 		onApproveReportingRep: approveRepForReporting,
 		loadingReportingDetails: reportingLoad.isLoading.value,
 		loadReporting,
+		readReporting,
 		onReportOutcome: reportOutcome,
 		reportingActiveAction: questionChanged ? undefined : reportingActiveAction.value,
 		reportingDetails: questionChanged ? undefined : reportingDetails.value,

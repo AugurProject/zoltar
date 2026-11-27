@@ -8,11 +8,12 @@ function createTrackingStoppedError() {
 }
 
 /** Ends a receipt wait as soon as the user stops tracking its transaction, instead of after the wait's own timeout. */
-async function untilTrackingStopped<TResult>(hash: Hash, work: Promise<TResult>) {
+async function untilTrackingStopped<TResult>(getHash: () => Hash, work: Promise<TResult>) {
 	let release: (() => void) | undefined
 	const stopped = new Promise<never>((_resolve, reject) => {
+		if (isTransactionTrackingStopped(getHash())) reject(createTrackingStoppedError())
 		release = subscribeTransactionTrackingStopped(stoppedHash => {
-			if (stoppedHash.toLowerCase() === hash.toLowerCase()) reject(createTrackingStoppedError())
+			if (stoppedHash.toLowerCase() === getHash().toLowerCase()) reject(createTrackingStoppedError())
 		})
 	})
 	try {
@@ -26,34 +27,48 @@ async function untilTrackingStopped<TResult>(hash: Hash, work: Promise<TResult>)
 export function createRecoveringReceiptWaiter(client: Pick<WriteClient, 'waitForTransactionReceipt' | 'getTransaction'>, callbacks: CreateWriteClientCallbacks): WriteClient['waitForTransactionReceipt'] {
 	return async parameters => {
 		if (isTransactionTrackingStopped(parameters.hash)) throw createTrackingStoppedError()
-		if (callbacks.onTransactionSubmitted === undefined) return await untilTrackingStopped(parameters.hash, client.waitForTransactionReceipt(parameters))
+		let hash = parameters.hash
+		const getHash = () => hash
 		let transaction = parameters.transaction
+		const { transaction: _originalTransaction, onReplaced, ...receiptRequest } = parameters
+		const waitParameters =
+			onReplaced === undefined
+				? receiptRequest
+				: {
+						...receiptRequest,
+						onReplaced: (replacement: Parameters<typeof onReplaced>[0]) => {
+							hash = replacement.transaction.hash
+							transaction = undefined
+							onReplaced(replacement)
+						},
+					}
+		if (callbacks.onTransactionSubmitted === undefined) return await untilTrackingStopped(getHash, client.waitForTransactionReceipt({ ...waitParameters, ...(transaction === undefined ? {} : { transaction }) }))
 		let uncertain = false
 		let lastReadError: unknown
 		while (callbacks.isCurrentEnvironment?.() !== false) {
-			if (isTransactionTrackingStopped(parameters.hash)) throw createTrackingStoppedError()
+			if (isTransactionTrackingStopped(hash)) throw createTrackingStoppedError()
 			try {
 				if (parameters.onReplaced !== undefined && transaction === undefined) {
 					try {
-						transaction = await client.getTransaction({ hash: parameters.hash })
+						transaction = await client.getTransaction({ hash })
 					} catch (error) {
 						lastReadError = error
 						// The receipt may already exist even if the original transaction was dropped.
 					}
 				}
-				const receipt = await untilTrackingStopped(parameters.hash, client.waitForTransactionReceipt({ ...parameters, ...(transaction === undefined ? {} : { transaction }) }))
+				const receipt = await untilTrackingStopped(getHash, client.waitForTransactionReceipt({ ...waitParameters, hash, ...(transaction === undefined ? {} : { transaction }) }))
 				if (callbacks.isCurrentEnvironment?.() === false) break
 				if (uncertain) callbacks.onTransactionSubmitted(receipt.transactionHash, 'pending')
 				return receipt
 			} catch (error) {
 				// The user released the transaction; never keep waiting for it.
-				if (isTransactionTrackingStopped(parameters.hash)) throw error
+				if (isTransactionTrackingStopped(hash)) throw error
 				lastReadError = error
 				// Re-read the receipt; never repeat the wallet submission.
 				if (callbacks.isCurrentEnvironment?.() === false) break
 				uncertain = true
-				callbacks.onTransactionSubmitted(parameters.hash, 'uncertain')
-				await untilTrackingStopped(parameters.hash, new Promise(resolve => setTimeout(resolve, parameters.pollingInterval ?? 5_000)))
+				callbacks.onTransactionSubmitted(hash, 'uncertain')
+				await untilTrackingStopped(getHash, new Promise(resolve => setTimeout(resolve, parameters.pollingInterval ?? 5_000)))
 			}
 		}
 		throw new Error('Transaction tracking stopped because the active network changed', { cause: lastReadError })

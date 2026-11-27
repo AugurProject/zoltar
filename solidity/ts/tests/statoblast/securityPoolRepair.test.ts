@@ -262,7 +262,7 @@ describe('Statoblast: permissionless settlement repair', () => {
 		for (const outcome of [0n, 1n, 2n]) await writeContractAndWait(other, () => other.writeContract({ abi: shareArtifact.abi, address: source.shareToken, functionName: 'migrate', args: [genesis * 256n + outcome, [1n]] }))
 		const collateral = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		await approveToken(owner, collateral, settlement)
-		await writeContractAndWait(other, () => other.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [1_000n, 0n, 0n] }))
+		await writeContractAndWait(other, () => other.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [1_000n, 0n] }))
 		const live = await deficit()
 		expect(live).toBeLessThan(quoted)
 		// The donor signed the stale quote as its maximum; the settlement pulls the live deficit.

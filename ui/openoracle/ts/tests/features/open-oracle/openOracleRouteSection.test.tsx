@@ -15,7 +15,6 @@ import type { OpenOracleActionResult, OpenOracleReportDetails } from '@zoltar/ui
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
-import { PriceRequestStatusSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -428,11 +427,11 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Standalone only. Start security-pool-managed requests from the security pool price panel.')).not.toBeNull()
+		expect(documentQueries.getByText('Standalone only. To report a security pool price, use its REP price tab.')).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Base token address' })).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Quote token address' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Standalone operator workflow')).toBe(false)
-		expect(document.body.textContent?.match(/security-pool-managed/gi) ?? []).toHaveLength(1)
+		expect(document.body.textContent?.match(/use its REP price tab/gi) ?? []).toHaveLength(1)
 	})
 
 	test('reviews lifecycle delays in human-readable and exact protocol units', async () => {
@@ -645,7 +644,7 @@ describe('OpenOracleSection route create view', () => {
 		// There is no swap-token selector: the lower proposed price swaps out the base token.
 		expect(dialog.querySelector('select')).toBeNull()
 		expect(dialog.textContent).toContain('Token to swap outREPv2')
-		expect(dialog.textContent).toContain('Proposed price0.15 WETH per REPv2')
+		expect(dialog.textContent).toContain('New price0.15 WETH per REPv2')
 		// 20 new + 10 bought out + 1 fee (10% of 10) REPv2; the 3 WETH posted comes from the 5 WETH bought out.
 		// Summary amounts use display rounding (payments round up like approvals); the exact amount stays in each value's title.
 		const dialogText = dialog.textContent?.replaceAll(' ', ' ')
@@ -689,11 +688,11 @@ describe('OpenOracleSection route create view', () => {
 		const fixedAmountField = within(dialog).getByText('New REPv2 amount').parentElement
 		expect(fixedAmountField?.querySelector('.field-read-only-value')?.textContent).toBe('20.00 REPv2')
 		expect(fixedAmountField?.querySelector('.field-read-only-value [title]')?.getAttribute('title')).toBe('20 REPv2')
-		const hint = within(dialog).getByText('Set by the report’s escalation rules.')
+		const hint = within(dialog).getByText('Set by the report’s dispute rules.')
 		expect(hint.classList.contains('field-hint')).toBe(true)
 		expect(hint.closest('.field-read-only-value, strong')).toBeNull()
 		// Without a valid quote amount the swap token is still pending; its explanation is prose, not a value.
-		const pendingSwapToken = within(dialog).getByText('Determined by the proposed price')
+		const pendingSwapToken = within(dialog).getByText('Determined by the new price')
 		expect(pendingSwapToken.closest('strong')).toBeNull()
 	})
 
@@ -929,7 +928,7 @@ describe('OpenOracleSection route create view', () => {
 			)
 			cleanupRenderedComponent = rendered.cleanup
 			expect(within(document.body).getByText(settled ? 'Settled after price expired' : 'Price expired')).not.toBeNull()
-			expect(document.body.textContent).toContain(settled ? 'Request a new price.' : 'Settlement will clear this report, but the security pool will reject its price.')
+			expect(document.body.textContent).toContain(settled ? 'Report a new price.' : 'Settlement will clear this report, but the security pool will reject its price.')
 			if (!settled) expectTransactionButtonEnabled(document.body, 'Settle report')
 		})
 	}
@@ -958,7 +957,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.body.querySelector('.lifecycle-stage-banner')).toBeNull()
 		expect(documentQueries.queryByText('This report is already settled and no further write actions are available.')).toBeNull()
 		expect(documentQueries.queryByText('This report is settled. No write actions are available.')).toBeNull()
-		for (const disclosureTitle of ['Status', 'Settlement', 'Callback / extra']) {
+		for (const disclosureTitle of ['Status', 'Settlement', 'Settlement add-ons']) {
 			const summary = documentQueries.getByText(disclosureTitle, { selector: 'summary' })
 			const disclosure = summary.closest('details')
 			if (!(disclosure instanceof HTMLElement)) throw new Error(`Expected ${disclosureTitle} disclosure`)
@@ -1157,7 +1156,7 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
-		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Escalation halt', 'Protocol fee (%)']) {
+		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Dispute limit', 'OpenOracle fee (%)']) {
 			expect(documentQueries.getByLabelText(label)).not.toBeNull()
 		}
 		expect((documentQueries.getByLabelText('Settlement delay (seconds)') as HTMLInputElement).value).toBe(defaultForm.settlementTime)
@@ -1185,9 +1184,9 @@ describe('OpenOracleSection route create view', () => {
 		const quoteTokenAddressInput = documentQueries.getByLabelText('Quote token address')
 		const feePercentageInput = documentQueries.getByLabelText('Dispute fee (%)')
 		const settlementTimeInput = documentQueries.getByLabelText('Settlement delay (seconds)')
-		const escalationHaltInput = documentQueries.getByLabelText('Escalation halt')
+		const escalationHaltInput = documentQueries.getByLabelText('Dispute limit')
 		const disputeDelayInput = documentQueries.getByLabelText('Dispute delay (seconds)')
-		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
+		const protocolFeeInput = documentQueries.getByLabelText('OpenOracle fee (%)')
 
 		expect(getDescriptionTexts(exactToken1ReportInput)).toEqual([])
 		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([])
@@ -1232,10 +1231,10 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText(openOracleCopy.settlerRewardHelpText)).not.toBeNull()
 		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before settlement can begin.')).toBeNull()
-		expect(documentQueries.getByText('Base token amount that ends escalation.')).not.toBeNull()
+		expect(documentQueries.getByText('Disputes can continue past this limit. The multiplier stops applying, and each dispute adds only the smallest unit of the base token to the bond.')).not.toBeNull()
 		expect(documentQueries.getByText('Parameter details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
-		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
+		expect(documentQueries.queryByText('OpenOracle fee charged during disputes, entered as a percentage.')).toBeNull()
 	})
 
 	test('associates progressive amount, timing, and cross-field create errors with their inputs', async () => {
@@ -1258,7 +1257,7 @@ describe('OpenOracleSection route create view', () => {
 		const baseTokenAmountInput = documentQueries.getByLabelText('Base token amount')
 		const settlementTimeInput = documentQueries.getByLabelText('Settlement delay (seconds)')
 		const feePercentageInput = documentQueries.getByLabelText('Dispute fee (%)')
-		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
+		const protocolFeeInput = documentQueries.getByLabelText('OpenOracle fee (%)')
 
 		await act(() => {
 			fireEvent.input(baseTokenAmountInput, { target: { value: '.' } })
@@ -1304,7 +1303,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(settlementTimeInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(protocolFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
-		expectPoliteFieldError('Dispute fee plus protocol fee must not exceed 100%.')
+		expectPoliteFieldError('Dispute fee plus OpenOracle fee must not exceed 100%.')
 		expect(documentQueries.getByRole('button', { name: 'Create standalone OpenOracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 	})
 
@@ -1400,7 +1399,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
-	test('keeps both report surfaces on the same chain clock and live settlement countdown', async () => {
+	test('uses the chain clock for the live settlement countdown', async () => {
 		const reportProps = createOpenOracleSectionProps({
 			activeView: 'selected-report',
 			openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
@@ -1409,16 +1408,13 @@ describe('OpenOracleSection route create view', () => {
 		})
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
-				<section aria-label='Statoblast report'>
-					<PriceRequestStatusSection {...reportProps} />
-				</section>
 				<section aria-label='OpenOracle report'>
 					<OpenOracleSection {...reportProps} />
 				</section>
 			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const surfaces = ['Statoblast report', 'OpenOracle report'].map(name => within(document.body).getByRole('region', { name }))
+		const surfaces = ['OpenOracle report'].map(name => within(document.body).getByRole('region', { name }))
 		for (const surface of surfaces) {
 			expect(within(surface).getByText('Can settle in 2s')).not.toBeNull()
 			expect(within(surface).getByText('Dispute window closing')).not.toBeNull()

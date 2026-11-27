@@ -23,7 +23,7 @@ describe('Security pool question ETH custody boundaries', () => {
 		}
 		expect(await quote()).toBeLessThanOrEqual(before)
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' })).toBe(supply)
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [supply, 0n, 0n] }))
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [supply, 0n] }))
 	})
 
 	test('the native forker no longer accepts auction ETH', async () => {

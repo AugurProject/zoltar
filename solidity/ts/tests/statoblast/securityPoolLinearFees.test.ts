@@ -171,23 +171,25 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'demandAttoEth' })).toBe(demand)
 	})
 
-	test('#1633 reviewed redemption pays the checkpointed quote at the same timestamp', async () => {
+	test('#1633 native redemption accepts accrued holding fees without a collateral minimum', async () => {
 		await fixture.prepare()
 		const client = fixture.other()
 		await fixture.mint(100n * unit)
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
+		const shares = unit
+		const reviewedCash = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares] })
 		await fixture.base.mockWindow.advanceTime(120n)
 		const saved = await fixture.base.mockWindow.anvilSnapshot()
 		await fixture.base.mockWindow.advanceTime(1n)
-		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
-		const shares = unit
 		const publicQuote = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares] })
 		const quote = await loadCompleteSetRedemptionQuote(client, pool, shares, await client.getBlockNumber())
 		expect(quote.cash).toBe(publicQuote)
+		expect(quote.cash).toBeLessThan(reviewedCash)
 		expect(quote.cash).toBeLessThan(shares)
 		const token = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		const before = await getERC20Balance(client, token, client.account.address)
 		await fixture.base.mockWindow.anvilRevert(saved)
-		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [shares, 0n, 0n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [shares, 0n] }))
 		expect((await getERC20Balance(client, token, client.account.address)) - before).toBe(quote.cash)
 	})
 

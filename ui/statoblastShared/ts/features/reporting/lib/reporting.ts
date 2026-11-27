@@ -2,7 +2,6 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 import type { EscalationSide, ReportingDetails } from '../../../types/contracts.js'
 import { getEscalationPhase, getStrictLeadingEscalationOutcome, isPoolQuestionFinalized } from './reportingDomain.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { formatTimestampWithRelative } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 const REPORTING_OUTCOME_OPTIONS: { key: ReportingOutcomeKey; label: string }[] = [
 	{ key: 'invalid', label: 'Invalid' },
@@ -33,10 +32,6 @@ export function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none') 
 		default:
 			return assertNever(outcome)
 	}
-}
-
-export function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp: bigint | undefined) {
-	return `Reporting opens when this question ends: ${formatTimestampWithRelative(endTime, currentTimestamp)}.`
 }
 
 export function hasReportingOpened(endTime: bigint, currentTimestamp: bigint | undefined) {

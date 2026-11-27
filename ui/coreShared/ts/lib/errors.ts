@@ -88,8 +88,10 @@ export function isRecoverableContractReadError(error: unknown) {
 
 const recoverableQuoteErrorPatterns = ['mock pricing', 'no uniswap', 'pool', 'quote', 'quoter', 'simulation mode', 'uniswap']
 
+export class RecoverableQuoteError extends Error {}
+
 export function isRecoverableQuoteError(error: unknown) {
-	if (isRecoverableContractReadError(error)) return true
+	if (error instanceof RecoverableQuoteError || isRecoverableContractReadError(error)) return true
 	return error instanceof Error && recoverableQuoteErrorPatterns.some(pattern => error.message.toLowerCase().includes(pattern))
 }
 

@@ -9,6 +9,7 @@ import type { SimulationScenario } from './scenarios.js'
 import { withTimeout } from '../lib/promise.js'
 import { MAX_ATTO_REP, REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { formatGenesisRepTokenUpdateFailed } from '../copy/simulation.js'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
@@ -76,7 +77,7 @@ async function seedAccountBalances(memoryClient: TevmLikeClient, accounts: reado
 	for (const [index, account] of accounts.entries()) {
 		await memoryClient.impersonateAccount({ address: account })
 		await memoryClient.setBalance({ address: account, value: ETH_BALANCE_AMOUNT })
-		await reportBootstrapProgress(onProgress, `Funding QA account ${index + 1} of ${accounts.length}`, 0.05 + ((index + 1) / Math.max(accounts.length, 1)) * 0.08)
+		await reportBootstrapProgress(onProgress, `Funding test wallet ${index + 1} of ${accounts.length}`, 0.05 + ((index + 1) / Math.max(accounts.length, 1)) * 0.08)
 	}
 }
 
@@ -153,7 +154,7 @@ export async function updateZoltarGenesisRepToken({ createWriteClient, memoryCli
 		args: [GENESIS_UNIVERSE_ID],
 	})
 	if (patchedRepToken.toLowerCase() !== repAddress.toLowerCase()) {
-		throw new Error(`Failed to patch simulation Zoltar genesis REP token. Expected ${repAddress}, received ${patchedRepToken}.`)
+		throw new Error(formatGenesisRepTokenUpdateFailed(repAddress, patchedRepToken))
 	}
 }
 
@@ -276,7 +277,7 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 			value: WETH_TOKEN_MINT_AMOUNT,
 		})
 		await writeClient.waitForTransactionReceipt({ hash })
-		await reportBootstrapProgress(onProgress, `Wrapping ETH for QA account ${index + 1} of ${accounts.length}`, 0.24 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
+		await reportBootstrapProgress(onProgress, `Wrapping ETH for test wallet ${index + 1} of ${accounts.length}`, 0.24 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
 	}
 }
 
@@ -330,7 +331,7 @@ type CoreScenarioApplyParameters = {
 }
 
 async function applyCoreScenario({ accounts, createWriteClient, getDeploymentSteps, memoryClient, onProgress, profile, scenario }: CoreScenarioApplyParameters) {
-	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
+	const primaryAccount = requireQaAccount(accounts[0], 'Could not find the first simulation wallet.')
 
 	switch (scenario) {
 		case 'baseline':
@@ -345,6 +346,7 @@ async function applyCoreScenario({ accounts, createWriteClient, getDeploymentSte
 }
 
 export type BootstrapScenarioApplyParameters = {
+	onSeededSecurityPool?: ((pool: import('./savedStates.js').SeededSecurityPool) => void) | undefined
 	accounts: readonly Address[]
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
@@ -362,6 +364,7 @@ export async function bootstrapSimulationChain({
 	getDeploymentSteps,
 	memoryClient,
 	onProgress,
+	onSeededSecurityPool,
 	primaryAccount,
 	profile,
 	scenario,
@@ -369,6 +372,7 @@ export async function bootstrapSimulationChain({
 }: {
 	accounts: readonly Address[]
 	applyScenario?: (parameters: BootstrapScenarioApplyParameters) => Promise<boolean>
+	onSeededSecurityPool?: BootstrapScenarioApplyParameters['onSeededSecurityPool']
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
 	getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[]
@@ -381,8 +385,8 @@ export async function bootstrapSimulationChain({
 	zoltarAddress: Address
 }) {
 	setRuntimeNetworkProfile(profile)
-	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
-	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Reload the page to retry.')
+	await reportBootstrapProgress(onProgress, 'Starting the simulation', 0.01)
+	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation startup timed out. Reload the page to retry.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)
@@ -405,6 +409,7 @@ export async function bootstrapSimulationChain({
 					createWriteClient,
 					memoryClient,
 					onProgress,
+					onSeededSecurityPool,
 					profile,
 					scenario,
 				})

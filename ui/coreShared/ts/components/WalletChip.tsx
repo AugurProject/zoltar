@@ -8,11 +8,11 @@ function chipClassName(tone: WalletChipTone) {
 }
 
 /** Responsive account identity for the toolbar with separate explorer and copy controls. */
-export function WalletChip({ address, tone = 'ok', widthConstraint }: { address: string; tone?: WalletChipTone; widthConstraint?: AddressWidthConstraint | undefined }) {
+export function WalletChip({ address, tone = 'ok', longAbbreviation = false, widthConstraint }: { address: string; tone?: WalletChipTone; longAbbreviation?: boolean; widthConstraint?: AddressWidthConstraint | undefined }) {
 	return (
 		<span className={chipClassName(tone)}>
 			<span className='wallet-chip-dot' aria-hidden='true' />
-			<AddressValue address={address} widthConstraint={widthConstraint} />
+			<AddressValue address={address} longAbbreviation={longAbbreviation} widthConstraint={widthConstraint} />
 		</span>
 	)
 }

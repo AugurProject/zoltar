@@ -9,6 +9,7 @@ type AccountMenuProps = {
 	/** Wallet actions such as change, switch network, and disconnect; omitted where the wallet is managed elsewhere. */
 	actions?: ComponentChildren
 	address: string
+	longAbbreviation?: boolean | undefined
 	/** Balance and price groups shown in the popover. */
 	metrics?: ComponentChildren
 	/** Network facts for the popover, such as the active network and the latest block. */
@@ -20,15 +21,15 @@ type AccountMenuProps = {
  * The top bar's account identity and independent disclosure control for balances, network details,
  * and wallet actions. The address remains copyable and linked while the popover is closed.
  */
-export function AccountMenu({ actions, address, metrics, network, tone = 'ok' }: AccountMenuProps) {
+export function AccountMenu({ actions, address, metrics, network, longAbbreviation = false, tone = 'ok' }: AccountMenuProps) {
 	const popover = useDisclosurePopover()
 	const controlsRef = useRef<HTMLSpanElement>(null)
 	const widthConstraint = useMemo(() => ({ slot: popover.containerRef, control: controlsRef }), [popover.containerRef])
 	return (
 		<div className='account-menu' ref={popover.containerRef}>
 			<span className='account-menu-controls' ref={controlsRef}>
-				<WalletChip address={address} tone={tone} widthConstraint={widthConstraint} />
-				<button {...popover.triggerProps} className='account-menu-trigger' aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(address))} onClick={popover.toggle}>
+				<WalletChip address={address} longAbbreviation={longAbbreviation} tone={tone} widthConstraint={widthConstraint} />
+				<button {...popover.triggerProps} className='account-menu-trigger' aria-label={appCopy.formatAccountMenuLabel(longAbbreviation ? address : abbreviateAddress(address))} onClick={popover.toggle}>
 					<span className='account-menu-caret' aria-hidden='true' />
 				</button>
 			</span>

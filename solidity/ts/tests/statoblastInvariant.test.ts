@@ -32,7 +32,7 @@ describe('Security pool cross-question conservation model', () => {
 			expect(await balanceOfShares(buyer, fixture.poolFor(id).shareToken, fixture.base.genesisUniverse, buyer.account.address)).toEqual([outstanding, outstanding, outstanding])
 		}
 		const second = fixture.poolFor(fixture.secondQuestionId)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: second.questionLedger, functionName: 'redeemCompleteSet', args: [1n, 0n, 0n] }))
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: second.questionLedger, functionName: 'redeemCompleteSet', args: [1n, 0n] }))
 		expect(await capacity()).toBe(1n)
 		await fixture.mint(1n, fixture.base.questionId)
 		expect(await capacity()).toBe(0n)
@@ -80,7 +80,7 @@ describe('Security pool cross-question conservation model', () => {
 				if (question.cash !== 0n && random(3n) === 0n) {
 					const amount = random(question.cash) + 1n
 					const before = await collateralBalance(trader, fixture.securityPool, trader.account.address)
-					const hash = await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: question.questionLedger, functionName: 'redeemCompleteSet', args: [amount, 0n, 0n] }))
+					const hash = await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: question.questionLedger, functionName: 'redeemCompleteSet', args: [amount, 0n] }))
 					const receipt = await trader.waitForTransactionReceipt({ hash })
 					expect(receipt.status).toBe('success')
 					expect(await collateralBalance(trader, fixture.securityPool, trader.account.address)).toBe(before + amount)
@@ -93,7 +93,7 @@ describe('Security pool cross-question conservation model', () => {
 				await verify()
 			}
 			for (const question of questions) {
-				if (question.cash !== 0n) await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: question.questionLedger, functionName: 'redeemCompleteSet', args: [question.cash, 0n, 0n] }))
+				if (question.cash !== 0n) await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: question.questionLedger, functionName: 'redeemCompleteSet', args: [question.cash, 0n] }))
 				question.cash = 0n
 				await verify()
 			}

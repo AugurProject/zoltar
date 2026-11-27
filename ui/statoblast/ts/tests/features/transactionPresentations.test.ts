@@ -39,7 +39,7 @@ describe('transaction presentations', () => {
 		expect(unconfirmed.tone).toBe('warning')
 		expect(unconfirmed.title).toBe('Report settled; price acceptance unconfirmed')
 		const rejected = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Report uneconomic' } })
-		expect(rejected.detail).toBe('Security pool rejected this price: Report uneconomic. Request a new price.')
+		expect(rejected.detail).toBe('Security pool rejected this price: Report uneconomic. Report a new price.')
 		const deferred = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'deferred', maxSettlementBaseFee: 33n * 10n ** 9n } })
 		expect(deferred.tone).toBe('warning')
 		expect(deferred.title).toBe('Report settled; price pending recovery')
@@ -50,25 +50,25 @@ describe('transaction presentations', () => {
 		const priceSettlement = { status: 'accepted' as const, candidate: { candidatePrice: 2n * 10n ** 30n, canonicalPrice: 3n * 10n ** 30n, observationTimestamp: 11n, canonicalUpdated: false } }
 		const context = { priceUnits: { decimals: 30, label: 'REP per USDC' } }
 		const result = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement }, context)
-		expect(result.detail).toBe('Report accepted. The feed kept its canonical observation.')
+		expect(result.detail).toBe('Report accepted. The pool price stayed the same.')
 		expect(result.rows).toMatchObject([
 			{ label: 'Candidate price', value: { props: { children: '2 REP per USDC' } } },
-			{ label: 'Canonical price', value: { props: { children: '3 REP per USDC' } } },
+			{ label: 'Pool price', value: { props: { children: '3 REP per USDC' } } },
 		])
 		const updated = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { ...priceSettlement, candidate: { ...priceSettlement.candidate, candidatePrice: 3n * 10n ** 30n, canonicalUpdated: true } } }, context)
-		expect(updated.detail).toBe('Report accepted. The feed updated its canonical observation.')
+		expect(updated.detail).toBe('Report accepted. The pool price was updated.')
 	})
 
 	test.each(['Security pool reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
 		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason } })
-		expect(presentation.detail).not.toContain('Request a new price')
+		expect(presentation.detail).not.toContain('Report a new price')
 	})
 
 	test('shows a stale coordinator rejection as a warning after successful report settlement', () => {
 		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Report stale' } })
 		expect(presentation.tone).toBe('warning')
 		expect(presentation.title).toBe('Report settled; price rejected')
-		expect(presentation.detail).toBe('Price expired before settlement. Request a new price.')
+		expect(presentation.detail).toBe('Price expired before settlement. Report a new price.')
 	})
 
 	test('describes OpenOracle settlement as a report lifecycle action', () => {
@@ -91,10 +91,10 @@ describe('transaction presentations', () => {
 		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
-		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Question ledger', 'Share outcome'])
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Question contract', 'Share outcome'])
 		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
-		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Question ledger', 'Outcome'])
+		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Question contract', 'Outcome'])
 	})
 
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
@@ -112,8 +112,8 @@ describe('transaction presentations', () => {
 		]
 
 		for (const { intent, presentation } of cases) {
-			expect(intent.rows?.[0]?.label).toBe('Question ledger')
-			expect(presentation.rows?.[0]?.label).toBe('Question ledger')
+			expect(intent.rows?.[0]?.label).toBe('Question contract')
+			expect(presentation.rows?.[0]?.label).toBe('Question contract')
 			expect(intent.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(presentation.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(intent.universeId).toBe(7n)

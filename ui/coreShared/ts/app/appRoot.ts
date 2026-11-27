@@ -17,6 +17,7 @@ type MountAppOptions = {
 	initialize?: () => Promise<unknown>
 	/** Independent applications can boot without choosing a Zoltar genesis deployment. */
 	requireGenesisSelection?: boolean
+	renderGenesisEntry?: (onSelect: (outcome: GenesisOutcome) => Promise<void>) => ComponentChildren
 	root?: () => ComponentChildren
 	target?: Element
 }
@@ -55,7 +56,7 @@ function ApplicationErrorBoundary({ root, genesisOutcome }: ApplicationProps) {
 export async function mountApp(options: MountAppOptions) {
 	const initialize = options.initialize ?? initializeActiveEnvironment
 	const rootOption = options.root
-	if (rootOption === undefined) throw new Error('mountApp requires a root component factory')
+	if (rootOption === undefined) throw new Error('mountApp requires a function that renders the root component')
 	const root = rootOption
 	const target = options.target ?? document.body
 	// Only capture the static fallback, the page's top-level frame, on startup; later mounts must leave Preact's frame alone.
@@ -65,16 +66,11 @@ export async function mountApp(options: MountAppOptions) {
 	applyThemePreference(readThemePreference())
 	if (options.requireGenesisSelection !== false && genesisOutcome === undefined) {
 		if (startupPlaceholder !== target) startupPlaceholder?.remove()
-		render(
-			createElement(GenesisUniverseEntry, {
-				applicationTitle: options.applicationTitle,
-				onSelect: async outcome => {
-					window.history.replaceState({}, '', getGenesisUniverseHref(outcome))
-					await mountApp(options)
-				},
-			}),
-			target,
-		)
+		const onSelect = async (outcome: GenesisOutcome) => {
+			window.history.replaceState({}, '', getGenesisUniverseHref(outcome))
+			await mountApp(options)
+		}
+		render(options.renderGenesisEntry?.(onSelect) ?? createElement(GenesisUniverseEntry, { applicationTitle: options.applicationTitle, onSelect }), target)
 		return
 	}
 	try {

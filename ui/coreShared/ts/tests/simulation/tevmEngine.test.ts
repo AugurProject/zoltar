@@ -106,7 +106,7 @@ describe('simulation engine prepared states', () => {
 		const restoredFacts = { ...expected, currentTimestamp: expected.currentTimestamp + 1n }
 		expect(await readChainFacts(engine)).toEqual(restoredFacts)
 		expect(engine.getState().currentSource).toEqual({ kind: 'scenario', scenario: 'baseline' })
-		expect(labels).not.toContain('Funding QA account 1 of 3')
+		expect(labels).not.toContain('Funding test wallet 1 of 3')
 
 		await engine.advanceTime(500n)
 		await engine.reset()
@@ -123,13 +123,13 @@ describe('simulation engine prepared states', () => {
 		const labels: Array<string | undefined> = []
 		mismatched.subscribe(() => labels.push(mismatched.getState().bootstrapLabel))
 		await mismatched.bootstrap({ scenarioSnapshot, scenarioSnapshotKey: 'other-key' })
-		expect(labels).toContain('Funding QA account 1 of 3')
+		expect(labels).toContain('Funding test wallet 1 of 3')
 
 		const matching = await createSimulationEngine({ dependencies: bundled, initialization: { kind: 'scenario', scenario: 'baseline' } })
 		const matchingLabels: Array<string | undefined> = []
 		matching.subscribe(() => matchingLabels.push(matching.getState().bootstrapLabel))
 		await matching.bootstrap({ scenarioSnapshot, scenarioSnapshotKey: 'bundle-key' })
-		expect(matchingLabels).not.toContain('Funding QA account 1 of 3')
+		expect(matchingLabels).not.toContain('Funding test wallet 1 of 3')
 		expect(matchingLabels).toContain('Loading prepared simulation scenario')
 	}, 60_000)
 
@@ -221,13 +221,13 @@ describe('simulation engine prepared states', () => {
 		engine.subscribe(() => labels.push(engine.getState().bootstrapLabel))
 		await engine.bootstrap({ scenarioSnapshot: foreign })
 		expect(engine.getState().isBootstrapped).toBe(true)
-		expect(labels).toContain('Funding QA account 1 of 3')
+		expect(labels).toContain('Funding test wallet 1 of 3')
 
 		const otherUniverse = await createSimulationEngine({ dependencies, genesisOutcome: 'no', initialization: { kind: 'scenario', scenario: 'baseline' } })
 		const universeLabels: Array<string | undefined> = []
 		otherUniverse.subscribe(() => universeLabels.push(otherUniverse.getState().bootstrapLabel))
 		await otherUniverse.bootstrap({ scenarioSnapshot: await seeded.exportState('yes universe') })
-		expect(universeLabels).toContain('Funding QA account 1 of 3')
+		expect(universeLabels).toContain('Funding test wallet 1 of 3')
 	}, 60_000)
 })
 

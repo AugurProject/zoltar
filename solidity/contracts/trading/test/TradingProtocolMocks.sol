@@ -288,7 +288,7 @@ contract TradingMockQuestionLedger {
 		shareToken.mintCompleteSets(universeId, msg.sender, amount);
 	}
 
-	function redeemCompleteSet(uint256 amount, uint256, uint256) external {
+	function redeemCompleteSet(uint256 amount, uint256) external {
 		uint256 ethAmount = attoSharesToAttoEth(amount);
 		shareToken.burnCompleteSets(universeId, msg.sender, amount);
 		shareTokenSupplyAttoShares -= amount;

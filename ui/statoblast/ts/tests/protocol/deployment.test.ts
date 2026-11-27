@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, keccak256, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getStatoblastUiDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { assertDeploymentStepRuntimeCode } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 const simulationProfile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: '0x1000000000000000000000000000000000000001', wethAddress: '0x2000000000000000000000000000000000000002' })
 const ORACLE_CREATION_CODE = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}` as const
@@ -29,6 +30,49 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
 		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'questionLedgerEventEmitter', 'questionLedgerOperationsDelegate'])
+	})
+
+	test('uses plain labels for the universe deployment steps', () => {
+		const steps = getDeploymentSteps(simulationProfile)
+		expect(steps.find(step => step.id === 'zoltar')?.label).toBe('Universe contract')
+		expect(steps.find(step => step.id === 'zoltarQuestionData')?.label).toBe('Question data contract')
+	})
+
+	test('deployment labels use product wording even for individual contracts', () => {
+		const internalLabels = /(?:zoltar|ledger|proof|cohort|callback|admission|factory|deployer|module|index|book|coordinator|services)/i
+		expect(
+			getDeploymentSteps(simulationProfile)
+				.filter(step => internalLabels.test(step.label))
+				.map(step => step.label),
+		).toEqual([])
+	})
+
+	test('a deployment code mismatch uses the display label of the universe contract', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			const universeStep = getDeploymentSteps(MAINNET_NETWORK_PROFILE).find(step => step.id === 'zoltar')
+			if (universeStep?.expectedRuntimeCodeHash === undefined) throw new Error('Expected the universe deployment step and contract hash')
+			const invalidCode = '0x6000'
+			await expect(
+				loadDeploymentStatusOracleSnapshot({
+					getCode: async ({ address }) => (address === universeStep.address ? invalidCode : '0x'),
+					readContract: async ({ functionName }) => {
+						throw new Error(`Unexpected read without a status oracle: ${functionName}`)
+					},
+				}),
+			).rejects.toThrow(`Unexpected contract code for Universe contract at ${universeStep.address}: expected ${universeStep.expectedRuntimeCodeHash}, received ${keccak256(invalidCode)}`)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('the missing expected hash message keeps the underlying ID private in Statoblast', () => {
+		const universeStep = getStatoblastUiDeploymentSteps(MAINNET_NETWORK_PROFILE).find(step => step.id === 'zoltar')
+		if (universeStep === undefined) throw new Error('Expected the universe deployment step')
+		const stepWithoutHash = { id: universeStep.id, address: universeStep.address }
+		const stepWithDisplayLabel = { ...stepWithoutHash, verificationLabel: universeStep.verificationLabel }
+		expect(() => assertDeploymentStepRuntimeCode(stepWithDisplayLabel, '0x6000')).toThrow('Could not verify the contract code for deployment step Universe contract on the active network')
+		expect(() => assertDeploymentStepRuntimeCode(stepWithoutHash, '0x6000')).toThrow('Could not verify the contract code for deployment step zoltar on the active network')
 	})
 
 	test('deploys independent fork and auction modules with verified runtime code', async () => {

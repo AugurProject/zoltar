@@ -15,9 +15,9 @@ import type { ShareMigrationTarget, ShareMigrationTargetsState, TradingShareBala
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 
-export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No vault has an active commitment.'
-export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes, No, and Invalid shares to redeem complete sets.'
-export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this question has complete-set shares but no collateral.'
+export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = tradingCopy.noMintCapacityWithoutCommitment
+export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = tradingCopy.matchingCompleteSetSharesRequired
+export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = tradingCopy.completeSetExchangeRateUnavailable
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
 /** True once an ordinary or fork-continuation escalation game has started. The flags stay set after the game, so use `isMintingPausedByEscalation` to tell a paused operating pool from one that finalization or a fork closed. */
@@ -259,36 +259,36 @@ export function getTradingMintGuardMessage({
 	shareTokenSupplyAttoShares: bigint | undefined
 	totalPoolHeldAttoRep: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Select a question before minting.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('minting complete sets') })
+	if (!hasSelectedPool) return tradingCopy.mintQuestionSelectionRequired
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore(tradingCopy.mintCompleteSetsWalletAction) })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const questionEndReason = getMintingQuestionEndReason(currentTimestamp, questionEndTime)
 	if (questionEndReason !== undefined) return questionEndReason
 	if (escalationGameActive) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (undefinedExchangeRate === undefined) return 'Loading mint capacity…'
+	if (undefinedExchangeRate === undefined) return tradingCopy.loadingMintCapacity
 	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 	const remainingCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (!usesSharedBacking && remainingCapacity === undefined) return 'Loading mint capacity…'
+	if (!usesSharedBacking && remainingCapacity === undefined) return tradingCopy.loadingMintCapacity
 	if (!usesSharedBacking && remainingCapacity === 0n) {
 		if ((totalPoolHeldAttoRep ?? 0n) > 0n && mintingCapacityAttoEth === 0n) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
-		return 'No mint capacity remaining.'
+		return tradingCopy.noRemainingMintCapacity
 	}
 
 	const trimmedAmount = mintAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.mintAmountRequired
 	const mintAmount = parseCompleteSetAmountInput(trimmedAmount, collateral?.decimals ?? 18)
-	if (mintAmount === undefined) return 'Enter a valid mint amount.'
+	if (mintAmount === undefined) return tradingCopy.enterValidMintAmount
 
 	if (mintAmount <= 0n) return tradingCopy.mintAmountRequired
-	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, collateral?.symbol ?? 'ETH', collateral?.decimals ?? 18)}.`
+	if (!usesSharedBacking && remainingCapacity !== undefined && mintAmount > remainingCapacity) return tradingCopy.formatMaxMintCapacity(formatCurrencyBalanceWithUnit(remainingCapacity, collateral?.symbol ?? 'ETH', collateral?.decimals ?? 18))
 	if (collateral !== undefined) return collateral.balance < mintAmount ? collateralCopy.formatInsufficientBalance(collateral.symbol) : undefined
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
-	if (mintAmount > spendableEthAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH')} in this wallet to mint the selected amount and keep ${formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH')} for gas.`
+	if (mintAmount > spendableEthAttoEth) return tradingCopy.formatMintWalletFundingRequired(formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH'), formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH'))
 	return undefined
 }
 
@@ -303,30 +303,28 @@ export function getTradingRedeemCompleteSetGuardMessage({
 }: {
 	shareDecimals?: number
 	accountAddress: Address | undefined
-	settlementCollateralAttoEth: bigint | undefined
 	hasSelectedPool: boolean
 	isOnActiveAppChain: boolean
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
-	shareTokenSupplyAttoShares: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Select a question before redeeming complete sets.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('redeeming complete sets') })
+	if (!hasSelectedPool) return tradingCopy.redeemSetsQuestionSelectionRequired
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore(tradingCopy.redeemCompleteSetsWalletAction) })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (loadingTradingDetails) return 'Loading wallet share balances…'
+	if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 	const maxRedeemableCompleteSetsAttoShares = getMaxRedeemableCompleteSets(shareBalances)
-	if (maxRedeemableCompleteSetsAttoShares === undefined) return 'Loading wallet share balances…'
+	if (maxRedeemableCompleteSetsAttoShares === undefined) return tradingCopy.loadingWalletShareBalances
 	if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
 	if (trimmedAmount === '') return tradingCopy.redeemAmountRequired
 	const redeemAmount = parseCompleteSetAmountInput(trimmedAmount, shareDecimals)
-	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
+	if (redeemAmount === undefined) return tradingCopy.enterValidRedeemAmount
 
 	if (redeemAmount <= 0n) return tradingCopy.redeemAmountRequired
-	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets', shareDecimals)}.`
+	if (redeemAmount > maxRedeemableCompleteSetsAttoShares) return tradingCopy.formatMaxRedeemableAmount(formatCurrencyBalanceWithUnit(maxRedeemableCompleteSetsAttoShares, 'sets', shareDecimals))
 	return undefined
 }
 
@@ -353,8 +351,8 @@ export function getTradingMigrateSharesGuardMessage({
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
-	if (!hasSelectedPool) return 'Select a question before migrating shares.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('migrating shares') })
+	if (!hasSelectedPool) return tradingCopy.migrateSharesQuestionSelectionRequired
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore(tradingCopy.migrateSharesWalletAction) })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniverses
 	if (tradingForkUniverse === undefined) return tradingCopy.forkTargetsRefreshRequired
@@ -362,18 +360,18 @@ export function getTradingMigrateSharesGuardMessage({
 
 	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
 	if (targetOutcomeIndexes === undefined) {
-		if (targetOutcomeIndexesInput.trim() !== '') return 'Select valid target child universes.'
-		if (loadingTradingDetails) return 'Select at least one target child universe.'
-		return getEmptyShareMigrationDefaultReason({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse }) ?? 'Select at least one target child universe.'
+		if (targetOutcomeIndexesInput.trim() !== '') return tradingCopy.invalidShareMigrationTargets
+		if (loadingTradingDetails) return tradingCopy.shareMigrationTargetRequired
+		return getEmptyShareMigrationDefaultReason({ selectedShareOutcome, shareBalances, shareMigrationTargets, tradingForkUniverse }) ?? tradingCopy.shareMigrationTargetRequired
 	}
-	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return 'Select each target child universe only once.'
+	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return tradingCopy.duplicateShareMigrationTarget
 
-	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
-	if (loadingTradingDetails) return 'Loading wallet share balances…'
+	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return tradingCopy.invalidShareMigrationTargets
+	if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
-	if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances…'
-	if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(selectedShareOutcome)} shares available to migrate.`
+	if (selectedOutcomeBalance === undefined) return tradingCopy.loadingWalletShareBalances
+	if (selectedOutcomeBalance === 0n) return tradingCopy.formatNoSharesToMigrate(getReportingOutcomeLabel(selectedShareOutcome))
 	if (shareMigrationTargets === undefined) return tradingCopy.loadingShareMigrationTargetPools
 	if ('unavailableReason' in shareMigrationTargets) return shareMigrationTargets.unavailableReason
 	return getShareMigrationTargetBlocker(shareMigrationTargets, targetOutcomeIndexes, selectedShareOutcome, selectedOutcomeBalance)

@@ -18,16 +18,16 @@ function fixture() {
 
 describe('standing commitment keeper planning', () => {
 	for (const kind of ['redeem', 'winning'] as const) {
-		test(`native ${kind} signs explicit zero payout floors`, () => {
+		test(`native ${kind} signs an explicit zero recovery REP floor`, () => {
 			const { snapshot, pool } = fixture()
 			pool.projectedSettlementCollateralAttoEth = pool.shareTokenSupplyAttoShares
 			if (kind === 'winning') pool.questionOutcome = 1
 			const plan = completeSetDefinition(kind).buildPlan(snapshot, options)
 			const step = plan?.steps[0]
 			if (step === undefined) throw new Error('Expected native redemption plan')
-			const decoded = decodeFunctionData({ abi: parseAbi(['function redeemCompleteSet(uint256,uint256,uint256)', 'function redeemShares(uint256,uint256)']), data: step.data })
+			const decoded = decodeFunctionData({ abi: parseAbi(['function redeemCompleteSet(uint256,uint256)', 'function redeemShares(uint256)']), data: step.data })
 			expect(decoded.functionName).toBe(kind === 'redeem' ? 'redeemCompleteSet' : 'redeemShares')
-			expect(decoded.args.slice(-2)).toEqual([0n, 0n])
+			expect(decoded.args.slice(-1)).toEqual([0n])
 		})
 	}
 

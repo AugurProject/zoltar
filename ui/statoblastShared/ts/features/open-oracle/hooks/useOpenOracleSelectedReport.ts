@@ -71,7 +71,7 @@ export function useOpenOracleSelectedReport({
 				openOracleWithdrawableBalances.value = balances
 			},
 			onError: error => {
-				openOracleWithdrawableBalancesError.value = getErrorMessage(error, 'Failed to load OpenOracle balances')
+				openOracleWithdrawableBalancesError.value = getErrorMessage(error, openOracleCopy.balancesReadFailed)
 			},
 		})
 	}
@@ -120,7 +120,7 @@ export function useOpenOracleSelectedReport({
 				const reportIdValue = reportIdInput?.trim() ?? openOracleForm.value.reportId
 				const reportId = parseReportIdInput(reportIdValue)
 				const details = await loadOracleReportById(reportId)
-				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) throw new Error('Stale oracle report load')
+				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) throw new Error(openOracleCopy.staleReportRead)
 				return { details, reportId } satisfies LoadedOracleReportResult
 			},
 			onSuccess: ({ details }: LoadedOracleReportResult) => {
@@ -135,7 +135,7 @@ export function useOpenOracleSelectedReport({
 				resetOpenOracleTokenAccessState(false)
 				const reportMissing = isOpenOracleReportMissingError(error)
 				openOracleReportLookupState.value = reportMissing ? 'missing' : 'load-failed'
-				openOracleError.value = reportMissing ? undefined : getErrorMessage(error, 'Failed to load OpenOracle report')
+				openOracleError.value = reportMissing ? undefined : getErrorMessage(error, openOracleCopy.reportReadFailed)
 			},
 		})
 	}
@@ -145,7 +145,7 @@ export function useOpenOracleSelectedReport({
 		if (!forceReload && openOracleReportDetails.value !== undefined && loadedOpenOracleReportId.value === reportId) return { reportId, details: openOracleReportDetails.value }
 
 		const details = await loadOracleReportById(reportId)
-		if (requireCurrentSelection && !isSelectedReportCurrent(selectedReportIdInput)) throw new Error('Selected report changed. Review the current report and try again.')
+		if (requireCurrentSelection && !isSelectedReportCurrent(selectedReportIdInput)) throw new Error(openOracleCopy.selectedReportChanged)
 		applyLoadedOracleReport(details)
 
 		return {
@@ -155,7 +155,7 @@ export function useOpenOracleSelectedReport({
 	}
 
 	const assertSelectedReportCurrent = (reportIdInput: string) => {
-		if (!isSelectedReportCurrent(reportIdInput)) throw new Error('Selected report changed. Review the current report and try again.')
+		if (!isSelectedReportCurrent(reportIdInput)) throw new Error(openOracleCopy.selectedReportChanged)
 	}
 
 	const requireLoadedCurrentSelectedReport = () => {

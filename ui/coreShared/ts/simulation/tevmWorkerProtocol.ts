@@ -1,6 +1,6 @@
 import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { SimulationScenario } from './scenarios.js'
-import type { SimulationInitialization, SimulationSource } from './savedStates.js'
+import type { SeededSecurityPool, SimulationInitialization, SimulationSource } from './savedStates.js'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 export type SimulationWorkerState = {
@@ -16,6 +16,7 @@ export type SimulationWorkerState = {
 	queryDelayMilliseconds: number
 	repPerEthPrice: bigint
 	repPerUsdcPrice: bigint
+	seededSecurityPool?: SeededSecurityPool | undefined
 	selectedAccount: Address
 	transactionCountSinceReset: bigint
 	transactionDelayMilliseconds: number

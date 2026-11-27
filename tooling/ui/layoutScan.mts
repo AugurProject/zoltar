@@ -291,7 +291,7 @@ async function openSession(chromiumPath: string, baseUrl: string, scenario: stri
 	await session.send('Page.addScriptToEvaluateOnNewDocument', { source: HELPER_SOURCE })
 	await session.send('Page.navigate', { url: pageUrl })
 	const title = APP_TITLES[app]
-	await session.waitFor(`document.readyState === 'complete' && document.body.innerText.includes(${quote(title)}) && !document.body.innerText.includes('BOOTSTRAPPING') && !document.body.innerText.includes('Starting simulation')`, {
+	await session.waitFor(`document.readyState === 'complete' && document.body.innerText.includes(${quote(title)}) && document.querySelector('.simulation-strip-progress') === null`, {
 		attempts: APP_READY_ATTEMPTS,
 		intervalMilliseconds: 250,
 		retryFailures: true,
