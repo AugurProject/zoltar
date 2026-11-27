@@ -75,14 +75,17 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 	const waitingReasonId = model.serveReason === copy.waitingForFreeCapacity ? `${capitalId}-waiting` : undefined
 	const previewCommitment = model.commitmentAttoEth ?? snapshot?.ownerCommitmentAttoEth
 	const previewTarget = model.healthBps
-	const addRep = model.healthDepositAmount.trim() !== '' && model.healthDepositAttoRep !== 0n
-	const targetChanged = model.healthBps !== (snapshot?.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps)
 	const increasing = !queued && snapshot !== undefined && model.commitmentAttoEth !== undefined && model.commitmentAttoEth > snapshot.ownerCommitmentAttoEth
 	const reducing = model.reducing && currentPosition !== undefined
+	const addRep = !reducing && model.healthDepositAmount.trim() !== '' && model.healthDepositAttoRep !== 0n
+	const targetChanged = !reducing && model.healthBps !== (snapshot?.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps)
 	const previewPrincipal = (snapshot?.ownerPrincipalAttoRep ?? 0n) + (model.healthDepositAttoRep ?? 0n)
-	const commitmentShortfall = priceCurrent && increasing && model.requiredCollateral !== undefined && model.requiredCollateral > previewPrincipal ? model.requiredCollateral - previewPrincipal : undefined
 	const previewReady = priceCurrent && snapshot !== undefined && previewCommitment !== undefined && previewTarget !== undefined && previewTarget >= minimumSecurityPoolHealthFactorBps && previewTarget < 1n << 256n
 	const previewRep = previewReady ? requiredSecurityPoolCollateral(snapshot, previewCommitment, model.proofPrice, previewTarget) : undefined
+	const commitmentShortfall = increasing && previewRep !== undefined && previewRep > previewPrincipal ? previewRep - previewPrincipal : undefined
+	const defaultCommitmentHint = snapshot === undefined ? undefined : copy.newCommitmentHint(snapshot.collateral.symbol, currentPosition !== undefined && !increasing)
+	const commitmentHint = commitmentShortfall === undefined ? defaultCommitmentHint : copy.commitmentShortfall(formatCurrencyBalanceWithUnit(commitmentShortfall, common.rep))
+	const targetShortfallHint = commitmentShortfall !== undefined || model.targetShortfall === undefined || model.targetShortfall === 0n ? undefined : copy.repToReachTarget(formatCurrencyBalanceWithUnit(model.targetShortfall, common.rep))
 	let estimatedWithdrawal: bigint | undefined
 	if (previewRep !== undefined) estimatedWithdrawal = previewPrincipal > previewRep ? previewPrincipal - previewRep : 0n
 	const currentRep = priceCurrent && snapshot !== undefined ? requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth) : undefined
@@ -205,7 +208,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 				{snapshot !== undefined && queuedReduction !== undefined && (
 					<div>
 						<SecurityPoolRetirementPreview snapshot={snapshot} position={queuedReduction} />
-						<UserMessage detail={copy.reductionTradeoff} />
+						<UserMessage detail={copy.reductionLiquidationRisk} />
 						{waitingReasonId !== undefined && (
 							<span className='visually-hidden' id={waitingReasonId}>
 								{copy.waitingForFreeCapacity}
@@ -215,15 +218,15 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 					</div>
 				)}
 				{!queued && !reducing && <UserMessage tone='warning' detail={liquidationNotice} />}
-				<details>
-					<summary>{copy.howTargetWorks}</summary>
-					<UserMessage detail={copy.healthHint} />
-				</details>
+				{!reducing && (
+					<details>
+						<summary>{copy.howTargetWorks}</summary>
+						<UserMessage detail={copy.healthHint} />
+					</details>
+				)}
 				<div className='statoblast-capital-plan'>
 					<div>
-						{!queued && (
-							<SecurityPoolInput label={copy.newCommitment} hint={commitmentShortfall === undefined ? snapshot?.collateral.symbol : copy.commitmentShortfall(formatCurrencyBalanceWithUnit(commitmentShortfall, common.rep))} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled} numeric />
-						)}
+						{!queued && <SecurityPoolInput label={copy.newCommitment} hint={commitmentHint} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled} numeric />}
 						{snapshot !== undefined && !queued && (
 							<div className='statoblast-capital-presets'>
 								<button type='button' className='secondary' disabled={disabled} onClick={() => model.setCommitmentAmount(formatUnits(snapshot.ownerCommitmentAttoEth, snapshot.collateral.decimals))}>
@@ -232,15 +235,12 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 								<ActionLauncherButton tone='secondary' idleLabel={common.max} pendingLabel={common.max} availability={{ disabled: targetCapacityReason !== undefined, reason: targetCapacityReason }} onClick={model.useTargetCapacity} />
 							</div>
 						)}
-						<SecurityPoolInput label={copy.health} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
-						<SecurityPoolInput
-							label={copy.optionalHealthDeposit}
-							hint={model.targetShortfall === undefined || model.targetShortfall === 0n ? undefined : copy.repToReachTarget(formatCurrencyBalanceWithUnit(model.targetShortfall, common.rep))}
-							value={model.healthDepositAmount}
-							onChange={model.setHealthDepositAmount}
-							disabled={disabled}
-							numeric
-						/>
+						{!reducing && (
+							<>
+								<SecurityPoolInput label={copy.health} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
+								<SecurityPoolInput label={copy.optionalHealthDeposit} hint={targetShortfallHint} value={model.healthDepositAmount} onChange={model.setHealthDepositAmount} disabled={disabled} numeric />
+							</>
+						)}
 						{!queued && !reducing && (
 							<details>
 								<summary>{copy.olderPriceReport}</summary>
@@ -270,8 +270,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 						</table>
 					)}
 				</div>
-				{reducing && <UserMessage detail={copy.queueHint} />}
-				{reducing && <UserMessage detail={copy.reductionTradeoff} />}
+				{reducing && <UserMessage detail={copy.reductionHint} />}
 				{(addRep || targetChanged || increasing || reducing) && (
 					<ol className='statoblast-capital-actions'>
 						{addRep && (model.healthDepositAttoRep === undefined || snapshot === undefined || snapshot.allowanceAttoRep < model.healthDepositAttoRep) && <li>{healthApproval}</li>}

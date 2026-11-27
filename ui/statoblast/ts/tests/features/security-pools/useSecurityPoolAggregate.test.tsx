@@ -189,6 +189,8 @@ test('target-sized retirement sends a fixed residual without silently saving an 
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [7_142_857_142_857_142_857n] })
 	expect(request.reviewDescription).toContain('saved health target stays unchanged')
 	expect(request.reviewDescription).toContain('change or cancel the queued reduction')
+	expect(request.reviewDescription).toContain('Your full current commitment stays active and can be liquidated until the reduction is released.')
+	expect(request.reviewDescription).toContain('Reducing lowers your share of future fees.')
 	await request.validateBeforeSubmit?.()
 	expect(request.readReviewRows?.()).toEqual([{ label: 'Commitment when reduction completes', value: '10 → 7.142857142857142857 WETH' }])
 })
@@ -289,6 +291,9 @@ test('personal health and exact commitment consent are rechecked after the revie
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('health target changed')
 	transport.setSnapshot(capitalSnapshot({ ownerPrincipalAttoRep: 31n * unit }))
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('pledged REP changed')
+	const largerCommitment = capitalSnapshot({ ownerCommitmentAttoEth: 12n * unit })
+	transport.setSnapshot({ ...largerCommitment, positions: largerCommitment.positions.map(position => ({ ...position, commitment: 12n * unit })) })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Queue a reduction to lower an existing commitment.')
 })
 test('custom admission blocks new underwriting while keeping existing owners exits available', async () => {
 	const snapshot = capitalSnapshot()

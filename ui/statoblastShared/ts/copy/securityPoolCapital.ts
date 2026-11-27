@@ -37,7 +37,10 @@ export const olderPriceReport = 'Use an older funded price report'
 export const setCommitment = 'Set commitment'
 export const increaseCommitment = 'Increase commitment'
 export const commitmentShortfall = (amount: string) => `Add ${amount} to back this commitment.`
-export const reductionTradeoff = 'Any commitment still active can be liquidated while you wait. Lowering it usually reduces your share of future fees.'
+export const reductionLiquidationRisk = 'Your full current commitment stays active and can be liquidated until the reduction is released.'
+const reductionTradeoff = `${reductionLiquidationRisk} Reducing lowers your share of future fees.`
+export const reductionHint = `A reduction can complete right away if there’s enough free capacity. Queued reductions complete in order and can’t be changed. ${reductionTradeoff}`
+export const newCommitmentHint = (unit: string, suggestReduction: boolean) => (suggestReduction ? `Enter a lower amount in ${unit} to queue a reduction.` : `Enter the total you want to back in ${unit}.`)
 export const afterReduction = 'After reduction'
 export const currentCommitmentPreset = 'Current'
 export const howTargetWorks = 'How the target works'
@@ -109,8 +112,7 @@ export const previewBacking = 'REP needed for target'
 export const previewMaximum = 'Max commitment'
 export const previewBefore = 'Current'
 export const previewAfter = 'After changes'
-export const queueHint = 'A reduction can complete right away if capacity is free. Queued reductions complete in order and can’t be changed.'
-export const queueCommitment = 'Current commitment → queued target'
+export const queueCommitment = 'Current and queued commitment'
 export const queueAhead = 'Ahead of you'
 export const queueYourReduction = 'Your reduction'
 export const requestReduction = 'Queue reduction'
