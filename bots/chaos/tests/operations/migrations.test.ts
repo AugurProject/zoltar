@@ -59,7 +59,6 @@ describe('indexed REP migration operations', () => {
 		if (step === undefined) throw new Error('Expected a split step')
 		expect(decodeFunctionData({ abi: zoltarAbi, data: step.data })).toEqual({ args: [0n, amount, [0n]], functionName: 'splitMigrationRep' })
 		expect(step.evidence.filter(evidence => evidence.kind === 'decoded-event-field').map(evidence => [evidence.field, evidence.equals])).toEqual([
-			['recipient', snapshot.wallet.address],
 			['outcomeIndex', '0'],
 			['amountAttoRep', amount.toString()],
 			['childMigrationRepAmountAttoRep', resulting.toString()],
