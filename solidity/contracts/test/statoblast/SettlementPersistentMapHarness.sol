@@ -17,16 +17,8 @@ contract SettlementPersistentMapHarness {
 		frozenRoots.push(0);
 	}
 
-	function set(uint256 rootIndex, uint256 key, uint256 value, uint256 weight) external {
-		roots.push(tree.set(roots[rootIndex], key, value, weight));
-	}
-
-	function setModular(uint256 rootIndex, uint256 key, uint256 value, uint256 weight) external {
-		roots.push(tree.setModular(roots[rootIndex], key, value, weight));
-	}
-
-	function prefixTotalModular(uint256 rootIndex, uint256 cutoff) external view returns (uint256) {
-		return tree.prefixTotalModular(roots[rootIndex], cutoff);
+	function set(uint256 rootIndex, uint256 key, uint256 value) external {
+		roots.push(tree.set(roots[rootIndex], key, value));
 	}
 
 	function appendFrozen(uint256 rootIndex, uint48 timestamp, uint256 value) external {
@@ -37,19 +29,11 @@ contract SettlementPersistentMapHarness {
 		return frozenHistory.ceiling(frozenRoots[rootIndex], timestamp);
 	}
 
-	function prefixTotal(uint256 rootIndex, uint256 cutoff) external view returns (uint256) {
-		return tree.prefixTotal(roots[rootIndex], cutoff);
-	}
-
 	function get(uint256 rootIndex, uint256 key) external view returns (uint256) {
 		return tree.get(roots[rootIndex], key);
 	}
 
 	function floor(uint256 rootIndex, uint256 key) external view returns (uint256) {
 		return tree.floor(roots[rootIndex], key);
-	}
-
-	function total(uint256 rootIndex) external view returns (uint256) {
-		return tree.total(roots[rootIndex]);
 	}
 }

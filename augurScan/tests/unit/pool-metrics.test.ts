@@ -112,7 +112,7 @@ test('samples source-owned frozen book cash and the authoritative winning outcom
 				scaledQuestion: [{ units: 52n, outcomeSupplyAttoShares: 100n, finalAfter: 7n }, frozen],
 				frozenBooks: [500n, 600n, source, 0n],
 				securityPoolTime: clock,
-				books: [0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, false, 5n, 0n, 0n, 0n],
+				books: [0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, false, 5n, 0n, 0n, 0n],
 			}
 			return values[name]
 		})

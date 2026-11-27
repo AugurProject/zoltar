@@ -1098,10 +1098,9 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 	let address: Address
 	const target = () => ({ abi: mapArtifact.abi, address })
 	// A synthetic 256-level key path exceeds the per-transaction gas cap; production keys are far shallower, so stress writes may set gas.
-	const set = (root: bigint, key: bigint, value: bigint, weight = value, gas?: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'set', args: [root, key, value, weight], ...(gas === undefined ? {} : { gas }) }))
+	const set = (root: bigint, key: bigint, value: bigint, gas?: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'set', args: [root, key, value], ...(gas === undefined ? {} : { gas }) }))
 	const get = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'get', args: [root, key] })
-	const prefix = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'prefixTotalModular', args: [root, key] })
-	const total = (root: bigint) => client.readContract({ ...target(), functionName: 'total', args: [root] })
+	const floor = (root: bigint, key: bigint) => client.readContract({ ...target(), functionName: 'floor', args: [root, key] })
 
 	beforeAll(async () => {
 		const ethereum = getAnvilWindowEthereum()
@@ -1113,7 +1112,7 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		await setBaselineSnapshot()
 	})
 
-	test('full-width keys, replacements, deletions and prefix reads preserve old snapshots', async () => {
+	test('full-width keys, replacements, deletions and predecessor reads preserve old snapshots', async () => {
 		const high = 1n << 255n
 		await set(0n, high, 7n)
 		await set(1n, 0n, 3n)
@@ -1121,30 +1120,14 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		await set(3n, 99n, 13n)
 		await set(4n, high, 17n)
 		await set(5n, 99n, 0n)
-		expect(await total(4n)).toBe(34n)
-		expect(await total(6n)).toBe(31n)
 		expect(await get(4n, high)).toBe(7n)
 		expect(await get(6n, high)).toBe(17n)
-		expect(await prefix(6n, high - 1n)).toBe(3n)
-		expect(await prefix(6n, high)).toBe(20n)
-		expect(await prefix(6n, (1n << 256n) - 1n)).toBe(31n)
-		expect(await prefix(4n, high)).toBe(23n)
+		expect(await floor(6n, high - 1n)).toBe(3n)
+		expect(await floor(6n, high)).toBe(17n)
+		expect(await floor(6n, (1n << 256n) - 1n)).toBe(11n)
+		expect(await floor(4n, high - 1n)).toBe(13n)
 		expect(await get(4n, 99n)).toBe(13n)
 		expect(await get(6n, 99n)).toBe(0n)
-	})
-
-	test('only finality maps wrap cumulative weights and checked maps still reject overflow', async () => {
-		const maximum = (1n << 256n) - 1n
-		const modular = (root: bigint, key: bigint, value: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'setModular', args: [root, key, value, value] }))
-		await modular(0n, 1n, maximum)
-		await expect(set(1n, 2n, maximum)).rejects.toThrow()
-		await modular(1n, 2n, maximum)
-		expect(await prefix(2n, 0n)).toBe(0n)
-		expect(await prefix(2n, 1n)).toBe(maximum)
-		expect(await prefix(2n, 2n)).toBe(maximum - 1n)
-		await modular(2n, 2n, 0n)
-		expect(await prefix(3n, 2n)).toBe(maximum)
-		expect(await prefix(2n, 2n)).toBe(maximum - 1n)
 	})
 
 	test('constant-work frozen history appends match sorted ceilings across immutable fork snapshots', async () => {
@@ -1159,7 +1142,7 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 			const timestamp = (prior.at(-1)?.timestamp ?? 0) + 1 + Number(seed % 13n)
 			const value = (1n << 248n) + BigInt(index)
 			const hash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'appendFrozen', args: [BigInt(parent), timestamp, value] }))
-			await set(BigInt(parent), BigInt(timestamp), value, 1n)
+			await set(BigInt(parent), BigInt(timestamp), value)
 			expect(await client.readContract({ ...target(), functionName: 'frozenRoots', args: [BigInt(index)] })).toBe(BigInt(index))
 			const gas = (await client.waitForTransactionReceipt({ hash })).gasUsed
 			if (gas > maximumGas) maximumGas = gas
@@ -1192,37 +1175,11 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 		for (let bit = 0; bit < 48; bit++) await set(BigInt(bit + 1), 1n << BigInt(bit), 1n)
 		const replacement = await client.waitForTransactionReceipt({ hash: await set(49n, 0n, 2n) })
 		expect(replacement.gasUsed).toBeLessThanOrEqual(16_777_216n)
-		expect(await prefix(50n, 0n)).toBe(2n)
-		expect(await prefix(50n, (1n << 48n) - 1n)).toBe(50n)
-		expect(await client.readContract({ ...target(), functionName: 'prefixTotal', args: [50n, 0n] })).toBe(2n)
-		expect(await client.readContract({ ...target(), functionName: 'prefixTotal', args: [50n, (1n << 48n) - 1n] })).toBe(50n)
-		expect(await client.readContract({ ...target(), functionName: 'floor', args: [50n, 0n] })).toBe(2n)
-		expect(await client.readContract({ ...target(), functionName: 'floor', args: [50n, (1n << 48n) - 1n] })).toBe(1n)
-		expect(await total(49n)).toBe(49n)
+		expect(await get(50n, 0n)).toBe(2n)
+		expect(await get(49n, 0n)).toBe(1n)
+		expect(await floor(50n, 0n)).toBe(2n)
+		expect(await floor(50n, (1n << 48n) - 1n)).toBe(1n)
 		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ timestampDepth: 48, replacementGas: replacement.gasUsed })
-	})
-
-	test('empty maturity prefixes preserve their original root without copying the timestamp path', async () => {
-		for (let bit = 0; bit < 48; bit++) await set(BigInt(bit), 1n << BigInt(bit), 1n)
-		const root = await client.readContract({ ...target(), functionName: 'roots', args: [48n] })
-		const gas = await client.estimateContractGas({ ...target(), functionName: 'prefixTotalModular', args: [48n, 0n] })
-		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ emptyTimestampPrefixGas: gas })
-		expect(gas).toBeLessThan(500_000n)
-		expect(await prefix(48n, 0n)).toBe(0n)
-		expect(await client.readContract({ ...target(), functionName: 'roots', args: [48n] })).toBe(root)
-		expect(await total(48n)).toBe(48n)
-	})
-
-	test('a fully matured timestamp tree reuses its original root and keeps old snapshots immutable', async () => {
-		const maximum = (1n << 48n) - 1n
-		for (let bit = 0; bit < 48; bit++) await set(BigInt(bit), maximum - (1n << BigInt(bit)), 1n)
-		const root = await client.readContract({ ...target(), functionName: 'roots', args: [48n] })
-		const gas = await client.estimateContractGas({ ...target(), functionName: 'prefixTotalModular', args: [48n, maximum] })
-		if (process.env['COMMITMENT_REPORT_GAS'] === '1') console.log({ completeTimestampPrefixGas: gas })
-		expect(gas).toBeLessThan(500_000n)
-		expect(await prefix(48n, maximum)).toBe(48n)
-		expect(await client.readContract({ ...target(), functionName: 'roots', args: [48n] })).toBe(root)
-		expect(await total(48n)).toBe(48n)
 	})
 
 	test('mixed immutable updates agree with independent sorted-map lookups and prefix boundaries', async () => {
@@ -1238,7 +1195,6 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 			root++
 			values.set(key, value)
 			snapshots.push(new Map(values))
-			expect(await total(root)).toBe([...values.values()].reduce((a, b) => a + b, 0n))
 		}
 		const keys = [...values.keys()].sort((a, b) => {
 			if (a === b) return 0
@@ -1253,8 +1209,8 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 				if (model === undefined) throw new Error('Missing persistent map snapshot')
 				for (const cutoff of [key - 1n, key, key + 1n, (1n << 256n) - 1n]) {
 					if (cutoff < 0n) continue
-					const expected = [...model.entries()].filter(([candidate]) => candidate <= cutoff).reduce((sum, [, value]) => sum + value, 0n)
-					expect(await prefix(BigInt(snapshot), cutoff)).toBe(expected)
+					const predecessor = [...model.keys()].filter(candidate => candidate <= cutoff).reduce<bigint | undefined>((best, candidate) => (best === undefined || candidate > best ? candidate : best), undefined)
+					expect(await floor(BigInt(snapshot), cutoff)).toBe(predecessor === undefined ? 0n : (model.get(predecessor) ?? 0n))
 				}
 			}
 		}
@@ -1267,20 +1223,19 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 			await set(root, 1n << BigInt(bit), 1n)
 			root++
 		}
-		expect(await total(root)).toBe(257n)
-		const gas = await client.estimateContractGas({ ...target(), functionName: 'set', args: [root, 0n, 2n, 2n] })
+		expect(await get(root, 1n << 255n)).toBe(1n)
+		const gas = await client.estimateContractGas({ ...target(), functionName: 'set', args: [root, 0n, 2n] })
 		expect(gas).toBeLessThan(25_000_000n)
-		await set(root, 0n, 2n, 2n, 25_000_000n)
+		await set(root, 0n, 2n, 25_000_000n)
 		expect(await get(root + 1n, 0n)).toBe(2n)
 		expect(await get(root, 0n)).toBe(1n)
-		expect(await prefix(root + 1n, 0n)).toBe(2n)
-		expect(await prefix(root, 0n)).toBe(1n)
-		expect(await prefix(root + 1n, (1n << 256n) - 1n)).toBe(258n)
-		await set(root + 1n, 0n, 0n, 0n, 25_000_000n)
-		expect(await total(root + 2n)).toBe(256n)
+		expect(await floor(root + 1n, 0n)).toBe(2n)
+		expect(await floor(root, 0n)).toBe(1n)
+		expect(await floor(root + 1n, (1n << 256n) - 1n)).toBe(1n)
+		await set(root + 1n, 0n, 0n, 25_000_000n)
 		expect(await get(root + 2n, 0n)).toBe(0n)
-		expect(await prefix(root + 2n, 0n)).toBe(0n)
+		expect(await floor(root + 2n, 0n)).toBe(0n)
+		expect(await floor(root + 2n, 1n)).toBe(1n)
 		expect(await get(root + 1n, 0n)).toBe(2n)
-		expect(await total(root)).toBe(257n)
 	})
 })

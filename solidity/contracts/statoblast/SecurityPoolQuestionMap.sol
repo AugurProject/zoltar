@@ -29,6 +29,6 @@ library SecurityPoolQuestionMap {
 			index = ++self.lastIndex;
 			self.indices[questionId] = index;
 		}
-		return self.tree.set(root, index, value, 0);
+		return self.tree.set(root, index, value);
 	}
 }

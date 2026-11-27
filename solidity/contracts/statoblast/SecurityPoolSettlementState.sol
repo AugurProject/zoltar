@@ -33,7 +33,6 @@ abstract contract SecurityPoolSettlementState {
 		uint48 securityPoolTimestamp;
 		bool isSealed;
 		uint64 feeRateRoot;
-		uint64 feeEndRoot;
 		uint64 feeModeRoot;
 		bool feesEnabled;
 		uint48 minimumFinalAfter;
@@ -70,13 +69,13 @@ abstract contract SecurityPoolSettlementState {
 	/// @dev Modular corrections keep a question's REP entitlement independent of
 	/// rounded collateral claim units. Units and REP custody are each below 2^128, so the true
 	/// scaled entitlement fits uint256 even when the cumulative index wraps.
-	/// Fork roots key each index increment by its native fork fee time: the
-	/// increment itself and that increment times the funded seconds at the fork.
-	/// They price lazily materialized fees at the index each fee unit held.
+	/// The fork root keys each index increment by its native fork fee time plus one:
+	/// units hold the increment and corrections that increment times the funded
+	/// seconds at the fork. It prices lazily materialized fees at the index each
+	/// fee unit held.
 	struct RecoveryState {
 		uint256 index;
-		uint64 forkIncrementRoot;
-		uint64 forkWeightRoot;
+		uint64 forkRoot;
 		uint256 finalizedPrefix;
 	}
 
@@ -115,7 +114,7 @@ contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
 	address private immutable host = msg.sender;
 
 	function writeQuestion(uint64 bookId, uint256 questionId, Question memory state, uint256 correction, uint64 frozenBookId) external {
-		require(address(this) == host, 'Only settlement book context');
+		_requireHost();
 		Book storage book = books[bookId];
 		StoredQuestionState storage stored = questionStates[uint64(questionMap.get(book.questionRoot, questionId))];
 		Question storage previous = stored.question;
@@ -136,5 +135,25 @@ contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
 		uint64 stateId = ++lastQuestionStateId;
 		questionStates[stateId] = StoredQuestionState({question: state, recoveryCorrection: correction, recoveryIndex: recoveryStates[bookId].index, frozenBookId: frozenBookId == 0 ? stored.frozenBookId : frozenBookId});
 		book.questionRoot = questionMap.set(book.questionRoot, questionId, stateId);
+	}
+
+	/// @notice Add modular deltas to a book's fee-rate root or its recovery fork root.
+	/// @dev A wrapped fee-bucket decrease, or a rate total above uint208.max, exceeds the rate domain.
+	function addPrefix(uint64 bookId, bool feeRoot, uint48 key, uint256 units, uint256 correction) external {
+		_requireHost();
+		if (!feeRoot) {
+			RecoveryState storage recovery = recoveryStates[bookId];
+			recovery.forkRoot = maturities.add(recovery.forkRoot, key, units, correction);
+			return;
+		}
+		Book storage book = books[bookId];
+		uint64 root = maturities.add(book.feeRateRoot, key, units, correction);
+		(uint256 bucketRate, ) = maturities.get(root, key);
+		require(bucketRate <= type(uint208).max && maturities.total(root) <= type(uint208).max, 'Aggregate fee rate overflow');
+		book.feeRateRoot = root;
+	}
+
+	function _requireHost() private view {
+		require(address(this) == host, 'Only settlement book context');
 	}
 }
