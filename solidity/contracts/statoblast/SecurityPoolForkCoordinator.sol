@@ -406,6 +406,15 @@ contract SecurityPoolForkCoordinator {
 			SecurityPoolUniformPriceRepairAuction.Clearing memory result = repairAuction.finalize();
 			raisedAttoEth = result.raisedAttoEth;
 			branch.recoveryAttoRep -= result.soldAttoRep;
+			// Unsold REP compensates inherited claims only while the branch stays
+			// short of cash. Raised cash is capped at the shortfall, so equality is a
+			// full repair and the rest is burned. Old recovery REP is never auction
+			// inventory and always stays with the claims that carried it here.
+			uint256 unsoldAttoRep = repairAuction.inventoryAttoRep() - result.soldAttoRep;
+			if (raisedAttoEth == repairAuction.shortfallAttoEth() && unsoldAttoRep != 0) {
+				branch.recoveryAttoRep -= unsoldAttoRep;
+				zoltar.burnRep(child, unsoldAttoRep);
+			}
 			if (result.filledLots != 0)
 				securityPool.capitalLedger(child).installRepairAuctionCohort(address(repairAuction), result.filledLots, result.attoRepPerLot, repairAuction.lotAttoEth());
 		}
