@@ -1,0 +1,10 @@
+import Inv48FinalObservedTransferExport
+#print axioms Inv48.FinalObservedTransfer.suffixExact
+#print axioms Inv48.FinalObservedTransfer.atSharedInvocation
+#print axioms Inv48.FinalObservedTransfer.fundingOfRecovered
+#print axioms Inv48.FinalObservedTransfer.actualChildTransfer
+#print axioms Inv48.FinalObservedTransfer.simpleRaw
+#print axioms Inv48.FinalObservedTransfer.operationsRaw
+#check Inv48.FinalObservedTransfer.Funding
+#check Inv48.FinalObservedTransfer.ActualTransfer
+#check Inv48.FinalObservedTransfer.ActualTokenBoundary

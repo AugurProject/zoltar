@@ -74,4 +74,8 @@ fi
   echo "Writing checked Lean source modules to $models/contracts"
   python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
   python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds --with-index --with-settlement --with-streams --with-mask --with-labels --with-reputation
+  if [[ ${SOLIDCORE_INV48_REPLAY:-0} == 1 ]]; then
+    toolchain=$(lake env lean --print-prefix)
+    python3 "$here/replay_inv48.py" --models "$models/contracts" --solidcore "$sc" --toolchain "$toolchain"
+  fi
 )
