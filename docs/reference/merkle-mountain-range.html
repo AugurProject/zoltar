@@ -162,7 +162,7 @@ bagPeaks(peaks, peakCount):
 				<p><code>merkleMountainRangeSiblings</code> is also ordered in two phases. The first <code>merkleMountainRangePeakIndex</code> entries are the bottom-up Merkle siblings inside the selected peak. The remaining entries are the other occupied peak roots in ascending peak-height order, skipping the selected peak height. That exact ordering is why the verifier checks <code>merkleMountainRangeSiblings.length == peakHeight + peakCount - 1</code>.</p>
 				<details class="interactive-example" id="mmr-proof-planner" open>
 					<summary>Plan a carry proof</summary>
-					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact sibling-array lengths the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
+					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact <code>merkleMountainRangeSiblings</code> length the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid in-peak offset</output></div>
 						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; leafIndex 8…11</output></div>

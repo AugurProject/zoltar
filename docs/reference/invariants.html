@@ -2878,7 +2878,7 @@
 					</dd>
 					<dt>Refunds and progress</dt>
 					<dd>
-						An early-refundable bid stays a loser. Refunds remain attributable to the bidder and can be withdrawn independently. Winner activation and refund processing stay feasible as the tested bid book grows. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a
+						An early-refundable bid stays a loser. Only the bidder can take back a bid’s unused collateral, independently of winner activation. Winner activation and refund processing stay feasible as the tested bid book grows. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a
 						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionGas.test.ts"><code>securityPoolAuctionGas.test.ts</code></a
 						>.
 					</dd>
