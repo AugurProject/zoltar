@@ -26,7 +26,7 @@ async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recover
 	source.setRead('quoteMintRecoveryRep', recoveryAttoRep)
 	source.setRead('attoEthToAttoShares', 1_875_101n)
 	source.setRead('availableMintCapacity', 20_000_000n)
-	source.setRead('recoveryTokens', recoveryToken)
+	source.setRead('universes', [1n, recoveryToken, 0n, 0n])
 	const quoteBatches = mock((_functionNames: readonly string[]) => undefined)
 	source.client.multicall = createMulticallStub(async request => {
 		quoteBatches(request.contracts.map(contract => contract.functionName))
@@ -302,7 +302,7 @@ test('quotes every amount the mint guard accepts, including a leading decimal po
 test('a recovery REP quote refreshes balance and approval independently from collateral', async () => {
 	const { source, hook, transactions } = await setup(3_000_000n, 3_000_000n)
 	source.setRead('quoteMintRecoveryRep', 2n * 10n ** 18n)
-	source.setRead('recoveryTokens', token)
+	source.setRead('universes', [1n, token, 0n, 0n])
 	source.setRead('balanceOf', 0n, token)
 	source.setRead('allowance', 0n, token)
 	await act(() => invalidateAppData())
@@ -324,7 +324,7 @@ test('a changed recovery quote stays blocked while loading and an invalid fundin
 	source.setRead('quoteMintRecoveryRep', pending.promise)
 	await hook.setProps({ amountInput: '2.1' })
 	await waitFor(() => expect(hook.state().reason).toBe('Updating collateral quote.'))
-	source.setRead('recoveryTokens', '0x0000000000000000000000000000000000000000')
+	source.setRead('universes', [1n, '0x0000000000000000000000000000000000000000', 0n, 0n])
 	pending.resolve(2n * 10n ** 18n)
 	await waitFor(() => expect(hook.state().reason).toContain('Recovery REP funding is unavailable.'))
 	expect(hook.state().recoveryApplicable).toBe(true)

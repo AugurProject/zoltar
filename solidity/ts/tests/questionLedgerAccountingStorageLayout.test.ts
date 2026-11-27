@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import assert from '../testSupport/simulator/utils/assert'
 import { getContractOutput, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
-test('QuestionLedger stateful delegates retain the exact host storage sequence', () => {
+test('QuestionLedger delegate retains the exact host storage sequence', () => {
 	const artifacts = loadContractsJson(import.meta.dir)
 	const hostLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/statoblast/QuestionLedger.sol', 'QuestionLedger'))
 	const summarize = (layout: typeof hostLayout) =>
@@ -14,14 +14,10 @@ test('QuestionLedger stateful delegates retain the exact host storage sequence',
 			slot: entry.slot,
 			type: entry.type,
 		}))
-	for (const [sourcePath, contractName] of [
-		['contracts/statoblast/QuestionLedgerAccountingModule.sol', 'QuestionLedgerAccountingModule'],
-		['contracts/statoblast/QuestionLedgerSettlementDelegate.sol', 'QuestionLedgerSettlementDelegate'],
-		['contracts/statoblast/QuestionLedgerOperationsDelegate.sol', 'QuestionLedgerOperationsDelegate'],
-	] as const) {
-		const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, sourcePath, contractName))
-		assert.deepStrictEqual(summarize(delegateLayout), summarize(hostLayout), `${contractName} storage layout diverged`)
-	}
+	const delegateLayout = normalizeStorageLayout(getContractOutput(artifacts, 'contracts/statoblast/QuestionLedgerDelegate.sol', 'QuestionLedgerDelegate'))
+	assert.deepStrictEqual(summarize(delegateLayout), summarize(hostLayout), 'QuestionLedgerDelegate storage layout diverged')
+	// The security multiplier is a constructor immutable, never delegate-visible storage.
+	assert.ok(!hostLayout.some(entry => entry.label === 'statoblastSecurityMultiplierBps'), 'statoblastSecurityMultiplierBps must be immutable')
 })
 
 test('QuestionLedger keeps low-level assembly outside the stateful host contract', () => {

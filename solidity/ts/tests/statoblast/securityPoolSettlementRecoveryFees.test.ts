@@ -26,7 +26,7 @@ describe('Statoblast: child holding fees preserve inherited recovery REP', () =>
 	let address: Address
 	const target = () => ({ abi: artifact.abi, address })
 	const send = (request: Parameters<WriteClient['writeContract']>[0]) => writeContractAndWait(client, () => client.writeContract(request))
-	const mint = (book: bigint, question: bigint, cash: bigint, at: bigint) => send({ ...target(), functionName: 'mint', args: [book, question, cash, 0n, Number(at)] })
+	const mint = (book: bigint, question: bigint, cash: bigint, at: bigint) => send({ ...target(), functionName: 'mintWithRecoveryRep', args: [book, question, cash, 0n, Number(at)] })
 	const stream = (book: bigint, question: bigint, rate: bigint, end: bigint, at: bigint) => send({ ...target(), functionName: 'replaceFeeStream', args: [book, question, rate, Number(end), Number(at)] })
 	const seal = (book: bigint, at: bigint) => send({ ...target(), functionName: 'sealForFork', args: [book, Number(at)] })
 	const freeze = (book: bigint, at: bigint) => send({ ...target(), functionName: 'freezeMatured', args: [book, Number(at)] })
@@ -42,7 +42,7 @@ describe('Statoblast: child holding fees preserve inherited recovery REP', () =>
 	const custody = (book: bigint) => client.readContract({ ...target(), functionName: 'recoveryRep', args: [book] })
 	const redeemAll = async (book: bigint, question: bigint, at: bigint) => {
 		const before = await custody(book)
-		await send({ ...target(), functionName: 'redeem', args: [book, question, await supply(book, question), 0n, Number(at)] })
+		await send({ ...target(), functionName: 'redeem', args: [book, question, await supply(book, question), Number(at)] })
 		return before - (await custody(book))
 	}
 

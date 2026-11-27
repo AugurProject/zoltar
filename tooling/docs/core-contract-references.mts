@@ -398,7 +398,7 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '2647769477e5121d2e89224b05f229b250ab0b20ca4c22f1b5f0d70ea53c93c4',
+		compiledAbiFingerprint: '11398f5acfbc707b1fed5c3ea6c55883d887a99b04a5e2936eaa0c6e222b035d',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every security pool from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
 		readAbiFingerprint: '0dde49d1ab3c93ffa7ff588b0344cfb09d1c75f6d8547026ce3bf6e7603e0bef',

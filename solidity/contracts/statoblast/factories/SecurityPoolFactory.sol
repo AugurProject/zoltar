@@ -15,7 +15,6 @@ import { IQuestionForker } from '../interfaces/IQuestionForker.sol';
 import { QuestionLedgerDeployer, QuestionLedgerConfiguration } from './QuestionLedgerDeployer.sol';
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
-import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -71,7 +70,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event SharedPriceFeedRegistered(address indexed securityPool, uint248 indexed universeId, address indexed priceFeed);
 	event SecurityPoolDeployed(address indexed securityPool, address indexed creator);
 
-	constructor(IQuestionForker _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, SharedPoolPriceFeedFactory _sharedPoolPriceFeedFactory, address operationsDelegate, QuestionLedgerAccountingModule accountingModule, bytes32 _securityPoolCreationCodeHash, address[9] memory securityPoolModuleDeployers) {
+	constructor(IQuestionForker _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, SharedPoolPriceFeedFactory _sharedPoolPriceFeedFactory, address questionLedgerDelegate, bytes32 _securityPoolCreationCodeHash, address[9] memory securityPoolModuleDeployers) {
 		require(_securityPoolCreationCodeHash != bytes32(0), 'Security pool creation code hash missing');
 		// The deployers are deterministic addresses that may be deployed after this
 		// factory. Every security pool constructor requires each of them to hold code.
@@ -92,10 +91,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		openOracle = _openOracle;
 		escalationGameFactory = _escalationGameFactory;
 		questionData = _questionData;
-		require(operationsDelegate != address(0), 'Operations delegate zero');
-		require(operationsDelegate.code.length != 0, 'Operations delegate has no code');
-		require(address(accountingModule).code.length != 0, 'Accounting delegate has no code');
-		questionLedgerDeployer = new QuestionLedgerDeployer(operationsDelegate, accountingModule);
+		require(questionLedgerDelegate.code.length != 0, 'Question ledger delegate has no code');
+		questionLedgerDeployer = new QuestionLedgerDeployer(questionLedgerDelegate);
 	}
 
 	function questionLedgerDeploymentCount() external view returns (uint256) {

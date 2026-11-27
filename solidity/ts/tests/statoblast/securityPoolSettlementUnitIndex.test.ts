@@ -14,8 +14,8 @@ describe('Statoblast: settlement cash per claim unit', () => {
 	let client: WriteClient
 	let address: Address
 	const target = () => ({ abi: artifact.abi, address })
-	const mint = (question: bigint, cash: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [1n, question, cash, 0n, 1] }))
-	const redeem = (question: bigint, shares: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [1n, question, shares, 0n, 1] }))
+	const mint = (question: bigint, cash: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [1n, question, cash, 0n, 1] }))
+	const redeem = (question: bigint, shares: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [1n, question, shares, 1] }))
 	const totals = () => client.readContract({ ...target(), functionName: 'totals', args: [1n] })
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
@@ -25,7 +25,7 @@ describe('Statoblast: settlement cash per claim unit', () => {
 		address = receipt.contractAddress
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))
 		for (let question = 1n; question <= 20n; question++) {
-			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [1n, question, 10n, 0n, 0] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [1n, question, 10n, 0n, 0] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, question, 9n * scale, 1, 0] }))
 		}
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freezeMatured', args: [1n, 1] }))
@@ -38,7 +38,7 @@ describe('Statoblast: settlement cash per claim unit', () => {
 	})
 	test('new cash cannot capture old holders accumulated redemption dust', async () => {
 		await mint(100n, 20n)
-		const request = { ...target(), functionName: 'redeem' as const, args: [1n, 100n, 20n, 0n, 1] as const }
+		const request = { ...target(), functionName: 'redeem' as const, args: [1n, 100n, 20n, 1] as const }
 		const returned = (await client.simulateContract(request)).result[0]
 		expect(returned).toBe(20n)
 		await writeContractAndWait(client, () => client.writeContract(request))
@@ -67,7 +67,7 @@ describe('Statoblast: settlement cash per claim unit', () => {
 		expect(earned).toBeGreaterThanOrEqual(expected - 1n)
 		expect(earned).toBeLessThanOrEqual(expected + 1n)
 		expect(remainingCash + fees).toBe(cash + 200n)
-		expect((await client.simulateContract({ ...target(), functionName: 'redeem', args: [1n, 1n, 1n, 0n, Number(duration + 1n)] })).result[0]).toBe(1n)
+		expect((await client.simulateContract({ ...target(), functionName: 'redeem', args: [1n, 1n, 1n, Number(duration + 1n)] })).result[0]).toBe(1n)
 	})
 	test('fork cash targets preserve an inflated source value and an earlier impairment', async () => {
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealForFork', args: [1n, 1] }))
@@ -84,10 +84,10 @@ describe('Statoblast: settlement cash per claim unit', () => {
 		const validationAbi = parseAbi(['function validateMintFeePrecision(uint64 bookId,uint256 questionId,uint256 cash,uint256 annualFeeBps) view'])
 		const principal = 10n ** 18n
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [2n, 1n, principal, 0n, 0] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [2n, 1n, principal, 0n, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [2n, 1n, (principal - 2n) * scale, 1, 0] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freezeMatured', args: [2n, 1] }))
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [2n, 1n, principal - 1n, 0n, 1] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [2n, 1n, principal - 1n, 1] }))
 		expect(await client.readContract({ ...target(), functionName: 'scaledUnits', args: [2n] })).toBe(1n)
 		expect((await client.readContract({ ...target(), functionName: 'totals', args: [2n] }))[0]).toBe(1n)
 		const validate = (cash: bigint, annualBps = 1_000n) => client.readContract({ abi: validationAbi, address, functionName: 'validateMintFeePrecision', args: [2n, 100n, cash, annualBps] })
@@ -109,17 +109,17 @@ describe('Statoblast: settlement cash per claim unit', () => {
 	test('redemptions keep pending fee cash out of the claim price', async () => {
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createBook', args: [0] }))
 		for (const question of [1n, 2n]) {
-			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [2n, question, 100n, 0n, 0] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [2n, question, 100n, 0n, 0] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [2n, question, 300_000_000n, 100, 0] }))
 		}
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freezeMatured', args: [2n, 1] }))
-		const request = { ...target(), functionName: 'redeem' as const, args: [2n, 1n, 100n, 0n, 1] as const }
+		const request = { ...target(), functionName: 'redeem' as const, args: [2n, 1n, 100n, 1] as const }
 		const first = (await client.simulateContract(request)).result[0]
 		expect(first).toBe(99n)
 		await writeContractAndWait(client, () => client.writeContract(request))
 		const fundedAbi = parseAbi(['function isCashFunded(uint64 bookId) view returns(bool)'])
 		expect(await client.readContract({ abi: fundedAbi, address, functionName: 'isCashFunded', args: [2n] })).toBe(true)
-		const finalRequest = { ...target(), functionName: 'redeem' as const, args: [2n, 2n, 100n, 0n, 1] as const }
+		const finalRequest = { ...target(), functionName: 'redeem' as const, args: [2n, 2n, 100n, 1] as const }
 		const last = (await client.simulateContract(finalRequest)).result[0]
 		await writeContractAndWait(client, () => client.writeContract(finalRequest))
 		expect(first + last).toBe(200n)
@@ -135,9 +135,9 @@ describe('Statoblast: settlement cash per claim unit', () => {
 	test('an emptied indexed child accepts a fresh deposit without becoming underfunded', async () => {
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'sealForFork', args: [1n, 1] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChildBook', args: [1n, 20n, 0n] }))
-		for (let question = 1n; question <= 20n; question++) await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [2n, question, 1n, 0n, 1] }))
+		for (let question = 1n; question <= 20n; question++) await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'redeem', args: [2n, question, 1n, 1] }))
 		expect((await client.readContract({ ...target(), functionName: 'totals', args: [2n] })).slice(0, 2)).toEqual([0n, 0n])
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mint', args: [2n, 100n, 4n, 0n, 1] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [2n, 100n, 4n, 0n, 1] }))
 		const fundedAbi = parseAbi(['function isCashFunded(uint64 bookId) view returns(bool)'])
 		expect(await client.readContract({ abi: fundedAbi, address, functionName: 'isCashFunded', args: [2n] })).toBe(true)
 		expect(await client.readContract({ ...target(), functionName: 'quoteMint', args: [2n, 101n, 1n] })).toBe(1n)

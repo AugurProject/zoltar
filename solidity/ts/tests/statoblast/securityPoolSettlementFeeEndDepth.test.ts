@@ -25,8 +25,8 @@ describe('Statoblast: fee-stream end keys have a bounded depth', () => {
 
 	const gasOf = async (execute: () => Promise<Hex>) => (await client.waitForTransactionReceipt({ hash: await writeContractAndWait(client, execute) })).gasUsed
 	const target = () => ({ abi: artifact.abi, address, gas: CAP })
-	const mint = (questionId: bigint, cash: bigint) => gasOf(() => client.writeContract({ ...target(), functionName: 'mint', args: [1n, questionId, cash, 0n, 0] }))
-	const redeem = (questionId: bigint, shares: bigint) => gasOf(() => client.writeContract({ ...target(), functionName: 'redeem', args: [1n, questionId, shares, 0n, 0] }))
+	const mint = (questionId: bigint, cash: bigint) => gasOf(() => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [1n, questionId, cash, 0n, 0] }))
+	const redeem = (questionId: bigint, shares: bigint) => gasOf(() => client.writeContract({ ...target(), functionName: 'redeem', args: [1n, questionId, shares, 0] }))
 	const stream = (questionId: bigint, rateAttoEthPerSecond: bigint, end: bigint) => gasOf(() => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, questionId, rateAttoEthPerSecond * UNIT_SCALE, Number(end), 0] }))
 	const deployBook = async (granularity: bigint) => {
 		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args: [client.account.address, 1n, granularity] }) }) })

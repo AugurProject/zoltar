@@ -734,13 +734,6 @@ export function reduceQuestionLedgerEvent(state: ReplayState, log: ReplayLog) {
 		return
 	}
 	const poolState = state.poolStates.get(log.emitter) ?? {}
-	if (log.eventName === 'ShareTokenSupplySet') {
-		const shareTokenSupplyAttoShares = requireBigInt(log.args, 'shareTokenSupplyAttoShares')
-		poolState.shareTokenSupplyAttoShares = shareTokenSupplyAttoShares
-		state.poolStates.set(log.emitter, poolState)
-		state.completeSetSupplies.set(log.emitter, shareTokenSupplyAttoShares)
-		return
-	}
 
 	if (log.eventName === 'SystemStateSet') {
 		poolState.systemState = requireBigInt(log.args, 'systemState')

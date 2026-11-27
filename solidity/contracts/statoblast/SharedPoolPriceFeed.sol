@@ -9,7 +9,6 @@ import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
-import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SharedPoolReportEscrow } from './SharedPoolReportEscrow.sol';
 import { ReputationToken } from '../ReputationToken.sol';
@@ -19,8 +18,8 @@ import {
 	PRICE_VALID_FOR_SECONDS,
 	SEPOLIA_CHAIN_ID,
 	SEPOLIA_PRICE_VALID_FOR_SECONDS,
-	OPEN_ORACLE_PERCENTAGE_PRECISION,
-	REQUEST_BOUNTY_OFFSET_ATTO_ETH,
+	FEED_SETTLEMENT_CALLBACK_GAS,
+	settlementBountyAttoEth,
 	OPEN_ORACLE_FLAG_TIME_TYPE,
 	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
 	OPEN_ORACLE_FLAG_STORE_ALL,
@@ -54,11 +53,6 @@ interface ISharedPoolSecurityPoolPriceCheckpoint {
 contract SharedPoolPriceFeed {
 	string private constant UNECONOMIC_REPORT_REASON = 'Report uneconomic';
 	string private constant OLD_REPORT_REASON = 'Report timestamp not newer';
-	// Keep these allowances aligned with the SDK bounty calculations in
-	// shared/statoblast/ts/initialReport/oracleInitialReport.ts and statoblast/securityPoolPrice.ts.
-	uint256 private constant BASE_SETTLEMENT_GAS_ALLOWANCE = 310_000;
-	uint256 private constant SETTLEMENT_GAS_BUFFER_BPS = 12_000;
-	uint256 private constant REWARD_COLLECTION_GAS_ALLOWANCE = 20_000;
 
 	bool public constant timeType = true;
 	bool public constant trackDisputes = true;
@@ -68,7 +62,7 @@ contract SharedPoolPriceFeed {
 	// operation data is read back inside the callback, which REPORT_OPERATION_GAS_OVERHEAD
 	// covers only for bounded data.
 	uint256 public constant MAXIMUM_REPORT_OPERATION_DATA_BYTES = 512;
-	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = 4_000_000;
+	uint256 public constant FEED_SETTLEMENT_GAS_OVERHEAD = FEED_SETTLEMENT_CALLBACK_GAS;
 	/// @dev Upper bound on callback gas, including sponsor operations, so every
 	/// report this feed creates stays settleable within one transaction.
 	uint256 private constant MAXIMUM_REPORT_CALLBACK_GAS = 10_000_000;
@@ -91,7 +85,6 @@ contract SharedPoolPriceFeed {
 	uint256 public pendingReportId;
 	address public pendingReportSponsor;
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
-	uint256 public pendingExposureLimitAttoEth;
 	uint256 public acceptedExposureLimitAttoEth;
 	uint256 public acceptedRepExposureLimitAttoRep;
 	uint256 public acceptedEpoch;
@@ -103,7 +96,6 @@ contract SharedPoolPriceFeed {
 		uint256 collateralAmount;
 		uint256 repAttoRep;
 		uint256 haltAttoEth;
-		uint256 exposureLimitAttoEth;
 		uint256 maxSettlementBaseFeeAttoEthPerGas;
 	}
 	struct ReportCandidate {
@@ -118,7 +110,6 @@ contract SharedPoolPriceFeed {
 	event ReportOperationAttempted(uint256 indexed reportId, address indexed sponsor, uint256 indexed operationIndex, bool success);
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
-	uint256 private checkpointedExposureAttoEth;
 	function reportCandidates(uint256 reportId) external view returns (SharedPoolReportEscrow escrow, address sponsor, uint256 maxSettlementBaseFee) {
 		ReportCandidate storage candidate = reports[reportId];
 		return (candidate.escrow, candidate.sponsor, candidate.maxSettlementBaseFee);
@@ -128,7 +119,6 @@ contract SharedPoolPriceFeed {
 		return reports[reportId].outcome;
 	}
 
-	event ExposureCheckpoint(address indexed questionLedger, uint256 aggregateExposureAttoEth);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event ReportFundingAssigned(uint256 indexed reportId, address indexed sponsor);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
@@ -151,7 +141,6 @@ contract SharedPoolPriceFeed {
 		minimumReportCollateral = ICollateralConfig(_securityPool).minimumReportCollateral();
 		initialReportPriorityFeeAttoEthPerGas = priorityFee;
 		targetPriceErrorForDispute = config.targetPriceErrorForDispute();
-		require(targetPriceErrorForDispute < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Oracle uncertainty reaches one hundred percent');
 		settlementTime = config.settlementTime();
 		disputeDelay = config.disputeDelay();
 		protocolFee = config.protocolFee();
@@ -170,21 +159,6 @@ contract SharedPoolPriceFeed {
 	function reputationToken() public view returns (ReputationToken) {
 		(, address token) = SecurityPoolBoundClones.universeBindings();
 		return ReputationToken(token);
-	}
-
-	/// @notice Checkpoint only a canonical ledger bound to this pool, universe and feed.
-	function syncExposure() external {
-		IQuestionLedger ledger = IQuestionLedger(payable(msg.sender));
-		ISecurityPoolFactory factory = ISecurityPoolFactory(securityPoolFactory);
-		require(factory.securityPoolOf(ledger) == securityPool, 'Wrong exposure security pool');
-		require(address(ledger.securityPoolFactory()) == securityPoolFactory, 'Wrong security pool factory');
-		require(ledger.universeId() == universeId(), 'Wrong exposure universe');
-		require(address(ledger.repToken()) == address(reputationToken()), 'Wrong REP token');
-		require(address(ledger.priceFeed()) == address(this) && factory.sharedPriceFeeds(securityPool, universeId()) == address(this), 'Feed is not canonical');
-		uint256 exposureAttoEth = aggregateExposureAttoEth();
-		if (exposureAttoEth == checkpointedExposureAttoEth) return;
-		checkpointedExposureAttoEth = exposureAttoEth;
-		emit ExposureCheckpoint(msg.sender, exposureAttoEth);
 	}
 
 	function aggregateExposureAttoEth() public view returns (uint256) {
@@ -239,13 +213,11 @@ contract SharedPoolPriceFeed {
 	}
 
 	function _minimumSettlementBounty(uint256 callbackGas) private view returns (uint256) {
-		uint256 gasBudget = callbackGas + callbackGas / 63 + BASE_SETTLEMENT_GAS_ALLOWANCE;
-		uint256 feeAllowance = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
-		return
-			Math.mulDiv(gasBudget, SETTLEMENT_GAS_BUFFER_BPS, SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil) *
-				feeAllowance +
-			REWARD_COLLECTION_GAS_ALLOWANCE * feeAllowance +
-			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
+		return settlementBountyAttoEth(callbackGas, _maxSettlementBaseFee());
+	}
+
+	function _maxSettlementBaseFee() private view returns (uint256) {
+		return Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 	}
 
 	/// @notice Fund a shared observation without first deploying a child question.
@@ -298,7 +270,6 @@ contract SharedPoolPriceFeed {
 		require(bountyAttoEth >= _minimumSettlementBounty(callbackGasLimit), 'Oracle bounty too small');
 		require(msg.value >= bountyAttoEth, 'Not enough ETH for oracle bounty');
 		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
-		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = quote.maxSettlementBaseFeeAttoEthPerGas;
 		pendingReportSponsor = sponsor;
 		SharedPoolReportEscrow escrow;
@@ -321,8 +292,7 @@ contract SharedPoolPriceFeed {
 		require(quote.repAttoRep <= type(uint128).max, 'REP report exceeds uint128');
 		require(quote.haltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(bountyAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		quote.exposureLimitAttoEth = (quote.collateralAmount - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
-		quote.maxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
+		quote.maxSettlementBaseFeeAttoEthPerGas = _maxSettlementBaseFee();
 	}
 
 	function createReportEscrow(address payer, address sponsor, uint256 wethAmount, uint256 repAmount, uint256 haltAmount, uint256 bounty, uint32 callbackGasLimit) external returns (uint256 id, SharedPoolReportEscrow escrow) {
@@ -480,7 +450,6 @@ contract SharedPoolPriceFeed {
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
-		pendingExposureLimitAttoEth = 0;
 	}
 
 	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2) private view returns (string memory reason, uint256 priceTimestamp) {

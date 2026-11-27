@@ -171,35 +171,32 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountOut, uint256 feeAmount) {
-		require(recipient != address(this), 'Recipient is pair');
-		_requireLifecycleOpen(true);
-		require(recipient != address(0), 'Recipient is zero');
-		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
-		(uint256 reserveIn, uint256 reserveOut) = yesForNo ? (yesReserve, noReserve) : (noReserve, yesReserve);
-		(amountOut, feeAmount) = TwoWayConstantProductMath.quoteExactInput(reserveIn, reserveOut, amountIn, feeBps);
+		(amountOut, feeAmount) = _swap(yesForNo, false, amountIn, recipient);
 		require(amountOut >= minAmountOut, 'Swap slippage');
-		uint256 tokenIn = yesForNo ? yesTokenId : noTokenId;
-		uint256 tokenOut = yesForNo ? noTokenId : yesTokenId;
-		shareToken.safeTransferFrom(msg.sender, address(this), tokenIn, amountIn, '');
-		shareToken.safeTransferFrom(address(this), recipient, tokenOut, amountOut, '');
-		_checkReserves(yesForNo ? yesReserve + amountIn : yesReserve - amountOut, yesForNo ? noReserve - amountOut : noReserve + amountIn);
-		emit Swap({sender: msg.sender, recipient: recipient, yesForNo: yesForNo, exactOutput: false, amountIn: amountIn, amountOut: amountOut, feeAmount: feeAmount, resultingYesReserve: _yesBalance(), resultingNoReserve: _noBalance()});
 	}
 
 	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountIn, uint256 feeAmount) {
+		(amountIn, feeAmount) = _swap(yesForNo, true, amountOut, recipient);
+		require(amountIn <= maxAmountIn, 'Swap slippage');
+	}
+
+	/// @dev Quotes `amount` as the exact input or output, then settles the swap and returns the quoted other side.
+	function _swap(bool yesForNo, bool exactOutput, uint256 amount, address recipient) private returns (uint256 quoted, uint256 feeAmount) {
 		require(recipient != address(this), 'Recipient is pair');
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
 		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
 		(uint256 reserveIn, uint256 reserveOut) = yesForNo ? (yesReserve, noReserve) : (noReserve, yesReserve);
-		(amountIn, feeAmount) = TwoWayConstantProductMath.quoteExactOutput(reserveIn, reserveOut, amountOut, feeBps);
-		require(amountIn <= maxAmountIn, 'Swap slippage');
+		(quoted, feeAmount) = exactOutput
+			? TwoWayConstantProductMath.quoteExactOutput(reserveIn, reserveOut, amount, feeBps)
+			: TwoWayConstantProductMath.quoteExactInput(reserveIn, reserveOut, amount, feeBps);
+		(uint256 amountIn, uint256 amountOut) = exactOutput ? (quoted, amount) : (amount, quoted);
 		uint256 tokenIn = yesForNo ? yesTokenId : noTokenId;
 		uint256 tokenOut = yesForNo ? noTokenId : yesTokenId;
 		shareToken.safeTransferFrom(msg.sender, address(this), tokenIn, amountIn, '');
 		shareToken.safeTransferFrom(address(this), recipient, tokenOut, amountOut, '');
 		_checkReserves(yesForNo ? yesReserve + amountIn : yesReserve - amountOut, yesForNo ? noReserve - amountOut : noReserve + amountIn);
-		emit Swap({sender: msg.sender, recipient: recipient, yesForNo: yesForNo, exactOutput: true, amountIn: amountIn, amountOut: amountOut, feeAmount: feeAmount, resultingYesReserve: _yesBalance(), resultingNoReserve: _noBalance()});
+		emit Swap({sender: msg.sender, recipient: recipient, yesForNo: yesForNo, exactOutput: exactOutput, amountIn: amountIn, amountOut: amountOut, feeAmount: feeAmount, resultingYesReserve: _yesBalance(), resultingNoReserve: _noBalance()});
 	}
 
 	function sync() external nonReentrant {

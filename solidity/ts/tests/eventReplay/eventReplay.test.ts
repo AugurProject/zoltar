@@ -693,7 +693,7 @@ describe('event-only replay', () => {
 					initialReportPriorityFeeAttoEthPerGas: 10n,
 				},
 			}),
-			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 1, args: { shareTokenSupplyAttoShares: 40n } }),
+			createReplayLog({ emitter: pool, eventName: 'CompleteSetCreated', logIndex: 1, args: { creator: parent, settlementCollateralProvidedAttoEth: 40n, completeSetsMintedAttoShares: 40n, resultingShareTokenSupplyAttoShares: 40n, resultingSettlementCollateralAttoEth: 40n } }),
 			createReplayLog({ emitter: pool, eventName: 'AwaitingForkContinuationSet', logIndex: 3, args: { awaitingForkContinuation: true } }),
 			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 4, args: { escalationGame: game } }),
 			createReplayLog({ emitter: pool, eventName: 'SystemStateSet', logIndex: 5, args: { systemState: 1n } }),

@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '8301ec3a120867d885afecc9b55a38dbab9cf678ff248f9263ad0f7794fe86a6',
+		compiledAbiFingerprint: '0e9308e62719763d4350416f44c7cafa22bcd1a40b4aae6884679a7a61df057e',
 		name: 'SharedPoolPriceFeed',
 		purpose: 'Canonical REP/collateral reporting and price source for every question in one security pool and universe.',
-		readAbiFingerprint: 'bc1d44d6d200cd829c7b91de21f3412e030748acfc485b1219dbcc270da1bf8d',
+		readAbiFingerprint: '5255b68aad8590d7f46ebfcab0eb064056af40fcf2251eea1cb45320d2d1a271',
 		readSurface:
-			'Accepted price and freshness: `lastPrice`, `lastSettlementTimestamp`, `priceValidUntil` and `isPriceValid`. Pending reports do not extend freshness. Reports retain isolated sponsor-owned escrows. Configuration, exposure and candidate getters: `reportCandidates`, `reportOutcome`, `universeId`, `reputationToken`, `aggregateExposureAttoEth`, `validateExposure`, `conservativePrice`, `liquidationPrice`, `minimumToken1ReportAttoEth`, `minimumToken2ReportAttoRep`, `minimumToken1ReportAttoEthForPrice`, `getSettlementCallbackGasLimit`, `getRequestPriceCostAttoEth`, `reportAuthorization`, `priceValidityWindowSeconds`, `timeType`, `trackDisputes`, `OPEN_INTEREST_DIVIDER`, `REPORT_OPERATION_GAS_OVERHEAD`, `MAXIMUM_REPORT_OPERATION_DATA_BYTES`, `FEED_SETTLEMENT_GAS_OVERHEAD`, `securityPoolFactory`, `securityPool`, `openOracle`, `collateralToken`, `minimumReportCollateral`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `pendingReportId`, `pendingReportSponsor`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `pendingExposureLimitAttoEth`, `acceptedExposureLimitAttoEth`, `acceptedRepExposureLimitAttoRep`, `acceptedEpoch`, `sponsorOperationReport`.',
+			'Accepted price and freshness: `lastPrice`, `lastSettlementTimestamp`, `priceValidUntil` and `isPriceValid`. Pending reports do not extend freshness. Reports retain isolated sponsor-owned escrows. Configuration, exposure and candidate getters: `reportCandidates`, `reportOutcome`, `universeId`, `reputationToken`, `aggregateExposureAttoEth`, `validateExposure`, `conservativePrice`, `liquidationPrice`, `minimumToken1ReportAttoEth`, `minimumToken2ReportAttoRep`, `minimumToken1ReportAttoEthForPrice`, `getSettlementCallbackGasLimit`, `getRequestPriceCostAttoEth`, `reportAuthorization`, `priceValidityWindowSeconds`, `timeType`, `trackDisputes`, `OPEN_INTEREST_DIVIDER`, `REPORT_OPERATION_GAS_OVERHEAD`, `MAXIMUM_REPORT_OPERATION_DATA_BYTES`, `FEED_SETTLEMENT_GAS_OVERHEAD`, `securityPoolFactory`, `securityPool`, `openOracle`, `collateralToken`, `minimumReportCollateral`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `pendingReportId`, `pendingReportSponsor`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `acceptedExposureLimitAttoEth`, `acceptedRepExposureLimitAttoRep`, `acceptedEpoch`, `sponsorOperationReport`.',
 		sourcePath: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 		securityBoundary:
 			'Report liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06).',
@@ -55,7 +55,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'pendingReportId' },
 			{ name: 'pendingReportSponsor' },
 			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' },
-			{ name: 'pendingExposureLimitAttoEth' },
 			{ name: 'acceptedExposureLimitAttoEth' },
 			{ name: 'acceptedRepExposureLimitAttoRep' },
 			{ name: 'acceptedEpoch' },
@@ -79,14 +78,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				preconditions: 'Same funding checks; unexpired batch, price bounds and sufficient bounded callback gas.',
 				signals: '`PriceRequested`, `ReportFundingAssigned`, `ReportOperationAttempted`',
 				declarations: [{ name: 'requestSecurityPoolPriceWithOperations' }],
-			},
-			{
-				call: '`syncExposure()`',
-				caller: 'Canonical question ledgers only',
-				effect: 'Emits changed live aggregate exposure. The factory mapping, ledger factory, universe, REP and feed must agree.',
-				preconditions: 'Caller belongs to this security pool and universe; this is the factory-registered feed.',
-				signals: '`ExposureCheckpoint`',
-				declarations: [{ name: 'syncExposure' }],
 			},
 			{
 				call: '`createReportEscrow(payer, sponsor, wethAmount, repAmount, haltAmount, bounty, callbackGasLimit)`',

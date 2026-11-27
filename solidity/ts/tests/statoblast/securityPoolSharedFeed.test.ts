@@ -343,7 +343,6 @@ describe('Statoblast: central capital shared price feed', () => {
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
 			const coordinator = fixture.poolFor(question).priceFeed
 			expect(await fixture.owner().readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'minimumToken1ReportAttoEth' })).toBe(await minimum())
-			await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: shared, functionName: 'syncExposure' })).rejects.toThrow('Wrong exposure security pool')
 		}
 		expect(await exposure()).toBe(200n * unit)
 	})
@@ -622,11 +621,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.register(fixture.base.questionId, second)
 		const secondFeed = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: second, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		expect(secondFeed).not.toBe(await feed())
-		const foreignLedger = fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, second).questionLedger
-		const foreignCaller = createWriteClient(fixture.base.mockWindow, BigInt(foreignLedger))
-		await expect(foreignCaller.simulateContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'syncExposure' })).rejects.toThrow('Wrong exposure security pool')
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
-		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'syncExposure' })).rejects.toThrow('Wrong exposure security pool')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
 		const implementation = (securityPool: typeof second) => fixture.owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().sharedPoolPriceFeedFactory, functionName: 'sharedPriceFeedImplementations', args: [factory.address, securityPool] })
 		const [firstImplementation, secondImplementation] = await Promise.all([implementation(fixture.securityPool), implementation(second)])

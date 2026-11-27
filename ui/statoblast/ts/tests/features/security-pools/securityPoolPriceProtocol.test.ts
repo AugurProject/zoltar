@@ -69,11 +69,11 @@ test.each(['escrow', 'token', 'callback', 'stored flags', 'time flag', 'state ha
 	await expect(loadSecurityPoolPriceReport(fixture.client, captured, 9n)).rejects.toThrow()
 })
 test('receipt captures an indexed report ID while ignoring unrelated feed logs', () => {
-	const abi = parseAbi(['event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)', 'event ExposureCheckpoint(uint256 indexed reportId,uint256 amount)'])
+	const abi = parseAbi(['event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)', 'event UnrelatedFeedEvent(uint256 indexed reportId,uint256 amount)'])
 	const base = { address: priceFeed, blockHash: zeroHash, blockNumber: 10n, transactionHash: zeroHash, transactionIndex: 0n, logIndex: 0n, removed: false }
 	const receipt = {
 		logs: [
-			{ ...base, topics: encodeEventTopics({ abi, eventName: 'ExposureCheckpoint', args: { reportId: 9n } }).filter(topic => topic !== null), data: encodeAbiParameters(parseAbiParameters('uint256'), [100n]) },
+			{ ...base, topics: encodeEventTopics({ abi, eventName: 'UnrelatedFeedEvent', args: { reportId: 9n } }).filter(topic => topic !== null), data: encodeAbiParameters(parseAbiParameters('uint256'), [100n]) },
 			{ ...base, logIndex: 1n, topics: encodeEventTopics({ abi, eventName: 'PriceRequested', args: { reportId: 9n } }).filter(topic => topic !== null), data: encodeAbiParameters(parseAbiParameters('uint256'), [1n]) },
 		],
 	}

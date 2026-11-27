@@ -30,8 +30,7 @@ import {
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer,
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+	statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
@@ -347,7 +346,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, securityPoolModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, `0x${'00'.repeat(32)}`, securityPoolModuleDeployers],
 				}),
 			}),
 			/Security pool creation code hash missing/,
@@ -357,44 +356,26 @@ describe('Solidity bytecode coverage helpers', () => {
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 				}),
 			}),
-			/Operations delegate zero/,
+			/Question ledger delegate has no code/,
 		)
 		await assert.rejects(
 			client.sendTransaction({
 				data: encodeDeployData({
 					abi: factoryArtifact.abi,
 					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, client.account.address, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 				}),
 			}),
-			/Operations delegate has no code/,
+			/Question ledger delegate has no code/,
 		)
-		const operationsDelegate = await deployContract(
+		const questionLedgerDelegate = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.abi,
-				bytecode: `0x${statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.bytecode.object}`,
-			}),
-		)
-
-		await assert.rejects(
-			client.sendTransaction({
-				data: encodeDeployData({
-					abi: factoryArtifact.abi,
-					bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, zeroAddress, securityPoolCreationCodeHash, securityPoolModuleDeployers],
-				}),
-			}),
-			/Accounting delegate has no code/,
-		)
-		const eventEmitter = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.abi,
-				bytecode: `0x${statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.bytecode.object}`,
+				abi: statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate.abi,
+				bytecode: `0x${statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate.evm.bytecode.object}`,
 			}),
 		)
 
@@ -403,7 +384,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: `0x${factoryArtifact.evm.bytecode.object}`,
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, operationsDelegate, eventEmitter, securityPoolCreationCodeHash, securityPoolModuleDeployers],
+				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, questionLedgerDelegate, securityPoolCreationCodeHash, securityPoolModuleDeployers],
 			}),
 		)
 		await assert.rejects(

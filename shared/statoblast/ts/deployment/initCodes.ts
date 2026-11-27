@@ -35,8 +35,7 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolFactory: ContractArtifact
 	securityPool: BytecodeArtifact
 	questionForker: ContractArtifact
-	questionLedgerOperationsDelegate: BytecodeArtifact
-	questionLedgerEventEmitter: BytecodeArtifact
+	questionLedgerDelegate: BytecodeArtifact
 	securityPoolCapitalLedgerDeployer: BytecodeArtifact
 	securityPoolCommitmentIndexDeployer: BytecodeArtifact
 	securityPoolCapitalFeeStreamsDeployer: BytecodeArtifact
@@ -54,8 +53,7 @@ type SecurityPoolFactoryInputs = {
 	openOracle: Address
 	sharedPoolPriceFeedFactory: Address
 	questionForker: Address
-	questionLedgerOperationsDelegate: Address
-	questionLedgerEventEmitter: Address
+	questionLedgerDelegate: Address
 	securityPoolCapitalLedgerDeployer: Address
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
@@ -84,8 +82,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getSharedPoolPriceFeedDeploymentWorkerByteCode = (): Hex => `0x${artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object}`
 	const getSharedPoolPriceFeedFactoryByteCode = (weth: Address) => concatHex([bytecodeOf(artifacts.sharedPoolPriceFeedFactory), encodeSharedPoolPriceFeedFactoryArguments(weth, getCreate2Address({ bytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(), from: proxyDeployerAddress, salt: zeroSalt }))])
 	const getQuestionForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForker.abi, bytecode: bytecodeOf(artifacts.questionForker), args: [zoltar] })
-	const getQuestionLedgerAccountingModuleByteCode = (): Hex => `0x${artifacts.questionLedgerEventEmitter.evm.bytecode.object}`
-	const getQuestionLedgerOperationsDelegateByteCode = (): Hex => `0x${artifacts.questionLedgerOperationsDelegate.evm.bytecode.object}`
+	const getQuestionLedgerDelegateByteCode = (): Hex => `0x${artifacts.questionLedgerDelegate.evm.bytecode.object}`
 	const getSecurityPoolCapitalLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object}`
 	const getSecurityPoolCommitmentIndexDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCommitmentIndexDeployer.evm.bytecode.object}`
 	const getSecurityPoolCapitalFeeStreamsDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalFeeStreamsDeployer.evm.bytecode.object}`
@@ -109,8 +106,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 				inputs.zoltar,
 				inputs.shareTokenFactory,
 				inputs.sharedPoolPriceFeedFactory,
-				inputs.questionLedgerOperationsDelegate,
-				inputs.questionLedgerEventEmitter,
+				inputs.questionLedgerDelegate,
 				keccak256(getSecurityPoolCreationCode()),
 				// The order is the security pool constructor's module deployer order.
 				[
@@ -142,8 +138,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			sharedPoolPriceFeedFactoryBytecode: () => getSharedPoolPriceFeedFactoryByteCode(weth),
 			sharedPoolPriceFeedDeploymentWorkerBytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(),
 			proxyDeployerAddress,
-			questionLedgerOperationsDelegateBytecode: getQuestionLedgerOperationsDelegateByteCode(),
-			questionLedgerEventEmitterBytecode: getQuestionLedgerAccountingModuleByteCode(),
+			questionLedgerDelegateBytecode: getQuestionLedgerDelegateByteCode(),
 			securityPoolCapitalLedgerDeployerBytecode: getSecurityPoolCapitalLedgerDeployerByteCode(),
 			securityPoolCommitmentIndexDeployerBytecode: getSecurityPoolCommitmentIndexDeployerByteCode(),
 			securityPoolCapitalFeeStreamsDeployerBytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode(),
@@ -164,8 +159,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolCreationCode,
 		getQuestionForkerByteCode,
-		getQuestionLedgerOperationsDelegateByteCode,
-		getQuestionLedgerAccountingModuleByteCode,
+		getQuestionLedgerDelegateByteCode,
 		getSecurityPoolCapitalLedgerDeployerByteCode,
 		getSecurityPoolCommitmentIndexDeployerByteCode,
 		getSecurityPoolCapitalFeeStreamsDeployerByteCode,

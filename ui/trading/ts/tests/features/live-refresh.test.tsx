@@ -533,7 +533,7 @@ describe('live market refresh', () => {
 				deadline: 2n ** 40n,
 				slippageBps: 50n,
 				minimumLongShares: 1n,
-				result: { ethSpent: 10n ** 16n, completeSetShares: 10n ** 16n, oppositeSharesSwapped: 10n ** 16n, additionalLongShares: 10n ** 16n, totalLongShares: 2n * 10n ** 16n, invalidInsurance: 10n ** 16n, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
+				result: { ethSpent: 10n ** 16n, completeSetShares: 10n ** 16n, additionalLongShares: 10n ** 16n, totalLongShares: 2n * 10n ** 16n, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
 			}),
 			simulateExit: async (_client: unknown, _configuration: unknown, selected: LiveMarket, _account: unknown, _side: unknown, completeSets: bigint) => {
 				exitRequests.push(completeSets)
@@ -1178,7 +1178,7 @@ describe('live market refresh', () => {
 				deadline: 2n ** 40n,
 				slippageBps: 50n,
 				minimumLongShares: 1n,
-				result: { ethSpent: amount, completeSetShares: amount, oppositeSharesSwapped: amount, additionalLongShares: amount, totalLongShares: 2n * amount, invalidInsurance: amount, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
+				result: { ethSpent: amount, completeSetShares: amount, additionalLongShares: amount, totalLongShares: 2n * amount, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
 			}),
 			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, _quote: unknown, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => await guardedWrite(async () => pendingHash),
 		}

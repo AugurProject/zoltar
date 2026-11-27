@@ -166,6 +166,7 @@ contract SecurityPoolForkHarness {
 		uint256 amount = assignedCapitalCash[msg.sender];
 		require(amount != 0, 'No assigned capital cash');
 		assignedCapitalCash[msg.sender] = 0;
+		settlement.withdrawServiceFees();
 		require(collateralToken.transfer(msg.sender, amount), 'Capital cash transfer failed');
 	}
 
@@ -176,6 +177,7 @@ contract SecurityPoolForkHarness {
 		forkController = coordinator;
 		ITestForkInitializer(coordinator).initialize(0);
 		settlement.initialize(book);
+		settlement.authorizeServices(address(this));
 		settlement.registerUniverse(0, uint48(block.timestamp));
 		reporters.registerUniverse(0);
 		_createCapital(0);
@@ -281,11 +283,11 @@ contract SecurityPoolForkHarness {
 	function mintQuestion(uint256 q) external payable {
 		capitalLedger[0].setDemand(capitalLedger[0].demandAttoEth() + msg.value);
 		collateralToken.deposit{value: msg.value}();
-		collateralToken.approve(address(settlement), msg.value);
-		settlement.mint(address(pools[0][q]), msg.value, 0, securityPoolTime(0));
+		require(collateralToken.transfer(address(settlement), msg.value), 'Settlement funding failed');
+		settlement.mintWithRecoveryRep(address(pools[0][q]), address(this), msg.value, 0, securityPoolTime(0));
 	}
 	function redeemQuestion(uint248 u, uint256 q, uint256 shares, address recipient) external {
-		settlement.redeem(address(pools[u][q]), recipient, shares, 0, securityPoolTime(u));
+		settlement.redeem(address(pools[u][q]), recipient, shares, securityPoolTime(u));
 		(uint256 fees, uint256 demand) = settlement.checkpointUniverse(u, securityPoolTime(u));
 		if (fees != 0) _creditFees(u, fees);
 		capitalLedger[u].synchronizeDemand(demand);

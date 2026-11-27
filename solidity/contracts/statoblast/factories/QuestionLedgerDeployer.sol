@@ -9,7 +9,6 @@ import { Zoltar } from '../../Zoltar.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
-import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
 import { CreationCodeStorage } from '../CreationCodeStorage.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
@@ -32,9 +31,9 @@ contract QuestionLedgerDeployer {
 	ISecurityPoolFactory immutable factory;
 	QuestionLedgerDeploymentWorker immutable worker;
 
-	constructor(address operationsDelegate, QuestionLedgerAccountingModule accountingDelegate) {
+	constructor(address delegate) {
 		factory = ISecurityPoolFactory(msg.sender);
-		worker = new QuestionLedgerDeploymentWorker(factory, accountingDelegate, operationsDelegate);
+		worker = new QuestionLedgerDeploymentWorker(factory, delegate);
 	}
 
 	function deploy(QuestionLedgerConfiguration calldata configuration) external returns (IQuestionLedger questionLedger) {
@@ -47,16 +46,14 @@ contract QuestionLedgerDeployer {
 contract QuestionLedgerDeploymentWorker {
 	address immutable deployer;
 	ISecurityPoolFactory public immutable factory;
-	QuestionLedgerAccountingModule public immutable accountingModule;
-	address public immutable operationsDelegate;
+	address public immutable delegate;
 	address private immutable creationCodeFirstChunk;
 	address private immutable creationCodeSecondChunk;
 
-	constructor(ISecurityPoolFactory _factory, QuestionLedgerAccountingModule _accountingModule, address _operationsDelegate) {
+	constructor(ISecurityPoolFactory _factory, address _delegate) {
 		deployer = msg.sender;
 		factory = _factory;
-		accountingModule = _accountingModule;
-		operationsDelegate = _operationsDelegate;
+		delegate = _delegate;
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(QuestionLedger).creationCode);
 	}
 

@@ -4,11 +4,10 @@ type PairReserves = Readonly<{ yesReserve: bigint; noReserve: bigint; feeBps: bi
 
 export type EnterPositionQuote = Readonly<{
 	longOutcome: 'YES' | 'NO'
+	/** Minted complete sets: also the opposite shares swapped and the INVALID shares kept. */
 	completeSetShares: bigint
-	oppositeSharesSwapped: bigint
 	additionalLongShares: bigint
 	totalLongShares: bigint
-	invalidInsurance: bigint
 	feeAmount: bigint
 	conditionalYesBpsBefore: bigint
 	conditionalYesBpsAfter: bigint
@@ -25,10 +24,8 @@ export function quoteEnterPosition(longOutcome: 'YES' | 'NO', completeSetShares:
 	return {
 		longOutcome,
 		completeSetShares,
-		oppositeSharesSwapped: completeSetShares,
 		additionalLongShares: swap.amountOut,
 		totalLongShares: completeSetShares + swap.amountOut,
-		invalidInsurance: completeSetShares,
 		feeAmount: swap.feeAmount,
 		conditionalYesBpsBefore: conditionalYesBps(yesReserve, noReserve),
 		conditionalYesBpsAfter: conditionalYesBps(yesAfter, noAfter),

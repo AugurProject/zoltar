@@ -54,22 +54,10 @@ contract SecurityPoolSettlement {
 		uint256 availableForkCashAttoEth;
 		uint256 availableForkRecoveryAttoRep;
 	}
-	mapping(uint248 => UniverseSettlement) private universes;
+	mapping(uint248 => UniverseSettlement) public universes;
 
-	function bookIds(uint248 universeId) public view returns (uint64) {
+	function bookIds(uint248 universeId) external view returns (uint64) {
 		return universes[universeId].bookId;
-	}
-
-	function availableForkCashAttoEth(uint248 universeId) public view returns (uint256) {
-		return universes[universeId].availableForkCashAttoEth;
-	}
-
-	function availableForkRecoveryAttoRep(uint248 universeId) public view returns (uint256) {
-		return universes[universeId].availableForkRecoveryAttoRep;
-	}
-
-	function recoveryTokens(uint248 universeId) public view returns (IERC20) {
-		return universes[universeId].recoveryToken;
 	}
 
 	event SettlementRepaired(uint248 indexed universeId, address indexed sponsor, uint256 cashAttoEth);
@@ -127,15 +115,9 @@ contract SecurityPoolSettlement {
 		ledgersByQuestion[universeId][questionId] = pool;
 	}
 
-	function mint(address pool, uint256 cash, uint256 minimumShares, uint48 timestamp) external onlySecurityPool nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
-		return _mint(pool, msg.sender, cash, minimumShares, 0, timestamp);
-	}
-
-	function mintWithRecoveryRep(address pool, address payer, uint256 cash, uint256 minimumShares, uint256 maximumRecoveryAttoRep, uint48 timestamp) external onlySecurityPool nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
-		return _mint(pool, payer, cash, minimumShares, maximumRecoveryAttoRep, timestamp);
-	}
-
-	function _mint(address pool, address payer, uint256 cash, uint256 minimumShares, uint256 maximumRecoveryAttoRep, uint48 timestamp) private returns (uint256 shares, Snapshot memory snapshot) {
+	/// @notice Services funds `cash` collateral to this custody before the native pool callback;
+	/// the native question ledger enforces the buyer's share slippage bound.
+	function mintWithRecoveryRep(address pool, address payer, uint256 cash, uint256 maximumRecoveryAttoRep, uint48 timestamp) external onlySecurityPool nonReentrant returns (uint256 shares, Snapshot memory snapshot) {
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
 		ledger.checkpointFees(bookId, timestamp);
@@ -145,18 +127,16 @@ contract SecurityPoolSettlement {
 			Collateral.pull(universes[source.universeId].recoveryToken, payer, address(this), recoveryAttoRep);
 			emit RecoveryRepFunded(source.universeId, source.questionId, payer, recoveryAttoRep);
 		}
-		// Services atomically funds collateral before the native pool callback.
-		if (msg.sender != services) Collateral.pull(collateralToken, msg.sender, address(this), cash);
-		shares = ledger.mintWithRecoveryRep(bookId, source.questionId, cash, minimumShares, recoveryAttoRep, timestamp);
+		shares = ledger.mintWithRecoveryRep(bookId, source.questionId, cash, recoveryAttoRep, timestamp);
 		snapshot = _snapshot(source, _collectFees(bookId));
 	}
 
-	function redeem(address pool, address recipient, uint256 shares, uint256 minimumCashAttoEth, uint48 timestamp) external onlySecurityPool nonReentrant returns (uint256 cashAttoEth, Snapshot memory snapshot) {
+	function redeem(address pool, address recipient, uint256 shares, uint48 timestamp) external onlySecurityPool nonReentrant returns (uint256 cashAttoEth, Snapshot memory snapshot) {
 		require(recipient != address(0), 'Invalid settlement recipient');
 		QuestionSource memory source = _question(pool);
 		uint64 bookId = _bookId(source.universeId);
 		uint256 recoveryAttoRep;
-		(cashAttoEth, , recoveryAttoRep) = ledger.redeem(bookId, source.questionId, shares, minimumCashAttoEth, timestamp);
+		(cashAttoEth, , recoveryAttoRep) = ledger.redeem(bookId, source.questionId, shares, timestamp);
 		snapshot = _snapshot(source, _collectFees(bookId));
 		_payRecoveryRep(source, recipient, recoveryAttoRep);
 		_sendCollateral(recipient, cashAttoEth);
@@ -221,14 +201,15 @@ contract SecurityPoolSettlement {
 		ledger.setFeeClock(_bookId(universeId), nativeTimestamp);
 	}
 
-	function sealUniverse(uint248 universeId, uint48 timestamp) external onlyForkAuthority nonReentrant returns (uint256 cashAttoEth, uint256 units, uint256 earnedFeesAttoEth) {
+	/// @dev Capital.freeze checkpoints every fee through the fork time before sealing, so none remain.
+	function sealUniverse(uint248 universeId, uint48 timestamp) external onlyForkAuthority nonReentrant returns (uint256 cashAttoEth, uint256 units) {
 		uint64 bookId = _bookId(universeId);
 		ledger.sealForFork(bookId, timestamp);
 		(cashAttoEth, , , , ) = ledger.totals(bookId);
 		units = ledger.scaledUnits(bookId);
 		universes[universeId].availableForkCashAttoEth = cashAttoEth;
 		universes[universeId].availableForkRecoveryAttoRep = ledger.recoveryRep(bookId);
-		earnedFeesAttoEth = _collectFees(bookId);
+		_collectFees(bookId);
 	}
 
 	/// @notice Fund one child's claim basket with assigned collateral and forfeited child REP.
@@ -372,9 +353,11 @@ contract SecurityPoolSettlement {
 	function _collectFees(uint64 bookId) private returns (uint256 cashAttoEth) {
 		(, , cashAttoEth, , ) = ledger.totals(bookId);
 		if (cashAttoEth == 0) return 0;
+		// Only Services can credit earned fees to capital; every other caller
+		// (root setup, fork sealing) runs after a checkpoint that collected them.
+		require(msg.sender == services, 'Uncollected settlement fees');
 		ledger.collectFees(bookId, cashAttoEth);
-		if (msg.sender == services) pendingServiceFees += cashAttoEth;
-		else _sendCollateral(securityPool, cashAttoEth);
+		pendingServiceFees += cashAttoEth;
 	}
 
 	/// @notice Move already accounted service income only when a payout needs it.

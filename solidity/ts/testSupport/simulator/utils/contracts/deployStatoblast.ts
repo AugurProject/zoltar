@@ -21,8 +21,7 @@ import {
 	statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_QuestionLedger_QuestionLedger,
-	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+	statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
@@ -58,8 +57,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPool: statoblast_SecurityPool_SecurityPool,
 		questionForker: statoblast_QuestionForker_QuestionForker,
-		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+		questionLedgerDelegate: statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 		securityPoolCommitmentIndexDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 		securityPoolCapitalFeeStreamsDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -80,8 +78,7 @@ const {
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getQuestionForkerByteCode,
-	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerAccountingModuleByteCode,
+	getQuestionLedgerDelegateByteCode,
 	getSecurityPoolCapitalLedgerDeployerByteCode,
 	getSecurityPoolCommitmentIndexDeployerByteCode,
 	getSecurityPoolCapitalFeeStreamsDeployerByteCode,
@@ -199,8 +196,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'multicall3', address: infraContracts.multicall3 },
 		{ id: 'zoltarQuestionData', address: infraContracts.zoltarQuestionData },
 		{ id: 'zoltar', address: infraContracts.zoltar },
-		{ id: 'questionLedgerOperationsDelegate', address: infraContracts.questionLedgerOperationsDelegate },
-		{ id: 'questionLedgerEventEmitter', address: infraContracts.questionLedgerEventEmitter },
+		{ id: 'questionLedgerDelegate', address: infraContracts.questionLedgerDelegate },
 		{ id: 'openOracle', address: infraContracts.openOracle },
 		{ id: 'shareTokenFactory', address: infraContracts.shareTokenFactory },
 		{ id: 'sharedPoolPriceFeedDeploymentWorker', address: infraContracts.sharedPoolPriceFeedDeploymentWorker },
@@ -233,8 +229,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 	const deploymentMask = await loadDeploymentStatusOracleMask(client)
 	return {
 		multicall3: isDeploymentStatusOracleStepDeployed(deploymentMask, 'multicall3'),
-		questionLedgerOperationsDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionLedgerOperationsDelegate'),
-		questionLedgerEventEmitter: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionLedgerEventEmitter'),
+		questionLedgerDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionLedgerDelegate'),
 		openOracle: isDeploymentStatusOracleStepDeployed(deploymentMask, 'openOracle'),
 		zoltar: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltar'),
 		shareTokenFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'shareTokenFactory'),
@@ -270,8 +265,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	const existence = await getInfraDeployedInformation(client)
 
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
-	if (!existence['questionLedgerOperationsDelegate']) await deployBytecode('questionLedgerOperationsDelegate', getQuestionLedgerOperationsDelegateByteCode())
-	if (!existence['questionLedgerEventEmitter']) await deployBytecode('questionLedgerEventEmitter', getQuestionLedgerAccountingModuleByteCode())
+	if (!existence['questionLedgerDelegate']) await deployBytecode('questionLedgerDelegate', getQuestionLedgerDelegateByteCode())
 	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {

@@ -54,7 +54,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		oracleExposure: 20n * unit,
 		getRepToken: rep,
 		getForkTime: 0n,
-		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false],
+		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false, zeroAddress, 0n],
 		forkAuthority: controller,
 		capital,
 		engine,
@@ -398,7 +398,7 @@ test('opening rejects an unaffordable default lot instead of retrying the commit
 
 test('#1634 final coverage also reserves the branch chosen commitment', async () => {
 	const snapshot = await load(
-		fixture({ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 1n, lotAttoEth: 1n, targetLots: 58n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, oracleExposure: 258n, acceptedExposureLimitAttoEth: 258n, branches: [0n, 1n, 0n, 200n, 0n, 0n, true, true, false] }, { opened: false }),
+		fixture({ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 1n, lotAttoEth: 1n, targetLots: 58n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, oracleExposure: 258n, acceptedExposureLimitAttoEth: 258n, branches: [0n, 1n, 0n, 200n, 0n, 0n, true, true, false, zeroAddress, 0n] }, { opened: false }),
 	)
 	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('final auction collateral exposure')
 })

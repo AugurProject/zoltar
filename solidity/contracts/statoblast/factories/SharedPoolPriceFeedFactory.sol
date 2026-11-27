@@ -8,7 +8,6 @@ import { ReputationToken } from '../../ReputationToken.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 import { SecurityPoolBoundClones } from '../SecurityPoolBoundClones.sol';
 import { SharedPoolPriceFeed, ISharedPoolPriceFeedConfig } from '../SharedPoolPriceFeed.sol';
-import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 
 contract SharedPoolPriceFeedDeploymentWorker {
 	address private immutable creationCodeFirstChunk;
@@ -52,11 +51,9 @@ contract SharedPoolPriceFeedFactory {
 	constructor(IWeth9 _weth, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
 		require(address(_sharedPoolPriceFeedDeploymentWorker).code.length != 0, 'Deployment workers missing');
 		sharedPoolPriceFeedDeploymentWorker = _sharedPoolPriceFeedDeploymentWorker;
-		require(_targetPriceErrorForDispute < 10_000_000, 'Target price error must be below one hundred percent');
 		OraclePriceMath.maximumPriorityFee(_targetPriceErrorForDispute, _protocolFee, _feePercentage, _escalationHaltMultiplierBps, _maxSettlementBaseFeeMultiplierBps);
 		require(_settlementTime > _disputeDelay, 'Settlement time must exceed dispute delay');
 		require(_multiplier >= 100, 'Oracle dispute multiplier must be at least one hundred percent');
-		require(_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
 		weth = _weth;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		settlementTime = _settlementTime;

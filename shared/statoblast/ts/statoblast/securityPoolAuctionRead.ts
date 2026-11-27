@@ -5,7 +5,7 @@ import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityP
 const abi = parseAbi([
 	'function collateralToken() view returns (address)',
 	'function minimumCommitmentAttoEth() view returns (uint256)',
-	'function branches(uint248 universeId) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 recoveryAttoRep,bool prepared,bool started,bool ready)',
+	'function branches(uint248 universeId) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 recoveryAttoRep,bool prepared,bool started,bool ready,address repairAuction,uint64 fixedRoot)',
 	'function balanceOf(address owner) view returns (uint256)',
 	'function allowance(address owner,address spender) view returns (uint256)',
 	'function factory() view returns (address)',
@@ -190,7 +190,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(capitalLedger, 'importing'),
 		])
 		if (decodeAddress(engineController, 'Auction contract address') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('The auction status or contract address does not match this branch.')
-		const [, , , chosenCommitment] = decodeFields(branchValue, ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'recoveryAttoRep', 'prepared', 'started', 'ready'], 'Invalid auction branch state.')
+		const [, , , chosenCommitment] = decodeFields(branchValue, ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'recoveryAttoRep', 'prepared', 'started', 'ready', 'repairAuction', 'fixedRoot'], 'Invalid auction branch state.')
 		const terms = {
 			address: auctionAddress,
 			engine,

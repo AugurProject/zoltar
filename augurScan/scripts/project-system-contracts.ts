@@ -4,8 +4,6 @@ import dependencySources from '../config/dependency-abi-sources.json'
 const kindAliases: Readonly<Record<string, string>> = {
 	ERC20Authorization: 'usdc',
 	EscalationGameProofVerifier: 'escalationProofVerifier',
-	// Deployment status masks and scanner records use this existing step ID.
-	QuestionLedgerAccountingModule: 'questionLedgerEventEmitter',
 	TwoWayConstantProductFactory: 'ammFactory',
 	TwoWayConstantProductPair: 'ammPair',
 	TwoWayConstantProductRouter: 'ammRouter',

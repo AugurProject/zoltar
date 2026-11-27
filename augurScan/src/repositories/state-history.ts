@@ -110,7 +110,7 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 				AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
 				AND log.event_name IN (
 					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceCandidateAccepted', 'PendingReportRecovered',
-					'ReportFundingAssigned', 'ReportOperationAttempted', 'ExposureCheckpoint'
+					'ReportFundingAssigned', 'ReportOperationAttempted'
 				)
 			ORDER BY log.block_number DESC, log.transaction_index DESC, log.log_index DESC, log.tx_hash DESC, log.block_hash DESC
 			LIMIT ${queryLimit} OFFSET ${offset}`,

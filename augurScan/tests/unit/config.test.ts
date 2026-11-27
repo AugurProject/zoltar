@@ -154,7 +154,7 @@ describe('network configuration', () => {
 			const indexedByKind = new Map(parseManifestValue(manifest, `${id}.json`).map(([address, _label, kind]) => [kind, address]))
 			expect(parseManifestValue(manifest, `${id}.json`).some(([address, , kind]) => address === deployedById.get('deploymentStatusOracle') && kind === 'deploymentStatusOracle')).toBe(true)
 			expect(deployedById.get('securityPoolFactory')).toBe(indexedByKind.get('securityPoolFactory'))
-			expect(deployedById.get('questionLedgerOperationsDelegate')).toBe(indexedByKind.get('questionLedgerOperationsDelegate'))
+			expect(deployedById.get('questionLedgerDelegate')).toBe(indexedByKind.get('questionLedgerDelegate'))
 			expect(indexedByKind.get('usdc')).toBeDefined()
 		}
 	})
