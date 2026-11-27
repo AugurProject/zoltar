@@ -7301,10 +7301,10 @@ index 0000000000000000000000000000000000000000..4ecdd6169c567110ce0a9a33de5dda19
 +    run(args.repo, args.oracle_solc, 'cancun', args.anvil)
 diff --git a/prototypes/source/project.py b/prototypes/source/project.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..c9d6c9d8aa752acd3a19a53c67097c4147567626
+index 0000000000000000000000000000000000000000..e765372734b867d98cf16311216b7de14f78ccf6
 --- /dev/null
 +++ b/prototypes/source/project.py
-@@ -0,0 +1,1750 @@
+@@ -0,0 +1,1777 @@
 +"""Retain the complete target contract and its referenced library members."""
 +
 +from copy import deepcopy
@@ -7796,6 +7796,20 @@ index 0000000000000000000000000000000000000000..c9d6c9d8aa752acd3a19a53c67097c41
 +        setup, result = lazy_boolean(expr, left_reads, left, right_reads, right)
 +        statements.extend(setup)
 +        return result
++    if (
++        kind == 'BinaryOperation'
++        and not expr.get('function')
++        and expr.get('operator') in ('==', '!=', '<', '<=', '>', '>=')
++    ):
++        setup, value = bind_condition(expr, units)
++        if not setup:
++            return None
++        statements.extend(setup)
++        # bind_condition may retain checked arithmetic in the comparison.
++        # Finish it now, rather than after capturing a later call argument.
++        return bind_scalar_read(
++            value, n('ElementaryTypeName', name='bool'), statements
++        )
 +    if kind == 'IndexAccess':
 +        base = expr.get('baseExpression', {})
 +        key = expr.get('indexExpression') or {}
@@ -8370,10 +8384,23 @@ index 0000000000000000000000000000000000000000..c9d6c9d8aa752acd3a19a53c67097c41
 +            sole_argument=sole or stable_scalar_siblings,
 +            stable_siblings=stable,
 +        )
++        # Materialize checked arithmetic at its argument position, including
++        # calls whose other arguments are storage references. Waiting until
++        # after the invocation would lose overflow and external-call ordering.
 +        if (
 +            not value
-+            and len(outer['arguments']) == 1
-+            and reads
++            and (
++                reads
++                or any(
++                    v.get('kind') == 'functionCall'
++                    and v.get('expression', {})
++                    .get('typeDescriptions', {})
++                    .get('typeIdentifier', '')
++                    .startswith(('t_function_external', 't_function_internal'))
++                    for sibling in outer['arguments']
++                    for v in walk(sibling)
++                )
++            )
 +            and arg.get('nodeType') == 'BinaryOperation'
 +            and all(
 +                not v.get('function')
@@ -9635,10 +9662,10 @@ index 0000000000000000000000000000000000000000..c84e4481133438ffc701d93cde72f9bb
 +    run(args.zoltar, args.solc, args.anvil)
 diff --git a/prototypes/source/test_assembly.py b/prototypes/source/test_assembly.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..539eb36b1010638c85f5d73b972ff2aac88390fa
+index 0000000000000000000000000000000000000000..ef615b04880a6c80b40b75fa52549b6b12b8c17e
 --- /dev/null
 +++ b/prototypes/source/test_assembly.py
-@@ -0,0 +1,1879 @@
+@@ -0,0 +1,2086 @@
 +"""Check the boundaries of source rewrites against actual analyzed Solidity."""
 +
 +import copy
@@ -10719,6 +10746,213 @@ index 0000000000000000000000000000000000000000..539eb36b1010638c85f5d73b972ff2aa
 +            subprocess.run(
 +                ['lake', 'env', 'lean', '--run', script], cwd=ROOT, check=True
 +            )
++
++    def test_internal_call_with_storage_reference_view_and_checked_arithmetic(self):
++        source = """
++pragma solidity 0.8.35;
++contract Ledger {}
++interface Pool { function capitalLedger(uint248 source) external view returns (Ledger); }
++contract Probe {
++    struct Fork { uint backing; uint recovery; }
++    mapping(uint248 => Fork) forks;
++    function setup(uint248 source, uint backing, uint recovery) external {
++        forks[source] = Fork(backing, recovery);
++    }
++    function read(uint248 source) external view returns (uint, uint) {
++        return (forks[source].backing, forks[source].recovery);
++    }
++    function prepare(uint248 source, Pool pool) external {
++        Fork storage fork = forks[source];
++        prepareInternal(source, fork, pool.capitalLedger(source), fork.backing + fork.recovery);
++    }
++    function beforeCall(uint248 source, Pool pool) external {
++        Fork storage fork = forks[source];
++        prepareBefore(source, fork, fork.backing + fork.recovery, pool.capitalLedger(source));
++    }
++    function prepareInternal(uint248 source, Fork storage fork, Ledger ledger, uint amount) internal {
++        fork.backing = amount;
++        fork.recovery = uint160(address(ledger)) + source;
++    }
++    function prepareBefore(uint248 source, Fork storage fork, uint amount, Ledger ledger) internal {
++        prepareInternal(source, fork, ledger, amount);
++    }
++}
++"""
++        result = compile_solc(
++            compiler, {'P.sol': source},
++            {'*': {'': ['ast'], 'Pool': ['evm.methodIdentifiers']}},
++        )
++        model = importer.render_module(
++            project(result['sources']['P.sol']['ast'], 'Probe'),
++            'P.sol', 'Probe', 'SolidCore.Solidity.StorageCallInputs', True,
++        )
++        selector = list(bytes.fromhex(
++            result['contracts']['P.sol']['Pool']['evm']['methodIdentifiers']['capitalLedger(uint248)']
++        ))
++        with tempfile.TemporaryDirectory() as tmp:
++            script = Path(tmp) / 'StorageCallInputs.lean'
++            script.write_text(
++                'import SolidCore.Solidity.Checked\n' + model + """
++open SolidCore.Solidity
++set_option maxRecDepth 65536
++set_option maxHeartbeats 20000000
++def main : IO Unit := do
++  let c ← match TypeCheck.CheckedInput.contract StorageCallInputs.importedSourceUnit "Probe" with
++    | .ok c => pure c
++    | .error e => throw (IO.userError (reprStr e))
++  let responder := Source.responderOfResults [
++    {kind := .staticcall, target := 8192, calldata := """ + str(selector) + """
++      ++ Source.wordToBytesBE 32 5, success := true, output := Source.wordToBytesBE 32 37}] []
++  for entry in ["prepare", "beforeCall"] do
++    let .ok (.returned st _) := TypeCheck.CheckedContract.call 30000 c (.name "setup") Source.State.empty [.word 5, .word 17, .word 19]
++      | throw (IO.userError "setup failed")
++    let some tree := Source.ABI.Contract.callWithSelfDispatch 30000 c.core (.name entry) st [.word 5, .word 8192]
++      | throw (IO.userError "missing method")
++    let .ok (.returned out _) := Source.SolI.runWith responder tree
++      | throw (IO.userError "wrong call inputs")
++    let .ok (.returned _ [.word backing, .word recovery]) := TypeCheck.CheckedContract.call 30000 c (.name "read") out [.word 5]
++      | throw (IO.userError "missing storage result")
++    unless backing == 36 && recovery == 42 do throw (IO.userError "storage alias or arithmetic changed")
++    let .ok (.returned overflow _) := TypeCheck.CheckedContract.call 30000 c (.name "setup") Source.State.empty [.word 5, .word (2^256-1), .word 1]
++      | throw (IO.userError "overflow setup failed")
++    let some overflowTree := Source.ABI.Contract.callWithSelfDispatch 30000 c.core (.name entry) overflow [.word 5, .word 8192]
++      | throw (IO.userError "missing overflow method")
++    let .ok (.reverted _ (.panic code)) := Source.SolI.runWith (if entry == "beforeCall" then Source.responderOfResults [] [] else responder) overflowTree
++      | throw (IO.userError "checked addition or evaluation order changed")
++    unless code == 17 do throw (IO.userError "wrong panic")
++    let rejected := Source.responderOfResults [
++      {kind := .staticcall, target := 8192, calldata := """ + str(selector) + """
++        ++ Source.wordToBytesBE 32 5, success := false, output := []}] []
++    match Source.SolI.runWith rejected overflowTree with
++    | .ok (.reverted _ (.empty)) =>
++      unless entry == "prepare" do throw (IO.userError "external call moved before arithmetic")
++    | .ok (.reverted _ (.panic 17)) =>
++      unless entry == "beforeCall" do throw (IO.userError "arithmetic moved before external call")
++    | _ => throw (IO.userError "wrong external failure")
++"""
++            )
++            subprocess.run(['lake', 'env', 'lean', '--run', script], cwd=ROOT, check=True)
++
++    def test_comparison_call_argument_evaluation_timing(self):
++        source = """
++pragma solidity 0.8.35;
++interface Pool { function next() external view returns(uint); }
++contract Probe {
++    function read() internal pure returns(uint) { return 0; }
++    function consume(bool b, uint y) internal pure returns(uint) { return b ? y : 9; }
++    function reverse(uint y, bool b) internal pure returns(uint) { return consume(b, y); }
++    function checked_(uint x, Pool pool) external view returns(uint) { return consume(read() != x+1, pool.next()); }
++    function unchecked_(uint x, Pool pool) external view returns(uint) { unchecked { return consume(read() != x+1, pool.next()); } }
++    function empty(uint x, Pool pool) external view returns(uint) { return consume(0 != x+1, pool.next()); }
++    function emptyUnchecked(uint x, Pool pool) external view returns(uint) { unchecked { return consume(0 != x+1, pool.next()); } }
++    function left(uint x, Pool pool) external view returns(uint) { return consume(x+1 != read(), pool.next()); }
++    function earlier(uint x, Pool pool) external view returns(uint) { return reverse(pool.next(), read() != x+1); }
++    function andSkip(uint x, Pool pool) external view returns(uint) { return consume(false && read() != x+1, pool.next()); }
++    function orSkip(uint x, Pool pool) external view returns(uint) { return consume(true || read() != x+1, pool.next()); }
++    function andRun(uint x, Pool pool) external view returns(uint) { return consume(true && read() != x+1, pool.next()); }
++    function orRun(uint x, Pool pool) external view returns(uint) { return consume(false || read() != x+1, pool.next()); }
++}
++"""
++        result = compile_solc(compiler, {'P.sol': source}, {'*': {'': ['ast'], '*': ['evm.methodIdentifiers']}})
++        projected = project(result['sources']['P.sol']['ast'], 'Probe')
++        checked = next(v for v in walk(projected) if v.get('nodeType') == 'FunctionDefinition' and v.get('name') == 'checked_')
++        statements = checked['body']['statements'][0]['statements']
++        self.assertEqual(statements[0]['initialValue']['expression']['name'], 'read')
++        comparison = statements[1]
++        self.assertEqual(comparison['declarations'][0]['typeName']['name'], 'bool')
++        self.assertEqual(comparison['initialValue']['operator'], '!=')
++        self.assertEqual(comparison['initialValue']['rightExpression']['operator'], '+')
++        self.assertEqual(statements[2]['initialValue']['expression']['memberName'], 'next')
++        model = importer.render_module(projected, 'P.sol', 'Probe', 'SolidCore.Solidity.ComparisonTiming', True)
++        selector = list(bytes.fromhex(result['contracts']['P.sol']['Pool']['evm']['methodIdentifiers']['next()']))
++        with tempfile.TemporaryDirectory() as tmp:
++            script = Path(tmp) / 'ComparisonTiming.lean'
++            script.write_text('import SolidCore.Solidity.Checked\n' + model + """
++open SolidCore.Solidity
++set_option maxRecDepth 65536
++set_option maxHeartbeats 20000000
++def main : IO Unit := do
++  let c ← match TypeCheck.CheckedInput.contract ComparisonTiming.importedSourceUnit "Probe" with
++    | .ok c => pure c
++    | .error e => throw (IO.userError (reprStr e))
++  let rejected := Source.responderOfResults [
++    {kind := .staticcall, target := 8192, calldata := """ + str(selector) + """, success := false, output := []}] []
++  let accepted := Source.responderOfResults [
++    {kind := .staticcall, target := 8192, calldata := """ + str(selector) + """, success := true, output := Source.wordToBytesBE 32 7}] []
++  for entry in ["checked_", "empty", "left", "andRun", "orRun", "unchecked_", "emptyUnchecked", "earlier", "andSkip", "orSkip"] do
++    let some tree := Source.ABI.Contract.callWithSelfDispatch 30000 c.core (.name entry) Source.State.empty [.word (2^256-1), .word 8192]
++      | throw (IO.userError ("missing method " ++ entry))
++    let mustPanic := ["checked_", "empty", "left", "andRun", "orRun"].contains entry
++    match Source.SolI.runWith rejected tree with
++    | .ok (.reverted _ (.panic 17)) =>
++      unless mustPanic do throw (IO.userError ("unexpected early panic " ++ entry))
++    | .ok (.reverted _ (.empty)) =>
++      if mustPanic then throw (IO.userError ("later external preceded comparison " ++ entry))
++    | _ => throw (IO.userError ("wrong rejection " ++ entry))
++    match Source.SolI.runWith accepted tree with
++    | .ok (.reverted _ (.panic 17)) =>
++      unless mustPanic || entry == "earlier" do throw (IO.userError ("unchecked or skipped panic " ++ entry))
++    | .ok (.returned _ [.word value]) =>
++      if mustPanic || entry == "earlier" then throw (IO.userError ("missing checked panic " ++ entry))
++      unless value == (if entry == "orSkip" then 7 else 9) do throw (IO.userError ("wrong bool " ++ entry))
++    | _ => throw (IO.userError ("wrong success " ++ entry))
++""")
++            subprocess.run(['lake', 'env', 'lean', '--run', script], cwd=ROOT, check=True)
++
++    def test_comparison_argument_after_view_receiver_and_storage_library_read(self):
++        source = """
++pragma solidity 0.8.35;
++interface Reporter { function createChild(uint248 source, uint outcome, bool fixed_) external returns(uint248); }
++interface Pool { function reporters() external view returns(Reporter); }
++library Tree {
++    struct Store { mapping(uint64 => uint) values; }
++    function get(Store storage self, uint64 root) internal view returns(uint) {return self.values[root];}
++}
++contract Probe {
++    using Tree for Tree.Store;
++    Tree.Store tree;
++    struct Branch {uint64 root;}
++    mapping(uint248 => Branch) branches;
++    function setup(uint248 source, uint value) external {branches[source].root=3;tree.values[3]=value;}
++    function run(uint248 source, Pool pool) external {
++        pool.reporters().createChild(source, 2, tree.get(branches[source].root) != 0);
++    }
++}
++"""
++        result = compile_solc(
++            compiler, {'P.sol': source},
++            {'*': {'': ['ast'], '*': ['evm.methodIdentifiers']}},
++        )
++        model = importer.render_module(
++            project(result['sources']['P.sol']['ast'], 'Probe'),
++            'P.sol', 'Probe', 'SolidCore.Solidity.ComparisonInputs', True,
++        )
++        ids = result['contracts']['P.sol']
++        receiver = list(bytes.fromhex(ids['Pool']['evm']['methodIdentifiers']['reporters()']))
++        child = list(bytes.fromhex(ids['Reporter']['evm']['methodIdentifiers']['createChild(uint248,uint256,bool)']))
++        with tempfile.TemporaryDirectory() as tmp:
++            script = Path(tmp) / 'ComparisonInputs.lean'
++            script.write_text('import SolidCore.Solidity.Checked\n' + model + """
++open SolidCore.Solidity
++set_option maxRecDepth 65536
++def main : IO Unit := do
++  let c ← match TypeCheck.CheckedInput.contract ComparisonInputs.importedSourceUnit "Probe" with
++    | .ok c => pure c
++    | .error e => throw (IO.userError (reprStr e))
++  for value in [0, 7] do
++    let .ok (.returned st _) := TypeCheck.CheckedContract.call 30000 c (.name "setup") Source.State.empty [.word 5, .word value]
++      | throw (IO.userError "setup failed")
++    let some tree := Source.ABI.Contract.callWithSelfDispatch 30000 c.core (.name "run") st [.word 5, .word 8192]
++      | throw (IO.userError "missing method")
++    let responder := Source.responderOfResults [
++      {kind := .staticcall, target := 8192, calldata := """ + str(receiver) + """, success := true, output := Source.wordToBytesBE 32 4096},
++      {kind := .call, target := 4096, calldata := """ + str(child) + """
++        ++ Source.wordToBytesBE 32 5 ++ Source.wordToBytesBE 32 2 ++ Source.wordToBytesBE 32 (if value == 0 then 0 else 1),
++        success := true, output := Source.wordToBytesBE 32 9}] []
++    let .ok (.returned _ _) := Source.SolI.runWith responder tree
++      | throw (IO.userError "wrong receiver, comparison, storage read or argument order")
++""")
++            subprocess.run(['lake', 'env', 'lean', '--run', script], cwd=ROOT, check=True)
 +
 +    def test_paired_view_comparison_and_storage_field_argument(self):
 +        source = """
