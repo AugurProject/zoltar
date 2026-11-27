@@ -88,10 +88,10 @@ const settledClaimSnapshot = async (pool: Address, securityPool: Address, shareS
 		return { outcome, supply, questionUnits, bookUnits: exact(units, 'frozenBook.units'), bookCash: exact(cash, 'frozenBook.cash') }
 	}
 	const [rawBookState, rawClock] = await Promise.all([call(book, 'securityPoolSettlementBook', 'books', [bookId]), call(securityPool, 'securityPool', 'securityPoolTime', [universe])])
-	const bookState = tuple(rawBookState, 16, 'books')
+	const bookState = tuple(rawBookState, 15, 'books')
 	const clock = BigInt(exact(rawClock, 'securityPoolTime'))
 	const deadline = BigInt(exact(rawState['finalAfter'], 'question.finalAfter'))
-	if (bookState[7] !== false || deadline === 0n || deadline >= clock || BigInt(exact(bookState[12], 'book.minimumFinalAfter')) >= clock) return undefined
+	if (bookState[7] !== false || deadline === 0n || deadline >= clock || BigInt(exact(bookState[11], 'book.minimumFinalAfter')) >= clock) return undefined
 	return { outcome, supply, questionUnits, bookUnits: questionUnits, bookCash: fullQuote }
 }
 

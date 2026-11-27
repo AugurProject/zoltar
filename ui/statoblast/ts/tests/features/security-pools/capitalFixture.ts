@@ -108,7 +108,7 @@ export function centralSecurityPoolRead(name: string, mode: CentralSecurityPoolM
 		case 'isCashFunded':
 			return mode !== 'runoff'
 		case 'books':
-			return [mode === 'runoff' ? 50n : 100n, 100_000_000_000n, 0n, 1n, 0n, 0n, 123n, mode === 'sealed', 1n, 1n, 1n, mode !== 'disabled', 0n, 877n, 40n, mode === 'basket' ? 150n : 0n]
+			return [mode === 'runoff' ? 50n : 100n, 100_000_000_000n, 0n, 1n, 0n, 0n, 123n, mode === 'sealed', 1n, 1n, mode !== 'disabled', 0n, 877n, 40n, mode === 'basket' ? 150n : 0n]
 		case 'settlement':
 			return token
 		case 'additionalMintCapacityAttoEth':

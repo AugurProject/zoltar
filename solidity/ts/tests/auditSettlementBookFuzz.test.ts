@@ -570,7 +570,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 
 		const readBook = async (bookId: number) => {
 			const [value, required] = await Promise.all([client.readContract({ ...target, functionName: 'books', args: [BigInt(bookId)] }), client.readContract({ ...target, functionName: 'requiredCash', args: [BigInt(bookId)] })])
-			return { required, cash: value[0], units: value[1], feeCash: value[2], ts: Number(value[6]), isSealed: value[7], enabled: value[11], minimumFinalAfter: Number(value[12]), offset: Number(value[13]), rec: value[15] }
+			return { required, cash: value[0], units: value[1], feeCash: value[2], ts: Number(value[6]), isSealed: value[7], enabled: value[10], minimumFinalAfter: Number(value[11]), offset: Number(value[12]), rec: value[14] }
 		}
 		const readFrozen = async (frozenId: number) => {
 			const value = await client.readContract({ ...target, functionName: 'frozenBooks', args: [BigInt(frozenId)] })

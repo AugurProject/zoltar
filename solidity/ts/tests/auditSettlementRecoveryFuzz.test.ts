@@ -94,7 +94,7 @@ describe('audit: settlement book recovery REP property test', () => {
 		const now = async (bookId: bigint) => Number((await client.readContract({ ...target(), functionName: 'totals', args: [bookId] }))[3])
 		const bookState = async (bookId: bigint) => {
 			const value = await client.readContract({ ...target(), functionName: 'books', args: [bookId] })
-			return { cash: value[0], units: value[1], recovery: value[15] }
+			return { cash: value[0], units: value[1], recovery: value[14] }
 		}
 		const questionState = async (bookId: bigint, questionId: bigint) => {
 			const [state, frozenBookId] = await client.readContract({ ...target(), functionName: 'scaledQuestion', args: [bookId, questionId] })

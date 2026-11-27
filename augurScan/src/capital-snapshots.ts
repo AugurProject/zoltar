@@ -156,7 +156,7 @@ const universeFees = async (ledger: Address, state: LedgerState, read: StateRead
 		const book = address(rawBook, 'settlement.ledger')
 		const bookId = quantity(rawBookId, 'bookIds')
 		// A universe without a registered book has id 0, which the book contract rejects.
-		const bookState = bookId === 0n ? undefined : tuple(await call(book, 'securityPoolSettlementBook', 'books', [bookId]), 16, 'books')
+		const bookState = bookId === 0n ? undefined : tuple(await call(book, 'securityPoolSettlementBook', 'books', [bookId]), 15, 'books')
 		return {
 			fees: {
 				annualFeeBps: quantity(annualFeeBps, 'annualFeeBps').toString(),
@@ -177,7 +177,7 @@ const universeFees = async (ledger: Address, state: LedgerState, read: StateRead
 					: {
 							bookCashAttoEth: quantity(bookState[0], 'books.cashAttoEth').toString(),
 							bookFeeCashAttoEth: quantity(bookState[2], 'books.feeCashAttoEth').toString(),
-							bookFeesEnabled: flag(bookState[11], 'books.feesEnabled'),
+							bookFeesEnabled: flag(bookState[10], 'books.feesEnabled'),
 						}),
 			},
 		}

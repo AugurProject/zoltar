@@ -106,7 +106,7 @@ describe('audit fuzz: settlement custody holds exactly what the book owes', () =
 		const balance = (token: Address, holder: Address) => client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [holder] })
 		const readBook = async (bookId: bigint) => {
 			const value = await client.readContract({ ...ledgerTarget, functionName: 'books', args: [bookId] })
-			return { cash: value[0], units: value[1], feeCash: value[2], ts: Number(value[6]), isSealed: value[7], enabled: value[11], minimumFinalAfter: Number(value[12]), offset: Number(value[13]), rec: value[15] }
+			return { cash: value[0], units: value[1], feeCash: value[2], ts: Number(value[6]), isSealed: value[7], enabled: value[10], minimumFinalAfter: Number(value[11]), offset: Number(value[12]), rec: value[14] }
 		}
 
 		// Token balances held by custody must equal the ledger's liabilities.

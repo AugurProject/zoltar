@@ -69,7 +69,7 @@ const ledgerOutputs: Outputs = {
 	rewardDuration: [604_800],
 	ledger: [book],
 	bookIds: [4n],
-	books: [5_000n, 4_900n, 60n, 0n, 0n, 0n, 1_700_000_000, false, 0n, 0n, 0n, true, 0, 0, 0n, 0n],
+	books: [5_000n, 4_900n, 60n, 0n, 0n, 0n, 1_700_000_000, false, 0n, 0n, true, 0, 0, 0n, 0n],
 	liquidationStarted: [1_700_000_000],
 	requiredRep: [400n],
 	accountOf: args => [{ owner: args[0] === 7n ? owner : other, batch: 0n, rep: 500n, commitment: 10n, maxHealthyPrice: 180n * 10n ** 18n, releasedRep: 0n, ethFees: 1n, repFees: 2n, remainingCommitment: 0n }],

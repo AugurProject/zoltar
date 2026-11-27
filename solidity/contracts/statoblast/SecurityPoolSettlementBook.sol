@@ -97,7 +97,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		child.frozenRoot = source.frozenRoot;
 		child.securityPoolTimestamp = source.securityPoolTimestamp;
 		child.feeRateRoot = source.feeRateRoot;
-		child.feeEndRoot = source.feeEndRoot;
 		child.feeModeRoot = source.feeModeRoot;
 		child.feesEnabled = source.feesEnabled;
 		child.minimumFinalAfter = source.securityPoolTimestamp;
@@ -117,8 +116,8 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 				recovery.index += increment;
 				weight = increment * _fundedSeconds(source, forkTime);
 			}
-			recovery.forkIncrementRoot = _addModular(recovery.forkIncrementRoot, forkTime, increment);
-			recovery.forkWeightRoot = _addModular(recovery.forkWeightRoot, forkTime, weight);
+			// MaturityMap ignores key zero, so a fork at fee time zero is keyed one later.
+			_addPrefix(bookId, false, forkTime + 1, increment, weight);
 		}
 		_setFeeMode(child, isCashFunded(bookId) && source.feesEnabled);
 		emit BookCreated(bookId, sourceBookId, fundedCashAttoEth, _descaled(source.units));
@@ -263,7 +262,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		if (state.feeRateAttoEthPerSecond != 0) {
 			uint256 remainingRate = Math.mulDiv(state.feeRateAttoEthPerSecond, state.outcomeSupplyAttoShares - outcomeShares, state.outcomeSupplyAttoShares);
 			// One net write: the stream keeps its end, so its key is changed once instead of removed and re-added.
-			_changeFeeRate(book, state.feeEnd, state.feeRateAttoEthPerSecond - remainingRate, DECREASE_BALANCE);
+			_changeFeeRate(bookId, state.feeEnd, state.feeRateAttoEthPerSecond - remainingRate, DECREASE_BALANCE);
 			state.feeRateAttoEthPerSecond = remainingRate;
 		}
 		state.outcomeSupplyAttoShares -= outcomeShares;
@@ -307,10 +306,10 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		uint256 previousRate = state.feeRateAttoEthPerSecond;
 		// An unchanged end receives one net write; only a moved stream is removed and re-added.
 		if (state.feeEnd == nextEnd)
-			_changeFeeRate(book, nextEnd, rateAttoEthPerSecond > previousRate ? rateAttoEthPerSecond - previousRate : previousRate - rateAttoEthPerSecond, rateAttoEthPerSecond > previousRate);
+			_changeFeeRate(bookId, nextEnd, rateAttoEthPerSecond > previousRate ? rateAttoEthPerSecond - previousRate : previousRate - rateAttoEthPerSecond, rateAttoEthPerSecond > previousRate);
 		else {
-			_changeFeeRate(book, state.feeEnd, previousRate, DECREASE_BALANCE);
-			_changeFeeRate(book, nextEnd, rateAttoEthPerSecond, INCREASE_BALANCE);
+			_changeFeeRate(bookId, state.feeEnd, previousRate, DECREASE_BALANCE);
+			_changeFeeRate(bookId, nextEnd, rateAttoEthPerSecond, INCREASE_BALANCE);
 		}
 		state.feeRateAttoEthPerSecond = rateAttoEthPerSecond;
 		state.feeStart = feeClockTimestamp;
@@ -471,18 +470,18 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		unchecked {
 			lazyFeeUnits = stored.units - state.units;
 		}
-		if (lazyFeeUnits != 0 && recovery.forkIncrementRoot != 0) {
+		if (lazyFeeUnits != 0 && recovery.forkRoot != 0) {
 			uint48 start = stored.feeStart;
-			uint48 cut = uint48(Math.min(_feeTimestamp(book), stored.feeEnd));
-			(uint256 increments, uint256 incrementsThroughCut) = _forkRange(recovery.forkIncrementRoot, start, cut);
-			(uint256 weights, ) = _forkRange(recovery.forkWeightRoot, start, cut);
-			lazyFeeIndex = incrementsThroughCut;
+			(uint256 increments, uint256 weights) = maturities.prefix(recovery.forkRoot, start + 1);
+			(lazyFeeIndex, earlierFeeCredit) = maturities.prefix(recovery.forkRoot, uint48(Math.min(_feeTimestamp(book), stored.feeEnd)) + 1);
 			// Forks after the snapshot and before the cut: fee units charged before each
 			// such fork did not hold its increment. They were charged at the unchanged
 			// funded-second rate, so rate * sum(increment * (forkSeconds - startSeconds)).
-			uint256 startSeconds = _fundedSeconds(book, start);
+			// Prefix sums are residues modulo 2^256, so their differences are exact.
 			unchecked {
-				earlierFeeCredit = stored.feeRateAttoEthPerSecond * (weights - startSeconds * increments);
+				earlierFeeCredit =
+					stored.feeRateAttoEthPerSecond *
+					(earlierFeeCredit - weights - _fundedSeconds(book, start) * (lazyFeeIndex - increments));
 			}
 		}
 		unchecked {
@@ -492,27 +491,6 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 				lazyFeeUnits * lazyFeeIndex -
 				earlierFeeCredit;
 		}
-	}
-
-	function _forkRange(uint64 root, uint48 start, uint48 cut) private view returns (uint256 range, uint256 throughCut) {
-		throughCut = tree.prefixTotalModular(root, cut);
-		unchecked {
-			range = throughCut - tree.prefixTotalModular(root, start);
-		}
-	}
-
-	/// @dev Each leaf value is its own weight; a zero residue deletes a leaf that adds nothing.
-	function _addModular(uint64 root, uint48 key, uint256 residue) private returns (uint64) {
-		unchecked {
-			residue += tree.get(root, key);
-		}
-		return _setModular(root, key, residue, residue);
-	}
-
-	/// @dev Every modular trie write goes through this one call site, so the optimizer emits the
-	/// trie update once instead of cloning it into individual callers.
-	function _setModular(uint64 root, uint48 key, uint256 value, uint256 weight) private returns (uint64) {
-		return tree.setModular(root, key, value, weight);
 	}
 
 	function recoveryRep(uint64 bookId) external view returns (uint256) {
@@ -605,24 +583,25 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _feeIntegral(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
-		uint256 bucket = nativeTimestamp / feeEndGranularity;
-		uint256 remainingRate = tree.total(book.feeRateRoot) - tree.prefixTotal(book.feeRateRoot, bucket);
-		return remainingRate * nativeTimestamp + tree.prefixTotal(book.feeEndRoot, bucket);
+		(uint256 endedRate, uint256 weightedEnds) = maturities.prefix(book.feeRateRoot, nativeTimestamp / feeEndGranularity);
+		return (maturities.total(book.feeRateRoot) - endedRate) * nativeTimestamp + weightedEnds;
 	}
 
-	/// @dev The fee maps share the modular trie update with the finality and fork maps, which keeps
-	/// the book under the runtime size limit. Their aggregates cannot wrap: each change is at most a
-	/// uint96 rate, the rate total stays at most uint208.max, and every end is below 2^33, so the
-	/// end-weighted total stays below 2^241.
-	function _changeFeeRate(Book storage book, uint48 end, uint256 rate, bool increase) private {
+	/// @dev Keys are bucket numbers; units are rates and corrections are rate * end in native seconds.
+	/// Normalized ends are positive multiples of feeEndGranularity, so every key is nonzero and every
+	/// stream in a bucket shares its end. Residues cannot wrap: each bucket rate and the rate total stay
+	/// at most uint208.max, and every end is below 2^33, so the end-weighted total stays below 2^241.
+	function _changeFeeRate(uint64 bookId, uint48 end, uint256 rate, bool increase) private {
 		if (rate == 0) return;
-		// Index by bucket number, but weight the end aggregate in native seconds.
-		uint48 bucket = end / feeEndGranularity;
-		uint256 previous = tree.get(book.feeRateRoot, bucket);
-		uint256 next = increase ? previous + rate : previous - rate;
-		book.feeRateRoot = _setModular(book.feeRateRoot, bucket, next, next);
-		require(tree.total(book.feeRateRoot) <= type(uint208).max, 'Aggregate fee rate overflow');
-		book.feeEndRoot = _setModular(book.feeEndRoot, bucket, next, next * end);
+		uint256 weighted = rate * end;
+		unchecked {
+			_addPrefix(bookId, true, end / feeEndGranularity, increase ? rate : 0 - rate, increase ? weighted : 0 - weighted);
+		}
+	}
+
+	/// @dev The writer holds the MaturityMap update code, which keeps the book under the runtime size limit.
+	function _addPrefix(uint64 bookId, bool feeRoot, uint48 key, uint256 units, uint256 correction) private {
+		DelegateCall.invoke(address(writer), abi.encodeCall(SecurityPoolSettlementWriter.addPrefix, (bookId, feeRoot, key, units, correction)));
 	}
 
 	function _fundedSeconds(Book storage book, uint48 nativeTimestamp) private view returns (uint256) {
@@ -648,7 +627,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		uint48 feeClockTimestamp = _feeTimestamp(book);
 		uint256 elapsed = book.feeModeRoot == 0 ? 0 : _fundedSeconds(book, feeClockTimestamp);
 		feeModes[++lastFeeModeId] = FeeMode(elapsed, feeClockTimestamp, funded);
-		book.feeModeRoot = tree.set(book.feeModeRoot, feeClockTimestamp, lastFeeModeId, 0);
+		book.feeModeRoot = tree.set(book.feeModeRoot, feeClockTimestamp, lastFeeModeId);
 	}
 
 	function _feeTimestamp(Book storage book) private view returns (uint48) {

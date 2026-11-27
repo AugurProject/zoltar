@@ -15,7 +15,7 @@ const abi = parseAbi([
 	'function isPriceValid() view returns(bool)',
 	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint256 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth) state,uint64 frozenBookId)',
 	'function isCashFunded(uint64 bookId) view returns(bool)',
-	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeEndRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset,uint256 finalizedUnitsPrefix,uint256 recoveryAttoRep)',
+	'function books(uint64 bookId) view returns(uint256 cash,uint256 units,uint256 fees,uint64 questionRoot,uint64 finalityRoot,uint64 frozenRoot,uint48 timestamp,bool isSealed,uint64 feeRateRoot,uint64 feeModeRoot,bool feesEnabled,uint48 minimumFinalAfter,uint48 feeTimeOffset,uint256 finalizedUnitsPrefix,uint256 recoveryAttoRep)',
 	'function securityPool() view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function settlement() view returns (address)',
@@ -73,12 +73,12 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const remainingCapacity = requireBigintValue(remainingValue, 'available capacity')
 	const question = requireTupleValue(questionValue, 2, 'question fee details')
 	const stream = requireObjectValue(question[0], 'question fee state')
-	const state = requireTupleValue(bookStateValue, 16, 'payout status')
+	const state = requireTupleValue(bookStateValue, 15, 'payout status')
 	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'last fee update time'))
 	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'fee end time'))
 	const feesActive =
 		requireBooleanValue(validValue, 'capital price validity') &&
-		requireBooleanValue(state[11], 'holding fee status') &&
+		requireBooleanValue(state[10], 'holding fee status') &&
 		!requireBooleanValue(state[7], 'payout fork status') &&
 		requireBooleanValue(fundedValue, 'collateral funding status') &&
 		requireBigintValue(question[1], 'frozen payout record ID') === 0n &&
