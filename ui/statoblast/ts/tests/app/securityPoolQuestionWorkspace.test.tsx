@@ -1,112 +1,229 @@
-import { expect, test } from 'bun:test'
-import { render } from 'preact'
+import { expect, spyOn, test } from 'bun:test'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { SecurityPoolQuestionWorkspace } from '../../app/components/SecurityPoolQuestionWorkspace.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createAccountState, disconnectedAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
-import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
-import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import type { RegisterStatoblastPageRefresh, ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const callbacks = { onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
+test('a cold question keeps its layout and announces loading while the read connection starts', async () => {
+	installStatoblastRouting()
+	const view = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<SecurityPoolQuestionWorkspace accountState={disconnectedAccountState} parameters={{ ...callbacks, accountAddress: undefined }} deploymentStatuses={[]} enabled={false} environmentKey={0} universeId={0n} currentTimestamp={undefined} entry={{ kind: 'question', pool: zeroAddress, questionId: 1n, tab: 'shares' }} />,
+		),
+	)
+	expect(view.container.querySelector('.statoblast-question-loading [role="status"]')?.textContent).toBe('Loading question details…')
+	expect(view.container.querySelector('.statoblast-question-loading [aria-busy="true"]')).not.toBeNull()
+	expect(view.container.querySelectorAll('.statoblast-question-loading .skeleton-line').length).toBeGreaterThan(1)
+	expect(view.container.querySelector('nav[aria-label="Question views"]')?.textContent).toContain('Shares')
+	expect(view.container.querySelector('.empty-state')).toBeNull()
+})
+
 test(
-	'security pool question browser selects a registered question and renders its trading and reporting workspace',
+	'a pool and question ID open the question and preserve visible data through a failed refresh',
 	async () => {
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast')
 		try {
-			let failQuestionRead = false
-			let failListing = true
+			const pool = backend.seededSecurityPool
+			const questionId = pool?.questionIds[0]
+			const [owner] = await backend.getAccounts()
+			if (pool === undefined || questionId === undefined || owner === undefined) throw new Error('Missing seeded pool, question or wallet.')
+			let offline = true
+			let balanceRead: ReturnType<typeof createDeferred<void>> | undefined
+			let reportingRead: ReturnType<typeof createDeferred<void>> | undefined
+			let detailsReadStarted = false
+			let boundaryBlockTime: bigint | undefined
+			let boundaryReads = 0
+			let headReads = 0
 			const client = backend.createReadClient()
+			const getBlock: typeof client.getBlock = async request => {
+				if (request?.blockNumber === undefined) headReads++
+				const block = await client.getBlock(request)
+				return boundaryBlockTime === undefined ? block : { ...block, timestamp: boundaryBlockTime }
+			}
 			const readContract: typeof client.readContract = async request => {
-				if (failListing && request.functionName === 'questionLedgerDeploymentCount') throw new Error('Temporary question listing failure.')
-				if (failQuestionRead && request.functionName === 'getQuestionLedgerOriginId') throw new Error('Temporary question read failure.')
+				if (request.functionName === 'balanceOfShares' && balanceRead !== undefined) {
+					detailsReadStarted = true
+					await balanceRead.promise
+				}
 				return await client.readContract(request)
 			}
-			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ readContract })) })
-			const [owner] = await backend.getAccounts()
-			if (owner === undefined) throw new Error('Missing scenario owner')
-			const { pools } = await loadQuestionLedgerListing(backend.createReadClient())
-			const first = pools[0]
-			if (first === undefined) throw new Error('Missing seeded question')
-			const selected: string[] = []
+			const multicall: typeof client.multicall = async request => {
+				if (request.contracts.some(call => call.functionName === 'initialReportingResponseWindow')) {
+					if (offline) throw new Error('Temporary question read failure.')
+					if (boundaryBlockTime !== undefined) boundaryReads++
+				}
+				if (reportingRead !== undefined && request.contracts.some(call => call.functionName === 'initialEscalationGameDepositAttoRep')) {
+					detailsReadStarted = true
+					await reportingRead.promise
+				}
+				return await client.multicall(request)
+			}
+			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ getBlock, readContract, multicall })) })
+			installStatoblastRouting()
+			window.history.replaceState({}, '', `#/pool/${pool.address}/question/${questionId}/shares?simulate=1&genesis=yes&simScenario=securitypoolx2`)
+			const deployments: DeploymentStatus[] = [{ address: zeroAddress, dependencies: [], deploy: async () => zeroAddress, deployed: true, id: 'proxyDeployer', label: 'proxyDeployer' }]
+			let refresh: (() => Promise<unknown>) | undefined
+			let status: { readAt: number | undefined; progress: string | undefined } | undefined
+			const registerPageRefresh: RegisterStatoblastPageRefresh = callback => {
+				refresh = callback
+				return () => {
+					refresh = undefined
+				}
+			}
+			const onReadStatus: ReportStatoblastReadStatus = (readAt, progress) => {
+				status = { readAt, progress }
+			}
 			const props = {
 				parameters: { ...callbacks, accountAddress: owner },
 				accountState: createAccountState({ address: owner, chainId: backend.profile.chainIdHex }),
-				deploymentStatuses: [],
+				deploymentStatuses: deployments,
+				registerPageRefresh,
+				onReadStatus,
 				enabled: true,
 				environmentKey: 0,
 				universeId: 0n,
 				currentTimestamp: undefined,
-				onSelect: (_universe: bigint, address: string) => selected.push(address),
+				entry: { kind: 'question', pool: pool.address, questionId, tab: 'shares' } as const,
 			}
-			installStatoblastRouting()
-			window.history.replaceState({}, '', '#/pools?simulate=1&genesis=yes&simScenario=securitypoolx2')
-			const view = await renderIntoDocument(<SecurityPoolQuestionWorkspace {...props} selectedAddress='' />)
-			lifecycle.trackRendered(view)
-			await waitFor(() => expect(view.container.textContent).toContain('Temporary question listing failure.'), simulationWaitOptions)
-			expect(view.container.textContent).not.toContain(securityPoolCopy.noRegisteredQuestions)
-			const retryListing = () => {
-				const button = [...view.container.querySelectorAll('button')].find(item => item.textContent === securityPoolCopy.retryQuestionList)
-				if (button === undefined) throw new Error('Missing listing retry action')
-				button.click()
+			const view = lifecycle.trackRendered(await renderIntoDocument(h(SecurityPoolQuestionWorkspace, props)))
+			const clickRetry = async () => {
+				const retry = [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Try again')
+				if (retry === undefined) throw new Error('Missing question retry')
+				await act(() => retry.click())
 			}
-			failListing = false
-			await act(retryListing)
-			await waitFor(() => expect(view.container.querySelectorAll('tbody tr')).toHaveLength(2), simulationWaitOptions)
-			failListing = true
-			await act(() => invalidateAppData())
-			await waitFor(() => expect(view.container.textContent).toContain('Temporary question listing failure.'), simulationWaitOptions)
-			expect(view.container.querySelectorAll('tbody tr')).toHaveLength(2)
-			failListing = false
-			await act(retryListing)
-			await waitFor(() => expect(view.container.textContent).not.toContain('Temporary question listing failure.'), simulationWaitOptions)
-			const table = view.container.querySelector('[role="region"]')
-			expect([...view.container.querySelectorAll('tbody td')].filter(cell => cell.getAttribute('data-label') === securityPoolCopy.outcomeColumn).map(cell => cell.textContent)).toEqual(['Unresolved', 'Unresolved'])
-			expect(table?.getAttribute('tabindex')).toBe('0')
-			// Explicit roles keep the table semantics when phone widths stack the rows.
-			expect(table?.querySelectorAll('[role="row"]')).toHaveLength(3)
-			expect(table?.querySelectorAll('[role="columnheader"]')).toHaveLength(3)
-			const securityPoolLink = table?.querySelector('tbody td[data-label] a')
-			if (securityPoolLink === null || securityPoolLink === undefined) throw new Error('Missing security pool link')
-			const securityPoolAddress = securityPoolLink.getAttribute('title') ?? ''
-			expect(securityPoolAddress).toMatch(/^0x[0-9a-fA-F]{40}$/)
-			// The full address stays in the page text; the shortened forms are for a cell too narrow to show it.
-			expect(securityPoolLink.querySelector('.address-value-full')?.textContent).toBe(securityPoolAddress)
-			expect([...securityPoolLink.querySelectorAll('.address-value-abbreviated')].map(form => form.textContent)).toContain(abbreviateAddress(securityPoolAddress, 6, 4))
-			expect(securityPoolLink.getAttribute('aria-label')).toBe(securityPoolCopy.formatOpenSecurityPoolLabel(securityPoolAddress))
-			expect(securityPoolLink.getAttribute('href')).toBe(`#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2&securityPool=${securityPoolAddress}&universe=0`)
-			const button = table?.querySelector('button')
-			if (!(button instanceof HTMLButtonElement)) throw new Error('Missing question selector')
-			await act(() => {
-				button.click()
-			})
-			expect(selected).toEqual([first.questionLedgerAddress])
-			await act(() => {
-				render(<SecurityPoolQuestionWorkspace {...props} selectedAddress={first.questionLedgerAddress} />, view.container)
-			})
-			await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
-			await waitFor(() => expect(view.container.textContent).toContain('Reporting workflow'), simulationWaitOptions)
-			failQuestionRead = true
+			await waitFor(() => expect(view.container.textContent).toContain('Temporary question read failure.'), simulationWaitOptions)
+			expect(view.container.textContent).not.toContain('showing data from')
+			expect(view.container.querySelector('.statoblast-question-loading')).toBeNull()
+			offline = false
+			const beforeVisibilityRefresh = headReads
+			let hidden = true
+			Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+			try {
+				await act(() => {
+					document.dispatchEvent(new Event('visibilitychange'))
+				})
+				expect(headReads).toBe(beforeVisibilityRefresh)
+				hidden = false
+				await act(() => {
+					document.dispatchEvent(new Event('visibilitychange'))
+				})
+				await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
+				expect(headReads).toBe(beforeVisibilityRefresh + 1)
+			} finally {
+				Reflect.deleteProperty(document, 'hidden')
+			}
+			expect(view.container.textContent).toContain('Resolution rules and details')
+			expect(view.container.querySelector('[aria-current="page"]')?.textContent).toBe('Question')
+			const poolLink = [...view.container.querySelectorAll('a')].find(link => link.textContent === 'Open security pool')
+			expect(poolLink?.getAttribute('href')).toContain(`#/pool/${pool.address}`)
+			offline = true
 			await act(() => invalidateAppData())
 			await waitFor(() => expect(view.container.textContent).toContain('Temporary question read failure.'), simulationWaitOptions)
-			expect(view.container.textContent).toContain('Reporting workflow')
-			failQuestionRead = false
-			const retry = [...view.container.querySelectorAll('button')].find(item => item.textContent === securityPoolCopy.retryQuestionDetails)
-			if (retry === undefined) throw new Error('Missing question retry action')
-			await act(() => retry.click())
-			await waitFor(() => expect(view.container.textContent).not.toContain('Temporary question read failure.'), simulationWaitOptions)
-			await act(() => {
-				render(<SecurityPoolQuestionWorkspace {...props} enabled={false} environmentKey={1} selectedAddress='' />, view.container)
+			expect(view.container.textContent).toMatch(/Couldn’t refresh, showing data from \d+s ago\./)
+			expect(view.container.textContent).toContain('Mint complete sets')
+			expect(view.container.querySelector('.statoblast-question-loading')).toBeNull()
+			offline = false
+			await clickRetry()
+			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
+			const checkDetailsFailure = async (gate: ReturnType<typeof createDeferred<void>>, assertVisible: () => void, fail: string) => {
+				if (refresh === undefined || status?.readAt === undefined) throw new Error('Missing verified question refresh status')
+				const previousReadAt = status.readAt
+				detailsReadStarted = false
+				let completed = false
+				const pending = refresh().then(() => {
+					completed = true
+				})
+				await waitFor(() => expect(status?.progress).toBe('Refreshing… 2 of 2'), simulationWaitOptions)
+				await waitFor(() => expect(detailsReadStarted).toBe(true), simulationWaitOptions)
+				expect(status?.readAt).toBe(previousReadAt)
+				assertVisible()
+				expect(completed).toBe(false)
+				gate.reject(new Error(fail))
+				await pending
+				await waitFor(() => expect(view.container.textContent).toMatch(/Couldn’t refresh, showing data from \d+s ago\./), simulationWaitOptions)
+				assertVisible()
+				expect(view.container.textContent).toContain(fail)
+				expect(status?.readAt).toBe(previousReadAt)
+			}
+			const assertSharesVisible = () => expect(view.container.textContent).toContain('1.00 sets')
+			await waitFor(assertSharesVisible, simulationWaitOptions)
+			await waitFor(() => expect(status?.progress).toBeUndefined(), simulationWaitOptions)
+			const sharesCache = statoblastDisplayCache(backend.profile, { universeId: 0n, owner, page: `shares:${pool.address}:${questionId}:0` }, value => value)
+			const savedBalances = await waitFor(() => {
+				const stored = sharesCache.read()
+				if (stored === undefined) throw new Error('Missing saved share balances')
+				return stored
+			}, simulationWaitOptions)
+			balanceRead = createDeferred<void>()
+			await checkDetailsFailure(balanceRead, assertSharesVisible, 'Share balances temporarily unavailable.')
+			expect(sharesCache.read()).toEqual(savedBalances)
+			balanceRead = undefined
+			await clickRetry()
+			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
+			await act(() => render(h(SecurityPoolQuestionWorkspace, { ...props, entry: { ...props.entry, tab: 'reporting' } }), view.container))
+			const assertReportingVisible = () => expect(view.container.querySelector('.statoblast-report-banner')).not.toBeNull()
+			await waitFor(assertReportingVisible, simulationWaitOptions)
+			await waitFor(() => expect(status?.progress).toBeUndefined(), simulationWaitOptions)
+			reportingRead = createDeferred<void>()
+			await checkDetailsFailure(reportingRead, assertReportingVisible, 'Reporting details temporarily unavailable.')
+			reportingRead = undefined
+			await clickRetry()
+			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
+			await act(async () => {
+				await refresh?.()
 			})
-			await waitFor(() => expect(view.container.querySelector('table')).toBeNull())
+			const deadline = view.container.querySelector('.statoblast-question-progress time')?.getAttribute('datetime')
+			if (typeof deadline !== 'string' || refresh === undefined) throw new Error('Missing question deadline')
+			let tick: (() => void) | undefined
+			const setClockInterval = globalThis.setInterval
+			const intervals = spyOn(globalThis, 'setInterval').mockImplementation(
+				new Proxy(setClockInterval, {
+					apply(schedule, receiver, [handler, delay, ...args]) {
+						if (delay === 1000 && typeof handler === 'function') tick = () => Reflect.apply(handler, receiver, args)
+						return Reflect.apply(schedule, receiver, [handler, delay, ...args])
+					},
+				}),
+			)
+			try {
+				boundaryBlockTime = BigInt(Date.parse(deadline) / 1000) - 2n
+				await act(async () => {
+					await refresh?.()
+				})
+				expect(boundaryReads).toBe(1)
+				await waitFor(() => expect(tick).toBeDefined())
+				const wallClock = Date.now
+				const later = spyOn(Date, 'now').mockImplementation(() => wallClock() + 3_000)
+				const shortTimers = new Proxy(globalThis.setTimeout, {
+					apply(schedule, receiver, [handler, delay, ...args]) {
+						return Reflect.apply(schedule, receiver, [handler, [500, 1000, 2000, 4000, 12_000].includes(delay) ? 5 : delay, ...args])
+					},
+				})
+				const schedule = spyOn(globalThis, 'setTimeout').mockImplementation(shortTimers)
+				try {
+					await act(() => tick?.())
+					await waitFor(() => expect(boundaryReads).toBe(5), { timeout: 6_000 })
+				} finally {
+					later.mockRestore()
+					schedule.mockRestore()
+				}
+			} finally {
+				intervals.mockRestore()
+			}
 		} finally {
 			await backend.dispose()
 		}

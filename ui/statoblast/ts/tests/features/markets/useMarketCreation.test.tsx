@@ -167,8 +167,8 @@ describe('useMarketCreation', () => {
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(createMarketTransaction).not.toHaveBeenCalled()
 		expect(hook.state().marketFeedback?.status.tone).toBe('error')
-		expect(hook.state().marketFeedback?.status.detail).toContain('Wallet account is no longer connected')
-		expect(hook.state().marketError).toContain('Wallet account is no longer connected')
+		expect(hook.state().marketFeedback?.status.detail).toContain('Your wallet is no longer connected')
+		expect(hook.state().marketError).toContain('Your wallet is no longer connected')
 
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 

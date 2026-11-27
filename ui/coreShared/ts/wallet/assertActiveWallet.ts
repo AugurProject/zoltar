@@ -3,6 +3,7 @@ import { createActiveEnvironmentGuard, getActiveBackend } from '../lib/activeEnv
 import { sameAddress } from '../lib/address.js'
 import { sameChainId } from './chainId.js'
 import { createUserFacingError } from '../lib/errors.js'
+import { walletAddressChanged, walletDisconnected } from '../copy/userMessages.js'
 
 export type ActiveWalletContext = {
 	accountAddress: Address
@@ -17,8 +18,8 @@ export async function assertActiveWallet(accountAddress: Address) {
 	const accounts = await backend.getAccounts()
 	if (!environmentGuard.isCurrent()) throw createUserFacingError('The active network or simulation changed. Review the action and try again.')
 	const connectedAccount = accounts[0]
-	if (connectedAccount === undefined) throw createUserFacingError('Wallet account is no longer connected. Reconnect your wallet and try again.')
-	if (!sameAddress(connectedAccount, accountAddress)) throw createUserFacingError('Wallet account changed. Review the action with the connected account and try again.')
+	if (connectedAccount === undefined) throw createUserFacingError(walletDisconnected)
+	if (!sameAddress(connectedAccount, accountAddress)) throw createUserFacingError(walletAddressChanged)
 	const chainId = await backend.getChainId()
 	if (!environmentGuard.isCurrent()) throw createUserFacingError('The active network or simulation changed. Review the action and try again.')
 	if (!sameChainId(chainId, backend.profile.chainIdHex)) throw createUserFacingError(`Wallet network changed. Switch to ${backend.profile.displayName} and try again.`)

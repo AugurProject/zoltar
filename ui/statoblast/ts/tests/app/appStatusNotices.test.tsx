@@ -6,7 +6,7 @@ import { waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { createInjectedBackend, type ReadBackendStatus } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
@@ -15,16 +15,17 @@ import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar-shared/featu
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
+let contractsMissing = true
 
 // Keep the real notices, routing and deployment page. Only the shell's wallet/deployment
-// session and the Uniswap REP price reads are replaced, with every contract reported missing.
+// session and the Uniswap REP price reads are replaced so the fixture can control deployment status.
 await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js', () => ({
 	useProtocolAppShell: ({ deploymentRoute }: Parameters<typeof useProtocolAppShell>[0]) => {
-		const deploymentStatuses = onchainStateDependencies.getDeploymentSteps().map(step => ({ ...step, deployed: false }))
+		const deploymentStatuses = onchainStateDependencies.getDeploymentSteps().map(step => ({ ...step, deployed: !contractsMissing }))
 		return {
 			accountState: disconnectedAccountState,
 			activeEnvironmentNonce: 0,
-			applicationDeploymentMissing: true,
+			applicationDeploymentMissing: contractsMissing,
 			canReadOnchainData: true,
 			currentBlockNumber: 10n,
 			currentTimestamp: 200n,
@@ -44,7 +45,13 @@ await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/appShell/hooks/u
 			errorMessages: [],
 			overviewWalletProps: disconnectedOverviewWalletProps,
 			readBackendMessage: undefined,
-			readBackendStatus: undefined,
+			readBackendStatus: {
+				blockNumber: 10n,
+				blockTimestamp: 200n,
+				rpcSource: 'default',
+				rpcUrl: SEPOLIA_NETWORK_PROFILE.chain.rpcUrls.default.http[0] ?? '',
+				transportMode: 'rpc',
+			} satisfies ReadBackendStatus,
 			refreshActiveEnvironment: async () => undefined,
 			refreshSimulationView: async () => undefined,
 			retryReadBackend: async () => undefined,
@@ -77,6 +84,7 @@ const { App } = await import('../../app/App.js')
 
 const lifecycle = installDomTestLifecycle({
 	beforeTest: () => {
+		contractsMissing = true
 		installStatoblastRouting()
 		installActiveEnvironmentForTesting(createInjectedBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 	},
@@ -96,21 +104,26 @@ describe('Statoblast setup-incomplete notice', () => {
 		await renderApp('#/deploy')
 		const query = within(document.body)
 		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Deploy contracts' })).toBeTruthy())
-		expect(document.body.textContent).toContain('SecurityPoolFactory')
+		expect(document.body.textContent).toContain('Security pool deployment contract')
 		// Assert on text, not on a queried element: Bun stalls formatting an element attached to a
 		// whole-app DOM and can then let a failed toBeNull() pass.
 		expect(document.body.textContent).not.toContain(appCopy.setupIncomplete)
 		expect(document.body.textContent).not.toContain(appCopy.deploymentIncompleteReason)
 	})
 
-	test('still explains missing contracts on a not-found page under the deploy path', async () => {
-		// The page is not the deploy page, and the missing-deployment redirect leaves an
-		// unrecognised deploy URL alone, so the notice is the only sign of missing contracts here.
+	test('shows the contracts gate without redirecting a removed deploy URL', async () => {
+		await renderApp('#/deploy?openOracleView=create')
+		const query = within(document.body)
+		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Deploy contracts' })).toBeTruthy())
+		expect(window.location.hash).toBe('#/deploy?openOracleView=create')
+		expect(document.body.textContent).toContain('Security pool deployment contract')
+	})
+
+	test('shows not found on a removed route once contracts are available', async () => {
+		contractsMissing = false
 		await renderApp('#/deploy?openOracleView=create')
 		const query = within(document.body)
 		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Page not found' })).toBeTruthy())
 		expect(window.location.hash).toBe('#/deploy?openOracleView=create')
-		expect(query.getByText(appCopy.setupIncomplete)).toBeTruthy()
-		expect(query.getByText(appCopy.deploymentIncompleteReason)).toBeTruthy()
 	})
 })

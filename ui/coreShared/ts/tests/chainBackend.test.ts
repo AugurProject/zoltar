@@ -394,7 +394,7 @@ describe('injected backend read transport', () => {
 		test(`blocks ${operation.name} when the wallet disconnects before send`, async () => {
 			const { requestCalls, writeClient } = installSendingWallet([])
 
-			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet account is no longer connected.')
+			await expect(operation.execute(writeClient)).rejects.toThrow('Your wallet is no longer connected.')
 			expect(requestCalls).toEqual(['eth_accounts'])
 		})
 

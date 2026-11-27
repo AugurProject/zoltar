@@ -94,10 +94,10 @@ test('keeps Statoblast product types out of the generic UI packages', () => {
 })
 
 test('treats the Statoblast route union as a product type while each application route union keeps its own name', () => {
-	const sourceText = ["export type StatoblastRoute = 'pools' | 'not-found'", "export type ZoltarRoute = 'zoltar' | 'not-found'"].join('\n')
+	const sourceText = ["export type StatoblastPage = { kind: 'watchlist' | 'not-found' }", "export type ZoltarRoute = 'zoltar' | 'not-found'"].join('\n')
 	for (const packageId of ['coreShared', 'zoltarShared']) {
 		const findings = findUiLayerBoundaryViolations(`ui/${packageId}/ts/types/app.ts`, sourceText)
-		expect(findings.map(finding => [finding.rule, 'declaredName' in finding ? finding.declaredName : undefined])).toEqual([['statoblast-product-type-outside-statoblast-shared', 'StatoblastRoute']])
+		expect(findings.map(finding => [finding.rule, 'declaredName' in finding ? finding.declaredName : undefined])).toEqual([['statoblast-product-type-outside-statoblast-shared', 'StatoblastPage']])
 	}
 	expect(findUiLayerBoundaryViolations('ui/zoltarShared/ts/types/app.ts', readFileSync('ui/zoltarShared/ts/types/app.ts', 'utf8'))).toEqual([])
 })

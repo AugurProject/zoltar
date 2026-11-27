@@ -1275,7 +1275,7 @@ describe('useOnchainState (integration)', () => {
 		}
 
 		failureSignal.reject(new Error('bootstrap unavailable'))
-		await waitFor(() => expect(requireHookState(failureState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: bootstrap unavailable.'))
+		await waitFor(() => expect(requireHookState(failureState).environmentBootstrapError).toBe('Could not start the simulation. Reason: bootstrap unavailable.'))
 		await failureRender.cleanup()
 		cleanupRenderedComponent = undefined
 		resetFailureEnvironment()
@@ -1316,7 +1316,7 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 
 		readySignal.reject(new Error('replacement bootstrap failed'))
-		await waitFor(() => expect(requireHookState(hookState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: replacement bootstrap failed.'))
+		await waitFor(() => expect(requireHookState(hookState).environmentBootstrapError).toBe('Could not start the simulation. Reason: replacement bootstrap failed.'))
 		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
 		resetEnvironment()
 	})

@@ -41,7 +41,7 @@ function normalizeDumpedStorage(storage: NonNullable<DumpedTevmAccountState['sto
 
 export async function applyDumpedAccountState(memoryClient: TevmLikeClient, address: Address, state: DumpedTevmState) {
 	const accountState = getDumpedAccountState(state, address)
-	if (accountState === undefined) throw new Error(`Missing simulation account state for ${address}`)
+	if (accountState === undefined) throw new Error(`Missing simulation wallet state for ${address}`)
 
 	const setAccountResult = await memoryClient.tevmSetAccount({
 		address,
@@ -57,7 +57,7 @@ export async function applyDumpedAccountState(memoryClient: TevmLikeClient, addr
 
 export async function applyDumpedStorageState(memoryClient: TevmLikeClient, address: Address, state: DumpedTevmState) {
 	const accountState = getDumpedAccountState(state, address)
-	if (accountState === undefined) throw new Error(`Missing simulation account state for ${address}`)
+	if (accountState === undefined) throw new Error(`Missing simulation wallet state for ${address}`)
 	if (accountState.storage === undefined) throw new Error(`Missing simulation storage state for ${address}`)
 
 	for (const [index, value] of Object.entries(accountState.storage)) {

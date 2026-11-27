@@ -1,6 +1,6 @@
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '../initialReport/oracleInitialReport.js'
 export { securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from './securityPoolTakeover.js'
-import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, formatUnits, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 export type SecurityPoolOriginConfig = {
 	collateralToken: Address
@@ -19,19 +19,29 @@ export type SecurityPoolEconomicsConfig = {
 }
 
 function uint(value: bigint, bits: number, label: string) {
-	if (value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
+	if (value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} is out of range.`)
 }
 function address(value: Address, label: string) {
 	if (!isAddress(value) || value.toLowerCase() === zeroAddress) throw new Error(`${label} must be a nonzero address.`)
 }
 
+export const minimumSecurityMultiplierBps = 10_500n
+const maximumFeeBps = 10_000n
+const secondsPerDay = 86_400n
+const maximumVestingDays = 3650n
+
 export function validateSecurityPoolEconomics(config: SecurityPoolEconomicsConfig) {
-	for (const [name, value] of Object.entries(config)) uint(value, name === 'rewardVestingSeconds' ? 48 : 256, name)
-	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
-	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
+	uint(config.purchaseFeeBps, 256, 'Purchase fee')
+	uint(config.annualFeeBps, 256, 'Annual fee')
+	uint(config.minimumPurchaseFeeAttoEth, 256, 'Minimum purchase fee')
+	uint(config.minimumCommitmentAttoEth, 256, 'Minimum commitment')
+	uint(config.minimumOutcomeRate, 256, 'Minimum outcome exchange rate')
+	uint(config.rewardVestingSeconds, 48, 'Fee vesting duration')
+	if (config.purchaseFeeBps > maximumFeeBps) throw new Error(`Purchase fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
+	if (config.annualFeeBps > maximumFeeBps) throw new Error(`Annual fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
 	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
-	if (config.rewardVestingSeconds > 3650n * 86_400n) throw new Error('Fee vesting duration cannot exceed 3650 days.')
-	if (config.rewardVestingSeconds < 86_400n) throw new Error('Fee vesting duration must be at least 24 hours.')
+	if (config.rewardVestingSeconds > maximumVestingDays * secondsPerDay) throw new Error(`Fee vesting duration cannot exceed ${maximumVestingDays} days.`)
+	if (config.rewardVestingSeconds < secondsPerDay) throw new Error(`Fee vesting duration must be at least ${secondsPerDay / 3_600n} hours.`)
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
 
@@ -49,14 +59,14 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 	uint(parameters.origin.minimumReportCollateral, 128, 'Report collateral floor')
 	if (parameters.origin.minimumReportCollateral === 0n) throw new Error('Report collateral floor must be positive.')
 	address(parameters.owner, 'Owner')
-	address(parameters.factory, 'Factory')
+	address(parameters.factory, 'Security pool deployment contract')
 	uint(parameters.origin.universeId, 248, 'Origin universe')
 	uint(parameters.origin.securityMultiplierBps, 256, 'Security multiplier')
 	uint(parameters.origin.reportPriorityFeeAttoEthPerGas, 256, 'Report priority fee')
-	if (parameters.origin.securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 10500 BPS.')
+	if (parameters.origin.securityMultiplierBps < minimumSecurityMultiplierBps) throw new Error(`Security multiplier must be at least ${formatUnits(minimumSecurityMultiplierBps, 2)}%.`)
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial report priority fee exceeds OpenOracle limits.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
-	address(parameters.questionAdmissionPolicy, 'Question admission policy')
+	address(parameters.questionAdmissionPolicy, 'Question rules')
 	uint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
 	if (parameters.maximumQuestionHorizonSeconds === 0n) throw new Error('Question horizon must be positive.')
 	validateSecurityPoolEconomics(parameters.economics)
@@ -82,6 +92,12 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 
 const securityPoolDeployedTopic = toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)'))
 
+export class MissingSecurityPoolDeploymentEventError extends Error {
+	constructor() {
+		super('Security pool deployment event is missing.')
+	}
+}
+
 /** The security pool a factory deployment transaction created, read from that factory's own event. */
 export function securityPoolAddressFromDeploymentLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], factory: Address): Address {
 	for (const log of logs) {
@@ -89,7 +105,7 @@ export function securityPoolAddressFromDeploymentLogs(logs: readonly { address: 
 		if (log.address.toLowerCase() !== factory.toLowerCase() || log.topics[0] !== securityPoolDeployedTopic || securityPoolTopic === undefined) continue
 		return getAddress(`0x${securityPoolTopic.slice(26)}`)
 	}
-	throw new Error('Security pool deployment event is missing.')
+	throw new MissingSecurityPoolDeploymentEventError()
 }
 
 /** Each call completes one immutable setup stage; anyone can resume an interrupted setup until the origin universe forks. */
@@ -101,7 +117,7 @@ export function buildSecurityPoolPrepareNextRequest(parameters: { caller: Addres
 
 /** @public Unsigned transaction export for external smart-account execution flows. */
 export function exportSecurityPoolTransaction(parameters: { chainId: number; request: { account: Address; to: Address; data: Hex; value: bigint } }) {
-	if (!Number.isSafeInteger(parameters.chainId) || parameters.chainId <= 0) throw new Error('Choose a valid chain id.')
+	if (!Number.isSafeInteger(parameters.chainId) || parameters.chainId <= 0) throw new Error('Choose a valid chain ID.')
 	address(parameters.request.account, 'Owner')
 	address(parameters.request.to, 'Transaction target')
 	uint(parameters.request.value, 256, 'Transaction value')
@@ -119,6 +135,7 @@ export {
 	buildSecurityPoolCapitalServeRetirementRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	loadSecurityPoolCapitalSnapshot,
+	minimumSecurityPoolHealthFactorBps,
 	loadSecurityPoolClaimableEarnings,
 	type SecurityPoolCapitalSnapshot,
 } from './securityPoolCapital.js'
@@ -126,7 +143,7 @@ export {
 export { buildSecurityPoolCapitalTakeOverRequest } from './securityPoolCapital.js'
 export { buildSecurityPoolCapitalTakeOverWithBoundsRequest } from './securityPoolCapital.js'
 export { buildSecurityPoolCapitalCureRequest } from './securityPoolCapital.js'
-export { buildSecurityPoolMintRequest, loadSecurityPoolMintQuote, securityPoolRecoveryMintBudget, type SecurityPoolMintQuote } from './securityPoolMint.js'
+export { buildSecurityPoolMintRequest, loadSecurityPoolMintQuote, securityPoolRecoveryMintBudget } from './securityPoolMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildSecurityPoolAddQuestionRequest } from './securityPoolMint.js'
 export {
@@ -155,6 +172,7 @@ export {
 export {
 	loadSecurityPoolAuctionSnapshot,
 	securityPoolAuctionOpeningReason,
+	minimumSecurityPoolAuctionRepPerLot,
 	quoteSecurityPoolAuctionBid,
 	buildSecurityPoolAuctionOpenRequest,
 	buildSecurityPoolAuctionBidRequest,

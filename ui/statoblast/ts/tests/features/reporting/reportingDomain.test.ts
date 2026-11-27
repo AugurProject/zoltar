@@ -1,8 +1,6 @@
 import { computeEscalationFinalityElapsed } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { getReportingMaxContribution } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingMaxContribution.js'
 import { getDisplayedLeadingEscalationOutcome, hasReportingOpened } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
-import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
-import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -11,7 +9,6 @@ import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import {
 	getEscalationDepositClaimAmount,
-	getHypotheticalClaimAmount,
 	getEscalationPhase,
 	getStrictLeadingEscalationOutcome,
 	getImportedEscalationDepositClaimAmount,
@@ -19,11 +16,11 @@ import {
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	getReportingForkTriggerAmount,
-	getSecondLargestEscalationBalance,
 	previewReportingContribution,
 	previewReportingDeadline,
 } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
 import { describe, expect, test } from 'bun:test'
+import { getSecondLargestEscalationBalance } from '@zoltar/ui-statoblast-shared/lib/reportingOutcomeBalances.js'
 
 const ATTO_REP = 10n ** 18n
 
@@ -171,7 +168,7 @@ describe('reportingDomain', () => {
 		})
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'no')).toEqual({ amountAttoRep: rep(11n) / 10n, reason: undefined })
 		// Yes already sits at the threshold, so filling No would trigger the fork rather than earn a reward.
-		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({ amountAttoRep: undefined, reason: 'Max reward is unavailable because matching the other side would trigger the universe fork.' })
+		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({ amountAttoRep: undefined, reason: 'Full reward share is unavailable because matching the other side would end reporting without a decision.' })
 	})
 
 	test('getReportingMinimumOutcomeChangeContribution respects startBondAttoRep when the lead delta is smaller than the minimum report', () => {
@@ -263,7 +260,7 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max reward is unavailable because the reward window is already filled on the selected side.',
+			reason: 'Full reward share is unavailable because the reward window is already filled on the selected side.',
 		})
 	})
 
@@ -305,7 +302,7 @@ describe('reportingDomain', () => {
 	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
 		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max reward becomes available after the escalation game starts.',
+			reason: 'Full reward share becomes available after the first report.',
 		})
 	})
 
@@ -316,18 +313,18 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: 'Reporting has already resolved.',
 		})
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: 'Reporting has already resolved.',
 		})
 	})
 
 	test('previewReportingContribution rejects a pre-start amount below the first-report minimum', () => {
 		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(2n))).toEqual({
 			actualDepositAmount: undefined,
-			reason: 'Enter at least 3\u00a0REP to start the escalation game.',
+			reason: 'Enter at least 3\u00a0REP to start the reporting game.',
 		})
 	})
 
@@ -359,7 +356,7 @@ describe('reportingDomain', () => {
 			),
 		).toEqual({
 			actualDepositAmount: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: 'Reporting has already resolved.',
 		})
 		expect(
 			previewReportingContribution(
@@ -412,15 +409,6 @@ describe('reportingDomain', () => {
 	})
 })
 
-for (const end of [300n, 600n]) {
-	test(`pending stage presentation names the actual deadline ${end} and leading outcome`, () => {
-		const details = createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: end })
-		const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
-		expect(stage?.label).toBe('Response window')
-		expect(stage?.detail).toBe(`If no other side overtakes No by ${formatReportingDeadline(end, details.currentTime)}, No wins.`)
-	})
-}
-
 test('only a unique positive balance leads, including auction and threshold ties', () => {
 	const details = createReportingDetails()
 	expect(getStrictLeadingEscalationOutcome(details.sides)).toBe('no')
@@ -441,29 +429,9 @@ test('larger tying reports lose one atto-REP below the threshold but can tie at 
 	expect(previewReportingContribution(fullSide, 'yes', rep(95n) + 1n)).toEqual({ actualDepositAmount: rep(95n), reason: undefined, tieAdjusted: false })
 })
 
-test('pending stage guidance does not name a tied side as the winner', () => {
-	const details = createReportingDetails({ activationTime: 300n })
-	details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
-	const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
-	expect(stage?.detail).toBe('No side leads right now.')
-})
-
 test('all-zero balances select Invalid, matching post-timeout resolution', () => {
 	const details = createReportingDetails()
 	expect(getStrictLeadingEscalationOutcome(details.sides.map(side => ({ ...side, balance: 0n })))).toBe('invalid')
-})
-
-test('hypothetical claims reuse local and imported math without requiring finalization', () => {
-	const details = createReportingDetails({ bindingCapital: rep(5n) })
-	const local = { amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(8n), depositIndex: 0n, depositor: zeroAddress }
-	const imported = { amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(8n), parentDepositIndex: 0n, depositor: zeroAddress }
-	const resolved = createReportingDetails({ ...details, questionOutcome: 'no', parentWithdrawalEnabled: true })
-	expect(getHypotheticalClaimAmount(details, 'no', local)).toBe(getEscalationDepositClaimAmount(resolved, 'no', local))
-	expect(getHypotheticalClaimAmount(details, 'no', imported)).toBe(getImportedEscalationDepositClaimAmount(resolved, 'no', imported))
-	expect(getHypotheticalClaimAmount(details, 'yes', local)).toBe(0n)
-	const tied = { ...details, sides: details.sides.map(side => ({ ...side, balance: rep(8n) })) }
-	expect(getHypotheticalClaimAmount(tied, 'yes', local)).toBeUndefined()
-	expect(details.questionOutcome).toBe('none')
 })
 
 test('display leaders exclude all-zero balances but retain unique positive leaders', () => {
@@ -555,8 +523,8 @@ describe('fork-triggering reports', () => {
 		expect(getReportingForkTriggerAmount(createNotStartedReportingDetails(), 'yes')).toBeUndefined()
 		expect(getReportingForkTriggerAmount({ ...forkReadyDetails(), hasReachedNonDecision: true }, 'no')).toBeUndefined()
 	})
-	test('max reward never fills a fork-triggering amount', () => {
-		expect(getReportingMaxProfitContribution(forkReadyDetails(), 'no')).toEqual({ amountAttoRep: undefined, reason: 'Max reward is unavailable because matching the other side would trigger the universe fork.' })
+	test('Full reward share never fills a fork-triggering amount', () => {
+		expect(getReportingMaxProfitContribution(forkReadyDetails(), 'no')).toEqual({ amountAttoRep: undefined, reason: 'Full reward share is unavailable because matching the other side would end reporting without a decision.' })
 	})
 	test('fork progress follows the second-largest side', () => {
 		expect(getSecondLargestEscalationBalance([side('invalid', rep(1n)), side('yes', rep(5n)), side('no', rep(8n))])).toBe(rep(5n))
@@ -573,11 +541,4 @@ describe('reporting opening boundary', () => {
 		expect(hasReportingOpened(100n, 101n)).toBe(true)
 		expect(hasReportingOpened(100n, undefined)).toBe(undefined)
 	})
-})
-
-test('reaching non-decision does not claim the universe fork has happened', () => {
-	const details = createReportingDetails({ hasReachedNonDecision: true })
-	const parameters = { reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime }
-	expect(getReportingStagePresentation({ ...parameters, forkAlreadyTriggered: false })?.label).toBe('Ready to fork')
-	expect(getReportingStagePresentation({ ...parameters, forkAlreadyTriggered: true })?.label).toBe('Fork triggered')
 })

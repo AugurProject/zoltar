@@ -44,13 +44,13 @@ function splitEmbeddedAddresses(value: string) {
 		.map(segment => ({ isAddress: /^0x[0-9a-fA-F]{40}$/.test(segment), segment }))
 }
 
-function TransactionDetailText({ value }: { value: string }) {
+export function TransactionDetailText({ value, longAbbreviation }: { value: string; longAbbreviation?: boolean | undefined }) {
 	const slot = useRef<HTMLSpanElement>(null)
 	const segments = splitEmbeddedAddresses(value)
 	if (!segments.some(({ isAddress }) => isAddress)) return <>{value}</>
 	return (
 		<span className='global-transaction-detail-text' ref={slot}>
-			{segments.map(({ isAddress, segment }, index) => (isAddress ? <FittedAddressValue key={index} address={segment} className='global-transaction-detail-address' slot={slot} /> : <span key={index}>{segment}</span>))}
+			{segments.map(({ isAddress, segment }, index) => (isAddress ? <FittedAddressValue key={index} address={segment} className='global-transaction-detail-address' longAbbreviation={longAbbreviation} slot={slot} /> : <span key={index}>{segment}</span>))}
 		</span>
 	)
 }

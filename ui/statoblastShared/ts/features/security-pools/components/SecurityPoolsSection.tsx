@@ -1,158 +1,225 @@
-import * as collateralCopy from '../../../copy/collateral.js'
-import { useId, useRef, useState } from 'preact/hooks'
-import { isAddress } from '@zoltar/core-shared/evm/ethereum'
-import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import * as pageCopy from '../../../copy/securityPoolPage.js'
+import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '../../useStatoblastPageRefresh.js'
+import { SecurityPoolQuestionsPanel } from './SecurityPoolQuestionsPanel.js'
+import { StatoblastPoolHead } from './StatoblastPoolHead.js'
+import { statoblastPageHref, type StatoblastPoolPage } from '../../../lib/routing.js'
+import { buildRouteHref, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { useSecurityPoolPriceDeadline } from '../hooks/useSecurityPoolPriceDeadline.js'
+import { useSecurityPoolPriceFunds } from '../hooks/useSecurityPoolPriceFunds.js'
+import { useCallback, useEffect, useId, useRef } from 'preact/hooks'
+import { isAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
-import { rememberedSecurityPool, useSecurityPool } from '../hooks/useSecurityPool.js'
+import { useSecurityPool } from '../hooks/useSecurityPool.js'
 import { useSecurityPoolActions } from '../hooks/useSecurityPoolActions.js'
 import { useSecurityPoolAggregate } from '../hooks/useSecurityPoolAggregate.js'
-import { useSecurityPoolPurchase } from '../hooks/useSecurityPoolPurchase.js'
-import { RegisteredSecurityPools } from './RegisteredSecurityPools.js'
 import { SecurityPoolTakeover } from './SecurityPoolTakeover.js'
 import { SecurityPoolAggregatePanel } from './SecurityPoolAggregatePanel.js'
-import { SecurityPoolSharedFork } from './SecurityPoolSharedFork.js'
-import { SecurityPoolPurchasePanel } from './SecurityPoolPurchasePanel.js'
+import { SecurityPoolSharedFork, type ForkQuestionRead } from './SecurityPoolSharedFork.js'
 import { SecurityPoolPriceReport } from './SecurityPoolPriceReport.js'
 import { accountPriceTarget } from '../hooks/useSecurityPoolPrice.js'
-import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
+import { SecurityPoolDeployment } from './SecurityPoolDeployment.js'
+import { SecurityPoolButton } from './SecurityPoolControls.js'
 import * as copy from '../../../copy/securityPool.js'
 import * as capitalCopy from '../../../copy/securityPoolCapital.js'
 
 /** `walletConnected` reports a wallet on any network; `parameters.accountAddress` is set only on the app's network. */
-export function SecurityPoolsSection({ parameters, walletConnected, enabled, environmentKey, activeUniverseId }: { parameters: WriteOperationsParameters; walletConnected: boolean; enabled: boolean; environmentKey: number; activeUniverseId: bigint }) {
-	const model = useSecurityPool({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId })
-	const actions = useSecurityPoolActions(model, parameters)
+export function SecurityPoolsSection({
+	parameters,
+	walletConnected,
+	walletAddress,
+	enabled,
+	environmentKey,
+	activeUniverseId,
+	cacheReads = false,
+	page,
+	deploying = false,
+	forkQuestion,
+	forkQuestionRead,
+	forkChildren,
+	forkRecapitalizationDeadline,
+	onBranchCommitted,
+	openOracleHref,
+	registerPageRefresh,
+	onReadStatus,
+	autoRefresh,
+}: {
+	registerPageRefresh?: RegisterStatoblastPageRefresh | undefined
+	onReadStatus?: ReportStatoblastReadStatus | undefined
+	autoRefresh?: boolean | undefined
+	cacheReads?: boolean
+	forkQuestion?: MarketDetails | undefined
+	forkQuestionRead?: ForkQuestionRead | undefined
+	forkChildren?: readonly ZoltarChildUniverseSummary[] | undefined
+	forkRecapitalizationDeadline?: bigint | undefined
+	onBranchCommitted?: ((committed: boolean) => void) | undefined
+	openOracleHref?: string | undefined
+	page?: StatoblastPoolPage | undefined
+	deploying?: boolean
+	parameters: WriteOperationsParameters
+	walletConnected: boolean
+	walletAddress?: Address | undefined
+	enabled: boolean
+	environmentKey: number
+	activeUniverseId: bigint
+}) {
+	const readingWallet = walletAddress ?? parameters.accountAddress
+	const model = useSecurityPool({ accountAddress: readingWallet, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
+	const refreshError = useStatoblastRefreshError(model.error, model.displayedAt)
+	useEffect(() => {
+		if (page?.tab !== 'price') onReadStatus?.(model.displayedAt, undefined)
+	}, [model.displayedAt, onReadStatus, page?.tab])
+	const reportPriceReadStatus = useCallback<ReportStatoblastReadStatus>((readAt, progress) => onReadStatus?.(readAt ?? model.displayedAt, progress), [model.displayedAt, onReadStatus])
+	const wrongNetwork = walletConnected && parameters.accountAddress === undefined ? getWrongNetworkReason() : undefined
+	const actions = useSecurityPoolActions(model, parameters, deploying, wrongNetwork)
+	const refreshPage = deploying ? actions.refreshDeploymentProgress : model.refresh
+	useStatoblastPageRefresh(registerPageRefresh, refreshPage)
+	const openChildPosition = (pool: Address, universeId: bigint, owner: Address | undefined) => {
+		const { routeHash, search } = parseRouteHash(statoblastPageHref({ kind: 'pool', pool, tab: 'capital' }, universeId))
+		const query = new URLSearchParams(search)
+		if (owner === undefined) query.delete('owner')
+		else query.set('owner', owner)
+		window.location.hash = buildRouteHref(routeHash, `?${query}`)
+	}
+	const shownSetupStage = model.setup?.stage ?? model.savedSetupStage
+	const preparingPool = useRef<Address>()
+	if (page !== undefined && shownSetupStage !== undefined && shownSetupStage < 4) preparingPool.current = page.pool
+	const setupVerificationReasonId = useId()
+	const setupVerificationReason = model.setup === undefined && model.savedSetupStage !== undefined ? actions.preparationReason(1) : undefined
+	const priceDeadline = useSecurityPoolPriceDeadline(model.presentationSnapshot, model.displayedAt, model.refresh)
 	const capital = useSecurityPoolAggregate(model, actions, parameters.accountAddress)
-	const purchase = useSecurityPoolPurchase(model, actions)
-	// Decided at mount, before a remembered security pool fills the field, so the list never opens and then jumps shut.
-	const [listInitiallyOpen] = useState(() => model.managerInput.trim() === '' && rememberedSecurityPool() === undefined)
-	// Said in place of the owner hint, so a visitor with no wallet learns why an opened security pool does not load without the list moving.
-	// Only once the page can read the chain, so a wallet still starting up is not told to connect.
-	const ownerMissing = enabled && isAddress(model.managerInput.trim()) && !isAddress(model.ownerInput.trim())
-	let ownerMessage: string | undefined
-	// Only a visitor with no wallet at all is asked to connect one; a wallet on another network is flagged in the header.
-	if (ownerMissing) ownerMessage = walletConnected ? copy.ownerAddressNeeded : copy.ownerNeeded
-	const disabled = actions.busy !== undefined
-	const deployReasonId = useId()
-	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
-	// only opening another security pool, owner or universe replaces it.
-	const accountIdentity = `${model.managerInput.trim().toLowerCase()}:${model.ownerInput.trim().toLowerCase()}:${model.universeInput.trim()}`
-	const shownAccount = useRef<string>()
-	if (model.presentationSnapshot !== undefined) shownAccount.current = accountIdentity
+	const shown = model.presentationSnapshot
+	const fundedPriceReports = useSecurityPoolPriceFunds(model.snapshot, shown, enabled && page !== undefined, readingWallet)
+	const hasPositionOwner = isAddress(model.ownerInput.trim())
+	const connectedPositionOwner = shown?.auctionVault?.bidder ?? model.ownerInput
+	let positionMode: 'own' | 'other' | 'none' = 'none'
+	if (hasPositionOwner) positionMode = connectedPositionOwner.toLowerCase() === readingWallet?.toLowerCase() ? 'own' : 'other'
+	const initialPoolLoading = model.loading && shown === undefined && shownSetupStage === undefined
+
 	return (
 		<div className='security-pool-flow'>
-			<RouteHeader title={copy.title} />
-			<SectionBlock title={copy.setup}>
-				<MetricGrid>
-					<SecurityPoolInput label={copy.manager} value={model.managerInput} onChange={model.setManagerInput} disabled={disabled} />
-					<SecurityPoolInput label={copy.owner} value={model.ownerInput} onChange={model.setOwnerInput} hint={ownerMissing ? undefined : copy.ownerHint} error={ownerMessage} liveError disabled={disabled} />
-					<SecurityPoolInput label={copy.universe} value={model.universeInput} onChange={model.setUniverseInput} disabled={disabled} />
-				</MetricGrid>
-				<RegisteredSecurityPools
-					enabled={enabled}
-					environmentKey={environmentKey}
-					universeId={activeUniverseId}
-					selected={model.managerInput}
-					selectedUniverse={model.universeInput}
-					initiallyOpen={listInitiallyOpen}
-					disabled={disabled}
-					onOpen={securityPool => {
-						// The list is for the active universe, so open the security pool there.
-						model.setUniverseInput(activeUniverseId.toString())
-						model.setManagerInput(securityPool)
-					}}
+			{deploying && <SecurityPoolDeployment actions={actions} model={model} />}
+			{!deploying && page !== undefined && <StatoblastPoolHead page={page} model={model} wallet={readingWallet} priceChecking={priceDeadline.status !== undefined} fundsRemain={(fundedPriceReports?.length ?? 0) > 0} />}
+			{!deploying && page !== undefined && shownSetupStage !== undefined && (shownSetupStage < 4 || preparingPool.current === page.pool) && (
+				<SectionBlock title={capitalCopy.prepareTitle} description={shownSetupStage === 4 ? undefined : capitalCopy.prepareHint}>
+					<UserMessage tone={shownSetupStage === 4 ? 'success' : 'neutral'} detail={capitalCopy.prepareProgress(shownSetupStage)} />
+					{setupVerificationReason === undefined ? undefined : <InlineHint id={setupVerificationReasonId} message={setupVerificationReason} />}
+					<ol className='statoblast-fork-steps'>
+						{capitalCopy.prepareStages.map((label, index) => (
+							<li key={label}>
+								<SecurityPoolButton
+									model={actions}
+									action={`prepareSecurityPool${index + 1}`}
+									label={label}
+									pendingLabel={capitalCopy.preparing}
+									reason={actions.preparationReason(index + 1)}
+									sharedReasonId={setupVerificationReason === undefined ? undefined : setupVerificationReasonId}
+									onClick={() => actions.prepare(index + 1)}
+								/>
+								<span>{shownSetupStage > index ? pageCopy.stepDone : pageCopy.sharedSetupStep}</span>
+							</li>
+						))}
+					</ol>
+				</SectionBlock>
+			)}
+			{priceDeadline.status === 'checking' && <UserMessage placement='section' announcement='polite' detail={pageCopy.priceWindowEndedChecking} />}
+			{priceDeadline.status === 'failed' && (
+				<button type='button' onClick={priceDeadline.retry}>
+					{pageCopy.tryAgain}
+				</button>
+			)}
+			{model.error === undefined ? undefined : (
+				<UserMessage
+					placement='section'
+					tone='error'
+					announcement='polite'
+					actions={
+						<button className='secondary' type='button' onClick={() => void refreshPage()}>
+							{pageCopy.tryAgain}
+						</button>
+					}
+					detail={refreshError}
 				/>
-				<details>
-					<summary>{copy.deploy}</summary>
-					<div className='form-grid security-pool-creation-form'>
-						<ViewTabs
-							ariaLabel={collateralCopy.selector}
-							variant='segmented'
-							value={actions.collateralSymbol}
-							onChange={actions.setCollateralSymbol}
-							options={[
-								{ value: collateralCopy.weth, label: collateralCopy.weth, disabled },
-								{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled },
-							]}
-						/>
-						<SecurityPoolInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
-						<SecurityPoolInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} error={actions.originForked ? copy.originForked : undefined} liveError />
-						<SecurityPoolInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
-						<SecurityPoolInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
-						<ViewTabs
-							ariaLabel={copy.admissionMode}
-							variant='segmented'
-							value={actions.admissionMode}
-							onChange={actions.setAdmissionMode}
-							options={[
-								{ value: 'open', label: copy.admissionOpen },
-								{ value: 'fixed', label: copy.admissionFixed },
-							]}
-						/>
-						<UserMessage detail={actions.admissionMode === 'open' ? copy.admissionOpenHint : copy.admissionFixedHint} />
-						{actions.admissionMode === 'fixed' ? <SecurityPoolInput label={copy.fixedQuestionIds} hint={copy.fixedQuestionIdsHint} value={actions.fixedQuestions} onChange={actions.setFixedQuestions} disabled={disabled} /> : undefined}
-						<SecurityPoolInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={disabled} numeric />
-						<MetricGrid>
-							<SecurityPoolInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
-							<SecurityPoolInput label={collateralCopy.purchaseFee(actions.collateral.symbol)} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
-							<SecurityPoolInput label={collateralCopy.commitment(actions.collateral.symbol)} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
-							<SecurityPoolInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
-							<SecurityPoolInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
-							<SecurityPoolInput label={capitalCopy.outcomeRate} hint={capitalCopy.outcomeRateHint} value={actions.economicsDraft.minimumOutcomeRate} onChange={value => actions.setEconomicsField('minimumOutcomeRate', value)} disabled={disabled} numeric />
-						</MetricGrid>
-						<UserMessage detail={copy.immutableEconomics} />
-						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
-						<SecurityPoolButton
-							model={actions}
-							action='deploySecurityPoolAdmission'
-							label={copy.deployAdmission}
-							pendingLabel={copy.deployingAdmission}
-							reason={actions.admissionDeployReason}
-							sharedReasonId={actions.admissionDeployReason === copy.originForked ? deployReasonId : undefined}
-							onClick={actions.deployAdmission}
-						/>
-						{actions.admissionAddress === undefined ? undefined : <code>{actions.admissionAddress}</code>}
-						<SecurityPoolButton model={actions} action='deploySecurityPool' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} sharedReasonId={actions.deployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deploy} />
-						{actions.originForked ? (
-							<div className='tx-action-feedback shared-action-reason'>
-								<InlineHint id={deployReasonId} message={copy.originForkedAction} />
-							</div>
-						) : undefined}
-					</div>
-				</details>
-			</SectionBlock>
-			<SectionBlock title={capitalCopy.prepareTitle} description={actions.setupStage === 4 ? undefined : capitalCopy.prepareHint}>
-				<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={actions.setupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(actions.setupStage)} />
-				<div className='actions'>
-					{capitalCopy.prepareStages.map((label, index) => (
-						<SecurityPoolButton key={label} model={actions} action={`prepareSecurityPool${index + 1}`} label={label} pendingLabel={capitalCopy.preparing} reason={actions.preparationReason(index + 1)} onClick={() => actions.prepare(index + 1)} />
-					))}
-				</div>
-			</SectionBlock>
-			{model.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.error} />}
+			)}
 			{actions.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={actions.error} />}
 			{actions.feedback === undefined ? undefined : <UserMessage placement='section' tone='success' announcement='polite' detail={actions.feedback} />}
-			<TransactionScopeProvider scope={actions.scope}>
-				<SecurityPoolAggregatePanel model={capital} actions={actions} priceReport={shownAccount.current === accountIdentity ? unfolded => <SecurityPoolPriceReport scope='universe' target={unfolded ? accountPriceTarget(model.snapshot) : undefined} actions={actions} bidder={parameters.accountAddress} /> : undefined} />
-				<SecurityPoolTakeover model={model} actions={actions} />
-				<SecurityPoolPurchasePanel model={model} purchase={purchase} actions={actions} />
-				<SecurityPoolSharedFork
-					snapshot={model.snapshot}
-					actions={actions}
-					bidder={parameters.accountAddress}
-					openUniverse={universeId => model.setUniverseInput(universeId.toString())}
-					openVault={(vault, universeId) => {
-						model.setOwnerInput(vault)
-						model.setUniverseInput(universeId.toString())
-					}}
-				/>
-			</TransactionScopeProvider>
+			{!deploying && page !== undefined && initialPoolLoading && <SkeletonList label={copy.loading} />}
+			{!deploying && page !== undefined && !initialPoolLoading && (
+				<TransactionScopeProvider scope={actions.scope}>
+					{page.tab === 'capital' && <SecurityPoolAggregatePanel positionMode={positionMode} model={capital} priceDeadlineChecking={priceDeadline.status !== undefined} actions={actions} />}
+					{page.tab === 'liquidations' &&
+						((shown?.forkTime ?? 0n) > 0n ? (
+							<SectionBlock title={pageCopy.poolTabLabels.liquidations}>
+								<UserMessage detail={pageCopy.liquidationsUnavailableAfterFork} />
+							</SectionBlock>
+						) : (
+							<SecurityPoolTakeover key={page.positionId?.toString()} positionId={page.positionId} wallet={parameters.accountAddress} model={model} actions={actions} autoRefresh={autoRefresh ?? false} />
+						))}
+					{page.tab === 'questions' && (
+						<SecurityPoolQuestionsPanel
+							pool={page.pool}
+							universeId={activeUniverseId}
+							actions={actions}
+							admission={shown?.admission}
+							forked={(shown?.forkTime ?? 0n) > 0n}
+							owner={parameters.accountAddress}
+							enabled={enabled}
+							environmentKey={environmentKey}
+							registerPageRefresh={registerPageRefresh}
+							paging={model.loading}
+							onPreviousApprovedPage={() => void model.previousApprovedQuestionPage()}
+							onNextApprovedPage={() => void model.nextApprovedQuestionPage()}
+						/>
+					)}
+					{page.tab === 'price' && (
+						<SecurityPoolPriceReport
+							scope='universe'
+							target={hasPositionOwner ? accountPriceTarget(model.snapshot) : undefined}
+							displayTarget={hasPositionOwner ? accountPriceTarget(shown) : undefined}
+							actions={actions}
+							bidder={parameters.accountAddress}
+							returnFundsOnly={(shown?.forkTime ?? 0n) > 0n}
+							defaultReportId={fundedPriceReports?.find(report => sameAddress(report.funder, parameters.accountAddress))?.reportId ?? fundedPriceReports?.[0]?.reportId}
+							priceWindowChecking={priceDeadline.status !== undefined}
+							autoRefresh={autoRefresh ?? false}
+							registerPageRefresh={registerPageRefresh}
+							onReadStatus={reportPriceReadStatus}
+							priceBand={
+								shown === undefined || shown.acceptedPrice === 0n
+									? undefined
+									: { accepted: shown.acceptedPrice, health: shown.conservativePrice, liquidation: shown.liquidationPrice, validUntil: shown.priceValidUntil, timestamp: shown.timestamp, decimals: shown.collateral.decimals, symbol: shown.collateral.symbol, readAt: model.displayedAt }
+							}
+							openOracleHref={openOracleHref}
+						/>
+					)}
+					{page.tab === 'fork' && shown?.forkTime === 0n && <UserMessage detail={pageCopy.universeUnforked} />}
+					{page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && !hasPositionOwner && <UserMessage detail={pageCopy.connectToSeePosition} />}
+					{page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && (
+						<SecurityPoolSharedFork
+							forkQuestion={forkQuestion}
+							forkQuestionRead={forkQuestionRead}
+							childUniverses={forkChildren}
+							forkRecapitalizationDeadline={forkRecapitalizationDeadline}
+							autoRefresh={autoRefresh}
+							registerPageRefresh={registerPageRefresh}
+							onBranchCommitted={onBranchCommitted}
+							snapshot={model.snapshot}
+							presentationSnapshot={shown}
+							actions={actions}
+							bidder={parameters.accountAddress}
+							openUniverse={universeId => openChildPosition(page.pool, universeId, hasPositionOwner ? shown?.owner : undefined)}
+							openVault={(vault, universeId) => openChildPosition(page.pool, universeId, vault)}
+						/>
+					)}
+				</TransactionScopeProvider>
+			)}
 		</div>
 	)
 }

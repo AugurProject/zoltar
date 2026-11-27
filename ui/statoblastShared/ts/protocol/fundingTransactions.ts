@@ -1,3 +1,4 @@
+import { reviewErrors } from '../copy/protocolErrors.js'
 import type { TransactionPlanStep, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
 export type FundingTransaction = {
@@ -14,7 +15,7 @@ export async function runFundingTransactions(client: Pick<WriteClient, 'onTransa
 		const required = (await Promise.all(actions.map(async (action, index) => (!completed.has(index) && (await action.isRequired()) ? index : undefined)))).filter(index => index !== undefined)
 		const execute = async (selected: number) => {
 			const action = actions[selected]
-			if (action === undefined || !required.includes(selected)) throw new Error('Unexpected funding transaction selection.')
+			if (action === undefined || !required.includes(selected)) throw new Error(reviewErrors.fundingSelection)
 			if (!(await action.isRequired())) return
 			await action.execute()
 			completed.add(selected)

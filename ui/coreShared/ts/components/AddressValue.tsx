@@ -22,6 +22,8 @@ type AddressValueProps = {
 	abbreviated?: boolean
 	className?: string
 	compactAbbreviation?: boolean
+	/** Shortens only to the first and last ten hex digits. */
+	longAbbreviation?: boolean
 	explorerProfile?: NetworkProfile | undefined
 	/** Keep the entire address visible, wrapping across lines when necessary. */
 	wrap?: boolean
@@ -29,7 +31,8 @@ type AddressValueProps = {
 }
 
 /** Shortened forms, longest first: a slot too narrow for one falls back to the next instead of clipping it. */
-function getAbbreviations(address: string, compactAbbreviation: boolean) {
+function getAbbreviations(address: string, compactAbbreviation: boolean, longAbbreviation: boolean) {
+	if (longAbbreviation) return [abbreviateAddress(address, 12, 10)]
 	const forms = compactAbbreviation ? [abbreviateAddress(address, 6, 4), abbreviateAddress(address, 4, 4)] : [abbreviateAddress(address), abbreviateAddress(address, 6, 4), abbreviateAddress(address, 4, 4)]
 	return forms.filter((form, index) => forms.indexOf(form) === index)
 }
@@ -38,13 +41,27 @@ function getAbbreviations(address: string, compactAbbreviation: boolean) {
  * The address text alone, for a caller that supplies its own link or control. Unless `alwaysAbbreviated` or `wrap` is
  * set, it shows the full address when it fits its container and otherwise the longest shortened form that does.
  */
-export function AddressText({ alwaysAbbreviated = false, address, compactAbbreviation = false, widthConstraint, wrap = false }: { alwaysAbbreviated?: boolean; address: string; compactAbbreviation?: boolean; widthConstraint?: AddressWidthConstraint | undefined; wrap?: boolean }) {
+export function AddressText({
+	alwaysAbbreviated = false,
+	address,
+	compactAbbreviation = false,
+	longAbbreviation = false,
+	widthConstraint,
+	wrap = false,
+}: {
+	alwaysAbbreviated?: boolean
+	address: string
+	compactAbbreviation?: boolean
+	longAbbreviation?: boolean
+	widthConstraint?: AddressWidthConstraint | undefined
+	wrap?: boolean
+}) {
 	const container = useRef<HTMLSpanElement>(null)
 	const full = useRef<HTMLSpanElement>(null)
 	const abbreviated = useRef<(HTMLSpanElement | null)[]>([])
 	// -1 shows the full address; otherwise the index of the longest shortened form that fits.
 	const [formIndex, setFormIndex] = useState(-1)
-	const abbreviations = useMemo(() => getAbbreviations(address, compactAbbreviation), [address, compactAbbreviation])
+	const abbreviations = useMemo(() => getAbbreviations(address, compactAbbreviation, longAbbreviation), [address, compactAbbreviation, longAbbreviation])
 	useLayoutEffect(() => {
 		const element = container.current
 		const fullText = full.current
@@ -80,7 +97,7 @@ export function AddressText({ alwaysAbbreviated = false, address, compactAbbrevi
 			</>
 		)
 	return (
-		<span className={`address-value-text${widthConstraint === undefined ? '' : ' address-value-fit-content'}`} data-abbreviated={formIndex !== -1} ref={container}>
+		<span className={`address-value-text${widthConstraint === undefined ? '' : ' address-value-fit-content'}${longAbbreviation ? ' address-value-long-abbreviation' : ''}`} data-abbreviated={formIndex !== -1} ref={container}>
 			<span className='address-value-full' ref={full}>
 				{address}
 			</span>
@@ -101,7 +118,7 @@ export function AddressText({ alwaysAbbreviated = false, address, compactAbbrevi
 	)
 }
 
-export function AddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, explorerProfile, widthConstraint, wrap = false }: AddressValueProps) {
+export function AddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, explorerProfile, longAbbreviation = false, widthConstraint, wrap = false }: AddressValueProps) {
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
 
 	if (address === undefined) {
@@ -114,7 +131,7 @@ export function AddressValue({ abbreviated = false, address, className = '', com
 	}
 	const validAddress = isHexAddressInput(address)
 	const href = validAddress ? buildAddressExplorerUrl(explorerProfile ?? getRuntimeNetworkProfile(), address) : undefined
-	const text = <AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} widthConstraint={widthConstraint} wrap={wrap} />
+	const text = <AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} longAbbreviation={longAbbreviation} widthConstraint={widthConstraint} wrap={wrap} />
 	const unavailableReason = validAddress ? commonCopy.addressExplorerUnavailable : commonCopy.addressExplorerInvalid
 
 	return (
@@ -164,12 +181,12 @@ export function AddressValue({ abbreviated = false, address, className = '', com
  * An address that shortens only when it cannot fit `slot`, a stable allocation that does not shrink with the address. The
  * control fits its content, so a copy glyph stays right after the visible text.
  */
-export function FittedAddressValue({ address, className = '', slot }: { address: string; className?: string; slot: RefObject<HTMLElement> }) {
+export function FittedAddressValue({ address, className = '', longAbbreviation, slot }: { address: string; className?: string; longAbbreviation?: boolean | undefined; slot: RefObject<HTMLElement> }) {
 	const control = useRef<HTMLSpanElement>(null)
 	const widthConstraint = useMemo(() => ({ control, slot }), [slot])
 	return (
 		<span className={`address-fit-control ${className}`.trim()} ref={control}>
-			<AddressValue address={address} widthConstraint={widthConstraint} />
+			<AddressValue address={address} longAbbreviation={longAbbreviation ?? false} widthConstraint={widthConstraint} />
 		</span>
 	)
 }

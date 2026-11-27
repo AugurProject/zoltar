@@ -1,4 +1,5 @@
 import { concatHex, getAddress, getCreate2Address, isAddress, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { verifyBoundCloneCode } from './securityPoolBoundClone.js'
 
 /**
  * Every auction vault is a minimal proxy (EIP-1167) to one shared implementation, followed by the vault's four immutable
@@ -18,13 +19,13 @@ function address(value: Address, label: string): Hex {
 	return `0x${getAddress(value).slice(2).toLowerCase()}`
 }
 function word(value: bigint, label: string) {
-	if (typeof value !== 'bigint' || value < 0n || value >= 1n << 256n) throw new Error(`${label} must fit uint256.`)
+	if (typeof value !== 'bigint' || value < 0n || value >= 1n << 256n) throw new Error(`${label} is out of range.`)
 	return toHex(value, { size: 32 })
 }
 
 /** @public The exact code a vault clone carries; external verifiers and fixtures reproduce it from the bindings. */
 export function auctionVaultRuntimeCode(bindings: AuctionVaultBindings): Hex {
-	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Vault implementation'), FORWARDER_SUFFIX, address(bindings.owner, 'Vault owner'), address(bindings.capital, 'Vault capital'), address(bindings.auction, 'Vault auction'), word(bindings.bidId, 'Vault bid')])
+	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction vault contract template'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Auction bid ID')])
 }
 /** @public The CREATE2 init code the auction uses; external tooling derives vault addresses from it. */
 export function auctionVaultCreationCode(bindings: AuctionVaultBindings): Hex {
@@ -33,7 +34,7 @@ export function auctionVaultCreationCode(bindings: AuctionVaultBindings): Hex {
 }
 /** The auction creates each clone with CREATE2 and the bid identifier as salt. */
 export function predictAuctionVaultAddress(bindings: AuctionVaultBindings): Address {
-	return getCreate2Address({ from: getAddress(bindings.auction), salt: word(bindings.bidId, 'Vault bid'), bytecode: auctionVaultCreationCode(bindings) })
+	return getCreate2Address({ from: getAddress(bindings.auction), salt: word(bindings.bidId, 'Auction bid ID'), bytecode: auctionVaultCreationCode(bindings) })
 }
 /** Decode a deployed account's code as a vault clone, or return undefined for any other code. */
 export function decodeAuctionVaultBindings(code: Hex | undefined): AuctionVaultBindings | undefined {
@@ -50,5 +51,5 @@ export function decodeAuctionVaultBindings(code: Hex | undefined): AuctionVaultB
 }
 /** Accept only the exact clone the auction would have created for these bindings. */
 export function verifyAuctionVaultCode(code: Hex | undefined, bindings: AuctionVaultBindings, label = 'auction vault') {
-	if (code === undefined || code.toLowerCase() !== auctionVaultRuntimeCode(bindings).toLowerCase()) throw new Error(`Unrecognized ${label} runtime code.`)
+	verifyBoundCloneCode(code, auctionVaultRuntimeCode(bindings), label)
 }

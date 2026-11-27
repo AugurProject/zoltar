@@ -284,8 +284,8 @@ describe('runWriteAction', () => {
 	})
 
 	test.each([
-		{ name: 'the active wallet account changed', backend: { accounts: [nextWalletAddress] }, expectedError: 'Wallet account changed. Review the action with the connected account and try again.' },
-		{ name: 'the wallet disconnects', backend: { accounts: [] }, expectedError: 'Wallet account is no longer connected. Reconnect your wallet and try again.' },
+		{ name: 'the active wallet account changed', backend: { accounts: [nextWalletAddress] }, expectedError: 'The connected wallet address changed. Review the action and try again.' },
+		{ name: 'the wallet disconnects', backend: { accounts: [] }, expectedError: 'Your wallet is no longer connected. Reconnect it and try again.' },
 		// Nothing was sent, so the check's own instruction is shown instead of a failed-transaction frame.
 		{ name: 'the wallet network changes', backend: { chainId: '0x5' }, expectedError: 'Wallet network changed. Switch to Ethereum mainnet and try again.' },
 	])('fails before requesting a transaction when $name', async ({ backend, expectedError }) => {

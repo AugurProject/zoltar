@@ -1,3 +1,4 @@
+import * as deploymentCopy from '../copy/deployment.js'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
 	statoblast_QuestionForker_QuestionForker,
@@ -6,15 +7,20 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_tokens_ShareToken_ShareToken,
 } from '../contractArtifact.js'
+import { statoblast_Multicall3_Multicall3, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { installAppContractLabelResolver } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { questionDataContract, universeContract } from '../copy/app.js'
 
 const CONTRACT_LABEL_BY_ABI = new Map<readonly unknown[], string>([
-	[statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, 'SharedPoolPriceFeed'],
-	[statoblast_QuestionForker_QuestionForker.abi, 'QuestionForker'],
-	[statoblast_QuestionLedger_QuestionLedger.abi, 'QuestionLedger'],
-	[statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'SecurityPoolFactory'],
+	[statoblast_Multicall3_Multicall3.abi, deploymentCopy.batchReadContract],
+	[ZoltarQuestionData_ZoltarQuestionData.abi, questionDataContract],
+	[Zoltar_Zoltar.abi, universeContract],
+	[statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, deploymentCopy.priceFeed],
+	[statoblast_QuestionForker_QuestionForker.abi, deploymentCopy.forkContract],
+	[statoblast_QuestionLedger_QuestionLedger.abi, deploymentCopy.questionContract],
+	[statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, deploymentCopy.poolDeploymentContract],
 	[statoblast_openOracle_OpenOracle_OpenOracle.abi, 'OpenOracle'],
-	[statoblast_tokens_ShareToken_ShareToken.abi, 'ShareToken'],
+	[statoblast_tokens_ShareToken_ShareToken.abi, deploymentCopy.shareToken],
 ])
 
 export function installStatoblastContractLabels() {

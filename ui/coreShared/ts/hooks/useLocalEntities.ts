@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import { getLocalEntityStoreRevision, hasFavoriteEntry, normalizeEntityId, readFavoriteEntries, setEntityFavorite, subscribeLocalEntityStore, type DownloadedEntityStore, type DownloadedItem, type LocalEntityApp, type LocalEntityKind, type LocalEntityScope } from '../lib/localEntityStore.js'
+import { getLocalEntityStoreRevision, hasFavoriteEntry, localEntityScopeForNetwork, normalizeEntityId, readFavoriteEntries, setEntityFavorite, subscribeLocalEntityStore, type DownloadedEntityStore, type DownloadedItem, type LocalEntityApp, type LocalEntityKind, type LocalEntityScope } from '../lib/localEntityStore.js'
 
 /**
  * The network and genesis deployment each keep their own favorites and downloaded summaries. A simulation chain is
@@ -8,9 +8,7 @@ import { getLocalEntityStoreRevision, hasFavoriteEntry, normalizeEntityId, readF
  * unrelated simulation of the same genesis root.
  */
 export function getLocalEntityScope(app: LocalEntityApp, kind: LocalEntityKind): LocalEntityScope {
-	const profile = getActiveNetworkProfile()
-	const network = `${profile.id}-${profile.chainIdHex.toLowerCase()}-${profile.genesisRepTokenAddress.toLowerCase()}`
-	return profile.id === 'simulation' ? { app, kind, network, persistence: 'session' } : { app, kind, network }
+	return localEntityScopeForNetwork(getActiveNetworkProfile(), app, kind)
 }
 
 function useLocalEntityStoreVersion() {

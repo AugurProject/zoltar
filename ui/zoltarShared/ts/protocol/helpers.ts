@@ -63,7 +63,7 @@ export function getEscalationSideLabel(key: ReportingOutcomeKey) {
 		case 'no':
 			return 'No'
 		default:
-			throw new Error(`Unhandled escalation side: ${JSON.stringify(key)}`)
+			throw new Error(zoltarCopy.formatUnknownReportingOutcome(key))
 	}
 }
 

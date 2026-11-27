@@ -1,63 +1,50 @@
+import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/statoblastShell.js'
+import { useOldActionDataNotice, type RegisterStatoblastPageRefresh } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import { StatoblastWatchlist } from './StatoblastWatchlist.js'
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
-import { PriceRequestStatusSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
-import { SecurityPoolQuestionWorkspace } from './SecurityPoolQuestionWorkspace.js'
-import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/UniversePoolDirectorySection.js'
 import { ZoltarMigrationWorkflow } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationWorkflow.js'
-import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
-import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
-import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
-import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
-import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
-import { buildPoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
-
-const STATOBLAST_NOT_FOUND_LINKS = [
-	{ href: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions },
-	{ href: statoblastRouting.getHash('security-pools'), label: statoblastAppCopy.securityPools },
-	{ href: buildPoolsRouteHash({ view: 'universes' }), label: zoltarCopy.universesTitle },
-	{ href: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports },
-	{ href: statoblastRouting.getHash('deploy'), label: commonCopy.deploy },
-] as const
+import { statoblastPageHref, type StatoblastPage } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { SecurityPoolQuestionWorkspace } from './SecurityPoolQuestionWorkspace.js'
 
 type Props = {
+	page: StatoblastPage
+	registerPageRefresh: RegisterStatoblastPageRefresh
+	contractsMissing: boolean
 	deploy: ComponentProps<typeof DeploymentRouteContent>
-	openOracle: ComponentProps<typeof PriceRequestStatusSection>
 	securityPools: ComponentProps<typeof SecurityPoolsSection>
-	readBackendMessage: string | undefined
-	route: StatoblastRoute
-	questions: ComponentProps<typeof SecurityPoolQuestionWorkspace>
-	questionView: QuestionLedgersView
-	universeDirectory: ComponentProps<typeof UniversePoolDirectorySection>
+	questions: Omit<ComponentProps<typeof SecurityPoolQuestionWorkspace>, 'entry'>
 	migration: ComponentProps<typeof ZoltarMigrationWorkflow>
 }
 
-function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
-	return shouldRenderAppRouteContent(route, readBackendMessage)
+function StatoblastMigrationWorkflow(props: Props['migration']) {
+	const actionDataNotice = useOldActionDataNotice(props.operations.zoltarUniverse?.hasForked === true ? props.operations.migrationBalancesReadAt : undefined)
+	return <ZoltarMigrationWorkflow {...props} singleForm actionDataNotice={actionDataNotice} />
 }
 
-export function AppRouteContent({ deploy, openOracle, securityPools, readBackendMessage, route, questions, questionView, universeDirectory, migration }: Props) {
-	if (!shouldRenderRouteContent({ readBackendMessage, route })) return undefined
-
-	switch (route) {
-		case 'deploy':
-			return <DeploymentRouteContent {...deploy} />
-		case 'pools':
-			if (questionView === 'universes') return <UniversePoolDirectorySection {...universeDirectory} />
-			if (questionView === 'migrate') return <ZoltarMigrationWorkflow {...migration} />
-			return <SecurityPoolQuestionWorkspace {...questions} />
-		case 'security-pools':
-			return <SecurityPoolsSection {...securityPools} />
-		case 'open-oracle':
-			return <PriceRequestStatusSection {...openOracle} />
-		case 'not-found':
-			return <NotFoundSection links={STATOBLAST_NOT_FOUND_LINKS} />
+export function AppRouteContent({ page, registerPageRefresh, contractsMissing, deploy, securityPools, questions, migration }: Props) {
+	if (contractsMissing)
+		return (
+			<div className='route-view-flow'>
+				<RouteHeader title={pageCopy.contractsMissingTitle} description={pageCopy.contractsMissingDetail} />
+				<DeploymentRouteContent {...deploy} />
+			</div>
+		)
+	switch (page.kind) {
+		case 'watchlist':
+			return <StatoblastWatchlist registerPageRefresh={registerPageRefresh} onReadStatus={questions.onReadStatus} enabled={questions.enabled} universe={questions.universeId} owner={questions.parameters.accountAddress} environmentKey={questions.environmentKey} />
+		case 'question':
+			return <SecurityPoolQuestionWorkspace {...questions} registerPageRefresh={registerPageRefresh} entry={page} />
+		case 'pool':
+			return <SecurityPoolsSection key={page.pool} {...securityPools} registerPageRefresh={registerPageRefresh} page={page} />
+		case 'deploy-pool':
+			return <SecurityPoolsSection key='deploy-pool' {...securityPools} deploying />
+		case 'migrate-rep':
+			return <StatoblastMigrationWorkflow {...migration} />
 		default:
-			return assertNever(route)
+			return <NotFoundSection links={[{ href: statoblastPageHref({ kind: 'watchlist' }), label: pageCopy.watchlist }]} />
 	}
 }

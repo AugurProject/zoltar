@@ -17,6 +17,7 @@ type BrowserSmokeState = {
 	body: string
 	height: number
 	hasMain: boolean
+	simulationStarting: boolean
 	readyState: DocumentReadyState
 	title: string
 	width: number
@@ -40,7 +41,7 @@ export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: 
 		state.body !== '' &&
 		state.body !== 'Loading…' &&
 		includesText(applicationTitle) &&
-		(explicitReadyStateReached || (!state.body.includes('BOOTSTRAPPING') && !state.body.includes('Starting simulation bootstrap'))) &&
+		(explicitReadyStateReached || !state.simulationStarting) &&
 		(readyText === undefined || includesText(readyText))
 	)
 }
@@ -189,7 +190,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 		const mountTimeoutMilliseconds = options.mountTimeoutMilliseconds ?? MOUNT_TIMEOUT_MILLISECONDS
 		while (Date.now() - start < mountTimeoutMilliseconds) {
 			const result = (await send('Runtime.evaluate', {
-				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, readyState: document.readyState, title: document.title, width: window.innerWidth })`,
+				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: window.innerHeight, hasMain: document.querySelector('main') !== null, simulationStarting: document.querySelector('.simulation-strip-progress') !== null, readyState: document.readyState, title: document.title, width: window.innerWidth })`,
 				returnByValue: true,
 			})) as { result?: { value?: string } }
 			const raw = result.result?.value

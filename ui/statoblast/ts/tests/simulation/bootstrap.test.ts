@@ -289,7 +289,7 @@ describe('simulation bootstrap', () => {
 			scenario: 'baseline',
 		})
 
-		expect(progressCalls).toContain('Initializing simulation engine')
+		expect(progressCalls).toContain('Starting the simulation')
 		expect(progressCalls).toContain('Preparing simulation chain')
 		expect(progressCalls).toContain('Using baseline simulation scenario')
 		expect(progressCalls).toContain('Simulation scenario ready')
@@ -341,7 +341,7 @@ describe('simulation bootstrap', () => {
 			scenario: 'deployed',
 		})
 
-		expect(progressCalls).toContain('Initializing simulation engine')
+		expect(progressCalls).toContain('Starting the simulation')
 		expect(progressCalls).toContain('Simulation scenario ready')
 		expect(writeCalls.length).toBeGreaterThan(1)
 	})
@@ -382,7 +382,7 @@ describe('simulation bootstrap', () => {
 					profile: createBaselineProfile(),
 					scenario: 'baseline',
 				}),
-			).rejects.toThrow('Simulation engine initialization timed out')
+			).rejects.toThrow('Simulation startup timed out')
 		} finally {
 			globalThis.setTimeout = originalSetTimeout
 		}

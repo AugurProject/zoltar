@@ -1,33 +1,247 @@
-import { expect, test } from 'bun:test'
+import { expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getAddress, TransactionLookupNotFoundError, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { createMulticallStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { getOpenOracleGameTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { localEntityScopeForNetwork } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
+import { initialDeploymentDraft } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/creation.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolPrice.js'
+import { poolTabLabels, returnFundsOnly } from '@zoltar/ui-statoblast-shared/copy/securityPoolPage.js'
+import { rememberSecurityPoolPriceReport, securityPoolPriceReportCache } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
 import { capitalSnapshot, owner, securityPool } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
-import { priceFeed, priceFixture } from './priceFixture.js'
+import { priceEscrow, priceFeed, priceFixture, priceOracle, priceWeth } from './priceFixture.js'
 
-const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
+const lifecycle = installDomTestLifecycle({
+	url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`,
+	afterTest: () => {
+		resetActiveEnvironmentForTesting()
+		resetRoutingForTesting()
+	},
+})
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
-const renderSecurityPools = async () => {
-	const view = await renderIntoDocument(<SecurityPoolsSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
+const poolPage = { kind: 'pool', pool: securityPool, tab: 'capital' } as const
+const renderSecurityPools = async (tab: 'capital' | 'price' | 'liquidations' = 'capital') => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', tab === 'capital' ? `#/pool/${securityPool}` : `#/pool/${securityPool}/${tab}`)
+	const view = await renderIntoDocument(<SecurityPoolsSection page={{ ...poolPage, tab }} parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
 	lifecycle.trackRendered(view)
 	return view
 }
 const sectionTitled = (container: Element, title: string) => [...container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === title)
-const universePriceReport = (backing: Element | undefined) => [...(backing?.querySelectorAll('details') ?? [])].find(details => details.querySelector('summary')?.textContent === priceCopy.scopes.universe.title)
-const firstPosition = (container: Element) => {
-	const position = [...container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
-	if (position === undefined) throw new Error('Position section missing')
-	return position
+
+test('walletless Capital shows the pool without reading a zero-address position and keeps explicit positions viewable', async () => {
+	installStatoblastRouting()
+	const source = capitalClient()
+	const addressReads: Address[] = []
+	const client = source.client.extend(() => ({
+		getCode: async (request: Parameters<typeof source.client.getCode>[0]) => {
+			addressReads.push(request.address)
+			return await source.client.getCode(request)
+		},
+		getBalance: async ({ address }: { address: Address }) => {
+			addressReads.push(address)
+			return 0n
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hash = `#/pool/${securityPool}`
+	window.history.replaceState({}, '', hash)
+	const element = <SecurityPoolsSection page={{ kind: 'pool', pool: securityPool, tab: 'capital' }} parameters={{ ...parameters, accountAddress: undefined }} walletConnected={false} enabled environmentKey={0} activeUniverseId={0n} />
+	const view = lifecycle.trackRendered(await renderIntoDocument(element))
+	await waitFor(() => expect(view.container.querySelector('.statoblast-pool-state')?.textContent).toContain('Active'))
+	expect(addressReads).not.toContain(zeroAddress)
+	expect(source.reads.some(read => read.args?.includes(zeroAddress))).toBe(false)
+	expect(view.container.textContent).toContain('Connect a wallet to see your position.')
+	expect(view.container.textContent).not.toContain('Your position')
+
+	await act(() => {
+		window.history.replaceState({}, '', `${hash}?owner=${owner}`)
+		window.dispatchEvent(new Event('hashchange'))
+	})
+	await waitFor(() => expect(source.reads.some(read => read.name === 'ownerAccount' && read.args?.includes(owner))).toBe(true))
+	await waitFor(() => expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Position'))
+	expect(view.container.textContent).not.toContain('Connect a wallet to see your position.')
+})
+
+test('Capital keeps the connected wallet position readable with a switch-network reason when writes are unavailable', async () => {
+	installStatoblastRouting()
+	const source = capitalClient()
+	source.install()
+	window.history.replaceState({}, '', `#/pool/${securityPool}`)
+	const props = { page: { kind: 'pool', pool: securityPool, tab: 'capital' }, enabled: true, environmentKey: 0, activeUniverseId: 0n, walletConnected: true, walletAddress: owner } as const
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection {...props} parameters={parameters} />))
+	await waitFor(() => expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Your position'))
+	await act(() => render(<SecurityPoolsSection {...props} parameters={{ ...parameters, accountAddress: undefined }} />, view.container))
+	expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Your position')
+	const claim = [...view.container.querySelectorAll('button')].find(button => button.textContent === copy.claim)
+	expect(claim?.disabled).toBe(true)
+	const reasonId = claim?.getAttribute('aria-describedby')
+	expect(reasonId === null || reasonId === undefined ? undefined : document.getElementById(reasonId)?.textContent).toBe(getWrongNetworkReason())
+})
+
+test('walletless fork page shows public context and keeps personal reads and transactions locked', async () => {
+	installStatoblastRouting()
+	const source = capitalClient(capitalSnapshot({ forkTime: 900n, forkChoiceDeadline: 2_000n }))
+	installActiveEnvironmentForTesting(source.backend)
+	window.history.replaceState({}, '', `#/pool/${securityPool}/fork`)
+	const view = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<SecurityPoolsSection
+				page={{ kind: 'pool', pool: securityPool, tab: 'fork' }}
+				parameters={{ ...parameters, accountAddress: undefined }}
+				walletConnected={false}
+				enabled
+				environmentKey={0}
+				activeUniverseId={0n}
+				forkRecapitalizationDeadline={3_000n}
+				forkQuestion={{ answerUnit: '', createdAt: 1n, description: '', displayValueMax: 100n, displayValueMin: 0n, endTime: 800n, exists: true, marketType: 'binary', numTicks: 2n, outcomeLabels: ['Yes', 'No'], questionId: '0x07', startTime: 1n, title: 'Will this resolve?' }}
+			/>,
+		),
+	)
+	await waitFor(() => expect(view.container.querySelector('.statoblast-fork-diagram')).not.toBeNull())
+	expect(view.container.querySelector('.statoblast-fork-diagram-stays .statoblast-fork-diagram-amounts')?.textContent).toBeUndefined()
+	expect([...view.container.querySelectorAll('.statoblast-fork-diagram-branches li > strong')].map(node => node.textContent)).toEqual(['Yes', 'No', 'Invalid'])
+	expect(view.container.querySelector('.statoblast-fork-choice-deadline')?.textContent).toContain('Choose a branch by')
+	expect(view.container.querySelectorAll('.statoblast-branch-recapitalization')).toHaveLength(1)
+	expect(view.container.querySelector('.statoblast-branch-recapitalization')?.textContent).toContain('Recapitalization deadline')
+	const steps = [...view.container.querySelectorAll('.statoblast-fork-workflow > li')]
+	expect(steps).toHaveLength(7)
+	for (const step of steps) {
+		expect(step.textContent).toContain('Connect a wallet')
+		expect(step.querySelector('button')?.disabled).toBe(true)
+	}
+	const input = view.container.querySelector<HTMLInputElement>('.statoblast-recovery-picker input')
+	const form = input?.form
+	if (input === null || form === null || form === undefined) throw new Error('Recovery question ID input unavailable')
+	await act(() => {
+		input.value = '7'
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	await act(() => {
+		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+	})
+	expect(view.container.textContent).toContain('Recovery for share holders')
+	expect(view.container.textContent).not.toContain('Checking recovery rights…')
+	expect(source.reads.some(read => read.args?.includes(zeroAddress) || read.name === 'choices' || read.name === 'balanceOfSecurityPoolRecoveryRights')).toBe(false)
+})
+const reduction = (container: Element) => {
+	const section = container.querySelector('section:has([id$="-reduce"])')
+	if (section === null) throw new Error('Reduce commitment section missing')
+	return section
 }
+
+test('deploy and setup shows all six persistent transaction controls in the same workflow', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	capitalClient().install()
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const step = [...view.container.querySelectorAll('button')].find(button => button.textContent?.includes('Deploy and set up'))
+	if (step === undefined) throw new Error('Missing deployment step')
+	await act(() => step.click())
+	const workflow = view.container.querySelector('ol[aria-label="Deployment transactions"]')
+	const transactions = [...(workflow?.querySelectorAll('button.tx-action-button') ?? [])]
+	expect(transactions.map(button => button.textContent)).toEqual(['Prepare question rules', 'Deploy security pool', ...copy.prepareStages])
+	expect(transactions.map(button => button.hasAttribute('disabled'))).toEqual([false, true, true, true, true, true])
+	const panelTitles = () => [...view.container.querySelectorAll('.statoblast-deploy-layout > section .section-block-title-row')].map(heading => heading.textContent)
+	expect(panelTitles()).toEqual(['4. Deploy and set up', 'Fees and limits'])
+	expect(view.container.querySelector('.statoblast-deploy-summary input')).toBeNull()
+	const fees = [...view.container.querySelectorAll<HTMLButtonElement>('.statoblast-deploy-progress button')].find(button => button.textContent?.includes('3. Fees and limits'))
+	if (fees === undefined) throw new Error('Missing fees and limits step')
+	await act(() => fees.click())
+	expect(panelTitles()).toEqual(['3. Fees and limits', 'Summary'])
+	expect(view.container.querySelector<HTMLInputElement>('.statoblast-deploy-section input')?.disabled).toBe(false)
+})
+
+test('a hashless deployment offers a way to check the wallet again', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	const source = capitalClient()
+	const { network, persistence } = localEntityScopeForNetwork(source.backend.profile, 'statoblast', 'pool')
+	const storage = persistence === 'session' ? window.sessionStorage : window.localStorage
+	storage.setItem(`zoltar-ui:statoblast:deployment:v1:${network}:${owner.toLowerCase()}`, JSON.stringify({ draft: initialDeploymentDraft('0'), pending: { id: 'waiting-deployment', step: 'rules', nonce: '0' } }))
+	let nonceChecks = 0
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		createReadClient: () =>
+			source.client.extend(() => ({
+				getTransactionCount: async () => {
+					nonceChecks++
+					return 0n
+				},
+			})),
+	})
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const findCheck = () => [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Check again' && !button.disabled)
+	await waitFor(() => expect(findCheck()).toBeDefined(), { timeout: 1000 })
+	expect([...view.container.querySelectorAll('.statoblast-deploy-layout > section .section-block-title-row')].map(heading => heading.textContent)).toEqual(['4. Deploy and set up', 'Locked fees and limits'])
+	const lockedSummary = view.container.querySelector('.statoblast-deploy-summary')
+	expect(lockedSummary?.textContent).toContain('200%')
+	expect(lockedSummary?.querySelector('input')).toBeNull()
+	const checksBeforeClick = nonceChecks
+	await act(() => findCheck()?.click())
+	await waitFor(() => expect(nonceChecks).toBeGreaterThan(checksBeforeClick))
+})
+
+test('Check again rereads a dropped transaction estimate and restart asks the wallet to cancel it', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	const source = capitalClient()
+	const { network, persistence } = localEntityScopeForNetwork(source.backend.profile, 'statoblast', 'pool')
+	const storage = persistence === 'session' ? window.sessionStorage : window.localStorage
+	storage.setItem(`zoltar-ui:statoblast:deployment:v1:${network}:${owner.toLowerCase()}`, JSON.stringify({ draft: initialDeploymentDraft('0'), pending: { id: 'waiting-deployment', step: 'rules', nonce: '0', hash: mockTransactionHash } }))
+	let confirmed = 0n
+	let hashChecks = 0
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		createReadClient: () =>
+			source.client.extend(() => ({
+				getTransactionCount: async () => confirmed,
+				getTransaction: async ({ hash }: { hash: Hash }) => {
+					hashChecks++
+					throw new TransactionLookupNotFoundError('transaction', hash)
+				},
+				getTransactionReceipt: async ({ hash }: { hash: Hash }) => {
+					throw new TransactionLookupNotFoundError('receipt', hash)
+				},
+			})),
+	})
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const findButton = (label: string) => [...view.container.querySelectorAll('button')].find(button => button.textContent === label && !button.disabled)
+	const waiting = 'If your wallet no longer shows this transaction, send or cancel a transaction with nonce 0 (or the nonce your wallet shows for it), then check again.'
+	const cancelWarning = 'This transaction may still be pending in your wallet. Cancel it there before starting a new deployment.'
+	await waitFor(() => expect(view.container.textContent).toContain(waiting))
+	expect(findButton('Start a new deployment')).toBeUndefined()
+	const checksBeforeClick = hashChecks
+	confirmed = 1n
+	await act(() => findButton('Check again')?.click())
+	await waitFor(() => expect(view.container.textContent).toContain(cancelWarning))
+	expect(hashChecks).toBeGreaterThan(checksBeforeClick)
+	await waitFor(() => expect(findButton('Start a new deployment')).toBeDefined(), { timeout: 1000 })
+	const originalConfirm = Object.getOwnPropertyDescriptor(window, 'confirm')
+	const confirmation = mock((_message: string) => false)
+	Object.defineProperty(window, 'confirm', { configurable: true, value: confirmation })
+	try {
+		await act(() => findButton('Start a new deployment')?.click())
+		expect(confirmation).toHaveBeenCalledWith(expect.stringContaining(cancelWarning))
+		expect(confirmation.mock.calls[0]?.[0]).not.toContain('reject it')
+	} finally {
+		if (originalConfirm === undefined) Reflect.deleteProperty(window, 'confirm')
+		else Object.defineProperty(window, 'confirm', originalConfirm)
+	}
+})
 
 test('completed setup preserves the four transaction controls in their original order with completion reasons', async () => {
 	const source = capitalClient()
@@ -42,39 +256,36 @@ test('completed setup preserves the four transaction controls in their original 
 	expect(buttons.map(button => button.disabled)).toEqual([true, true, false, true])
 
 	source.setSetupStage(4n)
-	await act(() => render(<SecurityPoolsSection parameters={parameters} walletConnected enabled environmentKey={1} activeUniverseId={0n} />, view.container))
-	await waitFor(() => expect(view.container.textContent).toContain(copy.prepareProgress(4)))
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(setup.textContent).toContain(copy.prepareProgress(4)))
 	expect(setup.textContent).not.toContain(copy.prepareHint)
 	expect(setup.isConnected).toBe(true)
 	expect([...setup.querySelectorAll('button')]).toEqual(buttons)
 	expect(buttons.map(button => button.disabled)).toEqual([true, true, true, true])
 	expect(setup.textContent?.match(/This setup stage is complete\./g)).toHaveLength(4)
 	expect(view.container.textContent?.split(copy.prepareProgress(4))).toHaveLength(2)
-	expect(view.container.textContent?.split(copy.description)).toHaveLength(2)
 	expect(view.container.textContent).not.toContain('Auction reserve')
 	expect(view.container.textContent).not.toContain('Execution reserve')
-	expect(view.container.textContent).toContain(copy.minimumCommitmentHint)
 })
 
 test('authenticated refresh preserves position controls while disabling transactions until fresh data resolves', async () => {
 	const source = capitalClient()
 	source.install()
 	const view = await renderSecurityPools()
-	await waitFor(() => expect(view.container.textContent).toContain(copy.position(1n)))
-	const position = firstPosition(view.container)
+	await waitFor(() => expect(view.container.querySelector('section:has([id$="-reduce"]) input')).not.toBeNull())
+	const position = reduction(view.container)
 	const inputs = [...position.querySelectorAll('input')]
 	const buttons = [...position.querySelectorAll('button')]
 	expect(inputs).toHaveLength(1)
-	expect(buttons).toHaveLength(2)
-	await act(() => render(<SecurityPoolsSection parameters={parameters} walletConnected enabled={false} environmentKey={0} activeUniverseId={0n} />, view.container))
+	expect(buttons).toHaveLength(1)
+	await act(() => render(<SecurityPoolsSection page={poolPage} parameters={parameters} walletConnected enabled={false} environmentKey={0} activeUniverseId={0n} />, view.container))
 	expect(position.isConnected).toBe(true)
 	expect([...position.querySelectorAll('input')]).toEqual(inputs)
 	expect([...position.querySelectorAll('button')]).toEqual(buttons)
 	expect(buttons.every(button => button.disabled)).toBe(true)
 	expect(position.textContent).toContain(copy.readUnavailable)
-	expect(view.container.textContent).toContain(copy.lastConfirmed)
 	expect(inputs.every(input => input.disabled)).toBe(true)
-	await act(() => render(<SecurityPoolsSection parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />, view.container))
+	await act(() => render(<SecurityPoolsSection page={poolPage} parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />, view.container))
 	await waitFor(() => expect(buttons.some(button => !button.disabled)).toBe(true))
 	expect(position.isConnected).toBe(true)
 })
@@ -84,159 +295,163 @@ test('a pending retirement shows its locked request without an editable form', a
 	const source = capitalClient({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 0n })) })
 	source.install()
 	const view = await renderSecurityPools()
-	await waitFor(() => expect(view.container.textContent).toContain(copy.queuedRemainingCommitment))
-	const position = firstPosition(view.container)
+	await waitFor(() => expect(view.container.querySelector('.statoblast-queue-totals')).not.toBeNull())
+	const position = reduction(view.container)
 	expect(position.querySelectorAll('input')).toHaveLength(0)
 	expect([...position.querySelectorAll('button')].map(button => button.textContent?.trim())).not.toContain(copy.retire)
 	expect(position.textContent).not.toContain(copy.remainingCommitment)
 })
 
-test('purchase selection uses question text with a full copyable identifier and optional ID lookup', async () => {
-	const questionId = BigInt(`0x${'ab'.repeat(32)}`)
-	const source = capitalClient(capitalSnapshot({ questions: [questionId] }))
-	source.setRead('getQuestions', [questionId])
-	source.setRead('questions', ['Will the official result be Yes?', 'Resolve using the published final result.', 0n, 10000n, 0n, 0n, 0n, ''])
-	source.setRead('questionCreatedTimestamp', 1n)
-	source.setRead('getOutcomeLabels', ['No', 'Yes'])
-	source.install()
-	const view = await renderSecurityPools()
-	await waitFor(() => expect([...view.container.querySelectorAll('option')].some(option => option.textContent === 'Will the official result be Yes?')).toBe(true))
-	const option = [...view.container.querySelectorAll('option')].find(option => option.textContent === 'Will the official result be Yes?')
-	const select = option?.closest('select')
-	if (select === null || select === undefined || option === undefined) throw new Error('Missing question selector')
-	await act(() => {
-		select.value = option.value
-		select.dispatchEvent(new Event('change', { bubbles: true }))
-	})
-	await waitFor(() => expect(view.container.textContent).toContain('Resolve using the published final result.'))
-	const identifier = view.container.querySelector('.question-summary .identifier-value')
-	expect(identifier?.textContent).toContain(`0x${'ab'.repeat(32)}`)
-	expect(identifier?.textContent).not.toContain('…')
-	const lookup = [...view.container.querySelectorAll('details')].find(details => details.querySelector('summary')?.textContent === 'Find by question ID')
-	expect(lookup?.open).toBe(false)
-	expect(lookup?.querySelector('input')?.value).toBe(`0x${'ab'.repeat(32)}`)
-})
-
 test('a forked origin is announced on its field and stated once beside the deploy actions', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
 	const source = capitalClient()
 	source.setRead('getForkTime', 1n)
 	source.install()
-	const view = await renderSecurityPools()
-	const form = view.container.querySelector('.security-pool-creation-form')
-	await waitFor(() => expect(form?.textContent).toContain('This universe has forked.'))
-	expect(form?.textContent?.split('This universe has forked.')).toHaveLength(2)
-	const originField = Array.from(form?.querySelectorAll('.field') ?? []).find(field => field.querySelector('label')?.textContent === 'Origin universe ID')
-	expect(originField?.querySelector('input')?.getAttribute('aria-invalid')).toBe('true')
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const originField = Array.from(view.container.querySelectorAll('.field')).find(field => field.querySelector('label')?.textContent === 'Origin universe ID')
+	await waitFor(() => expect(originField?.querySelector('input')?.getAttribute('aria-invalid')).toBe('true'))
 	expect(originField?.querySelector('[aria-live="polite"]')?.textContent).toContain('This universe has forked.')
+	const setup = view.container.querySelector<HTMLButtonElement>('.statoblast-deploy-progress li:last-child button')
+	if (setup === null) throw new Error('Deploy step not found')
+	await act(() => setup.click())
+	const form = view.container.querySelector('.security-pool-creation-form')
 	const reasons = form?.querySelectorAll('.shared-action-reason')
 	expect(reasons).toHaveLength(1)
 	const reason = reasons?.item(0)
 	expect(reason?.textContent).toBe('The origin universe has forked.')
 	const reasonId = reason?.firstElementChild?.id
-	const buttons = ['Deploy admission policy', 'Deploy security pool'].map(name => Array.from(form?.querySelectorAll('button') ?? []).find(candidate => candidate.textContent === name))
+	const buttons = ['Prepare question rules', 'Deploy security pool'].map(name => Array.from(form?.querySelectorAll('button') ?? []).find(candidate => candidate.textContent === name))
 	for (const button of buttons) {
 		expect(button?.disabled).toBe(true)
 		expect(button?.getAttribute('aria-describedby')).toBe(reasonId ?? null)
 	}
-	const deployButton = buttons[1]
-	if (deployButton === undefined || reason === null || reason === undefined) throw new Error('Missing deploy action')
-	expect(deployButton.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
-test('an unforked security pool with an expired price can fund a new report from its shared backing', async () => {
-	// The fork panel prices only fork branches, so the unforked universe needs its own request path.
+test('an unforked pool with an expired price can fund a price report from its REP price tab', async () => {
 	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
 	fixture.set(priceFeed, 'universeId', 0n)
-	const view = await renderSecurityPools()
-	const backing = () => sectionTitled(view.container, copy.poolTitle)
-	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceStale))
-	const report = universePriceReport(backing())
-	if (report === undefined) throw new Error('Shared backing has no price report')
-	expect(report.open).toBe(true)
-	// The summary is the report's only label.
-	expect(report.querySelector('h4') === null).toBe(true)
-	await waitFor(() => expect(report.textContent).toContain('Wallet WETH'))
-	const input = [...report.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
-	if (input === undefined) throw new Error('Missing proposed price input')
+	const view = await renderSecurityPools('price')
+	await waitFor(() => expect(view.container.textContent).toContain('Wallet WETH'))
+	const input = [...view.container.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.priceDraftLabel('WETH')))
+	if (input === undefined) throw new Error('Missing REP price input')
 	await act(() => {
 		input.value = '2'
 		input.dispatchEvent(new Event('input', { bubbles: true }))
 	})
-	const button = (label: string) => [...report.querySelectorAll('button')].find(candidate => candidate.textContent === label)
+	const button = (label: string) => [...view.container.querySelectorAll('button')].find(button => button.textContent === label)
 	await waitFor(() => expect(button(priceCopy.wrap)?.disabled).toBe(false))
 	expect(button(priceCopy.scopes.universe.request)?.disabled).toBe(true)
-	expect(report.textContent).toContain(priceCopy.insufficientWeth)
+	expect(view.container.textContent).toContain(priceCopy.insufficientWeth)
 })
 
-test('shared backing has no price report until a security pool account is shown', async () => {
-	window.localStorage.clear()
-	window.history.replaceState(undefined, '', '/#/security-pools')
-	capitalClient().install()
-	const view = await renderSecurityPools()
-	const backing = () => sectionTitled(view.container, copy.poolTitle)
-	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceExpiry))
-	// Assert on text: with no account there is nothing to price, and an empty report would only show endless loading.
-	expect(backing()?.textContent).not.toContain(priceCopy.scopes.universe.title)
-	expect(view.container.textContent).not.toContain(priceCopy.scopes.universe.request)
+test.each([undefined, owner] as const)('a forked pool on Capital checks other funders’ known reports regardless of wallet %s', async wallet => {
+	installStatoblastRouting()
+	const fixture = priceFixture(capitalSnapshot({ forkTime: 100n, priceFeed }))
+	const olderEscrow = getAddress('0x0000000000000000000000000000000000000085')
+	const foreignEscrow = getAddress('0x0000000000000000000000000000000000000086')
+	let olderCredit = 20n
+	let failFundingRead = false
+	let failedReads = 0
+	const readReportIds: bigint[] = []
+	const client = fixture.client.extend(() => ({
+		multicall: createMulticallStub(async request =>
+			request.contracts.map(contract => {
+				const name = getContractFunctionName(contract)
+				const args: unknown = Reflect.get(contract, 'args')
+				const first: unknown = Array.isArray(args) ? args[0] : undefined
+				switch (name) {
+					case 'pendingReportId':
+						return 0n
+					case 'sponsorOperationReport':
+						expect(first).toBe(wallet)
+						return 8n
+					case 'openOracle':
+						return priceOracle
+					case 'reportCandidates':
+						if (typeof first !== 'bigint') throw new Error('Expected report ID')
+						readReportIds.push(first)
+						if (first === 11n) return [foreignEscrow, priceFeed, 1n]
+						return [first === 8n ? olderEscrow : priceEscrow, owner, 1n]
+					case 'tokenHolder':
+						if (failFundingRead) {
+							failedReads++
+							throw new Error('RPC unavailable')
+						}
+						return first === foreignEscrow ? olderCredit : 1n
+					case 'storedGame': {
+						const callbackContract = first === 8n ? olderEscrow : priceEscrow
+						return getOpenOracleGameTuple({ ...fixture.game, settlementTimestamp: 1100n, callbackContract: first === 11n ? foreignEscrow : callbackContract })
+					}
+					default:
+						throw new Error(`Unexpected multicall ${name}`)
+				}
+			}),
+		),
+	}))
+	installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => client })
+	const savedBlock = { number: 9n, timestamp: 1100n }
+	if (wallet === undefined) {
+		const oldPreview = securityPoolPriceReportCache(fixture.backend.profile, securityPool, 0n, owner, 8n)
+		oldPreview.write({ reportId: 8n, sponsor: owner, outcome: 1n, state: { settled: true }, reportedAt: undefined, eligibleAt: 1100n, bounty: undefined, baseFeePerGas: undefined, maxSettlementBaseFee: 1n, wethCredit: 19n, repCredit: 0n, collateralToken: priceWeth }, savedBlock)
+	}
+	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, owner, 9n, savedBlock)
+	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, priceFeed, 11n, savedBlock)
+	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 7n, owner, 12n, savedBlock)
+	const view = await renderIntoDocument(<SecurityPoolsSection page={{ kind: 'pool', pool: securityPool, tab: 'capital' }} parameters={{ ...parameters, accountAddress: wallet }} walletConnected={wallet !== undefined} enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const priceTab = () => [...view.container.querySelectorAll('a')].find(link => link.hash.includes('/price'))
+	await waitFor(() => expect(priceTab()?.textContent).toContain(returnFundsOnly))
+	expect([...view.container.querySelectorAll('.statoblast-pool-tab-select option')].map(option => option.textContent)).toEqual(['Capital · Limited', 'Questions · Minting closed', 'Return funds only', 'Fork & recovery · Action'])
+	expect(new Set(readReportIds)).toEqual(new Set([8n, 9n, 11n]))
+
+	failFundingRead = true
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(failedReads).toBeGreaterThan(0))
+	expect(priceTab()?.textContent).toContain(returnFundsOnly)
+	failFundingRead = false
+	olderCredit = 1n
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(priceTab()?.textContent).toContain(poolTabLabels.price))
+	expect(priceTab()?.textContent).not.toContain(returnFundsOnly)
 })
 
-test('a current price keeps the price request folded under its summary', async () => {
+test('Capital links to REP price and does not mount its form', async () => {
 	const source = capitalClient()
 	source.install()
 	const view = await renderSecurityPools()
-	const backing = () => sectionTitled(view.container, copy.poolTitle)
-	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceValid))
-	const disclosure = backing()?.querySelector('details')
-	expect(disclosure?.querySelector('summary')?.textContent).toBe(priceCopy.scopes.universe.title)
-	expect(disclosure?.open).toBe(false)
-	// Folded, the report reads nothing, so it does not poll the price feed every block.
+	await waitFor(() => expect(view.container.querySelector('.statoblast-pool-state')?.textContent).toContain('Active'))
+	expect(view.container.querySelector('a[href$="/price"]')?.textContent).toContain(poolTabLabels.price)
+	expect(view.container.textContent).not.toContain(priceCopy.scopes.universe.request)
 	expect(source.reads.some(read => read.name === 'isPriceReportingOpen')).toBe(false)
 })
 
-test.each([
-	['a forked universe', { forkTime: 1n }, copy.forked],
-	['a universe still importing its fork', { importing: true }, copy.importing],
-])('an expired price stays folded in %s, where no new report can be requested', async (_state, overrides, status) => {
-	const source = capitalClient(capitalSnapshot({ priceValid: false, ...overrides }))
-	source.install()
-	const view = await renderSecurityPools()
-	const backing = () => sectionTitled(view.container, copy.poolTitle)
-	await waitFor(() => expect(backing()?.textContent).toContain(status))
-	expect(backing()?.querySelector('details')?.open).toBe(false)
+test('a direct Liquidations link to a forked pool explains why takeovers are unavailable', async () => {
+	capitalClient(capitalSnapshot({ forkTime: 100n })).install()
+	const view = await renderSecurityPools('liquidations')
+	await waitFor(() => expect(view.container.textContent).toContain('Liquidations are unavailable in a universe that has forked.'))
+	expect(view.container.querySelector('a[href$="/liquidations"]')).toBeNull()
 })
 
-test('the price report keeps its drafts when folded and through a failed account refresh', async () => {
+test('the REP price tab preserves its draft through a failed pool refresh', async () => {
 	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
 	fixture.set(priceFeed, 'universeId', 0n)
-	const view = await renderSecurityPools()
-	const backing = () => sectionTitled(view.container, copy.poolTitle)
-	const report = () => universePriceReport(backing())
-	const priceInput = () => [...(report()?.querySelectorAll('input') ?? [])].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
-	await waitFor(() => expect(report()?.textContent).toContain('Wallet WETH'))
+	const view = await renderSecurityPools('price')
+	const priceInput = () => [...view.container.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.priceDraftLabel('WETH')))
+	await waitFor(() => expect(view.container.textContent).toContain('Wallet WETH'))
 	await act(() => {
 		const input = priceInput()
-		if (input === undefined) throw new Error('Missing proposed price input')
+		if (input === undefined) throw new Error('Missing REP price input')
 		input.value = '2'
 		input.dispatchEvent(new Event('input', { bubbles: true }))
 	})
-	const toggle = async (open: boolean) => {
-		await act(() => {
-			const details = report()
-			if (details === undefined) throw new Error('Missing price report')
-			details.open = open
-			details.dispatchEvent(new Event('toggle'))
-		})
-	}
-	await toggle(false)
-	await toggle(true)
 	expect(priceInput()?.value).toBe('2')
-	// One failed account read clears the shown account; the report and its draft must outlive it.
 	fixture.source.setRead('getForkTime', 'not a time')
 	await act(() => invalidateAppData())
-	await waitFor(() => expect(view.container.textContent).toContain('Unable to load the security pool account'))
+	await waitFor(() => expect(view.container.textContent).toContain('Unable to load this security pool position'))
 	expect(priceInput()?.value).toBe('2')
 	fixture.source.setRead('getForkTime', 0n)
 	await act(() => invalidateAppData())
-	await waitFor(() => expect(backing()?.textContent).toContain(copy.priceStale))
+	await waitFor(() => expect(view.container.textContent).not.toContain('Unable to load this security pool position'))
 	expect(priceInput()?.value).toBe('2')
 })

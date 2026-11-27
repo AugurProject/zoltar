@@ -1,7 +1,11 @@
+import { auctionErrors, contractCodeUnverified, contractSettingsMismatch, contractLinkMismatch } from '../copy/protocolErrors.js'
 import { collateralPresentation } from './collateral.js'
 import { getAddress, parseAbi, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { decodeAuctionVaultBindings, loadSecurityPoolAuctionSnapshot, predictAuctionVaultAddress, verifyAuctionVaultCode } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { decodeAuctionVaultBindings, loadSecurityPoolAuctionSnapshot, predictAuctionVaultAddress, verifyAuctionVaultCode, type SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { decodeStoredValue, isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { statoblastDisplayCache } from './statoblastPageCache.js'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
@@ -54,22 +58,90 @@ const vaultIdentityAbi = parseAbi([
 export async function loadSecurityPoolBranchAuction(client: ReadClient, securityPool: Address, bidder: Address, universeId: bigint, bidStart = 0n) {
 	const snapshot = await loadSecurityPoolAuctionSnapshot({ client: { ...securityPoolReadClient(client), getBalance: parameters => client.getBalance(parameters) }, securityPool, bidder, universeId, bidStart })
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(snapshot.factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(snapshot.zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized auction infrastructure.')
+	if (getAddress(snapshot.factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(snapshot.zoltar) !== getAddress(infrastructure.zoltar)) throw new Error(auctionErrors.auctionNotVerified)
 	const blockNumber = snapshot.blockNumber
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
-	const modules: { address: Address; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }; label: string }[] = [{ address: snapshot.controller, artifact: forkArtifact, label: 'fork coordinator' }]
+	const modules: { address: Address; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }; label: string }[] = [{ address: snapshot.controller, artifact: forkArtifact, label: 'fork contract' }]
 	const auction = snapshot.auction
 	if (auction !== undefined) {
 		await verifyAuctionCapitalCustody(client, securityPool, snapshot.capitalLedger, blockNumber)
 		await verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber)
-		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'security pool auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction engine' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction vault implementation' })
+		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'security pool auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction bidding contract' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction vault contract' })
 	}
 	await Promise.all(modules.map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)))
 	// Every vault is the exact clone the auction creates for the bidder, ledger, auction and bid.
-	if (auction !== undefined) await Promise.all(auction.bids.map(async bid => verifyAuctionVaultCode(await client.getCode({ address: bid.vault, blockNumber }), { implementation: auction.vaultImplementation, owner: bidder, capital: snapshot.capitalLedger, auction: auction.address, bidId: bid.id })))
+	if (auction !== undefined) await Promise.all(auction.bids.map(async bid => verifyAuctionVaultCode(await client.getCode({ address: bid.vault, blockNumber }), { implementation: auction.vaultImplementation, owner: bidder, capital: snapshot.capitalLedger, auction: auction.address, bidId: bid.id }, 'auction vault')))
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
-	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Auction authentication changed. Refresh and retry.')
+	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error(auctionErrors.auctionChanged)
 	return { ...snapshot, collateral: collateralPresentation(snapshot.collateralToken) }
+}
+
+function decodeAuctionBid(value: unknown): SecurityPoolAuctionBid | undefined {
+	return decodeStoredValue(value, read => {
+		const fill = read.optional('fill', read.record)
+		const position = read.optional('position', read.record)
+		return {
+			id: read.bigint('id'),
+			bidder: read.address('bidder'),
+			vault: read.address('vault'),
+			targetHealthFactorBps: read.bigint('targetHealthFactorBps'),
+			lots: read.bigint('lots'),
+			minimumAttoRepPerLot: read.bigint('minimumAttoRepPerLot'),
+			refundSettled: read.boolean('refundSettled'),
+			earlyRefundAttoEth: read.bigint('earlyRefundAttoEth'),
+			materialized: read.boolean('materialized'),
+			fill: fill && { filledLots: fill.bigint('filledLots'), usedAttoEth: fill.bigint('usedAttoEth'), refundAttoEth: fill.bigint('refundAttoEth'), principalAttoRep: fill.bigint('principalAttoRep') },
+			position: position && {
+				positionId: position.bigint('positionId'),
+				principalAttoRep: position.bigint('principalAttoRep'),
+				commitmentAttoEth: position.bigint('commitmentAttoEth'),
+				targetHealthFactorBps: position.bigint('targetHealthFactorBps'),
+				liquidationStarted: position.bigint('liquidationStarted'),
+				materialized: position.boolean('materialized'),
+				earnedAttoEth: position.bigint('earnedAttoEth'),
+				earnedAttoRep: position.bigint('earnedAttoRep'),
+			},
+		}
+	})
+}
+
+export function securityPoolAuctionCache(profile: NetworkProfile, pool: Address, universeId: bigint, bidder: Address, start: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner: bidder, page: `auction:${pool.toLowerCase()}:${start}` }, value => {
+		if (!isStoredRecord(value) || !isStoredRecord(value['auction']) || !Array.isArray(value['auction']['bids']) || value['auction']['bids'].length > 16) return undefined
+		const bids: SecurityPoolAuctionBid[] = []
+		for (const raw of value['auction']['bids']) {
+			const bid = decodeAuctionBid(raw)
+			if (bid === undefined || bid.bidder.toLowerCase() !== bidder.toLowerCase()) return undefined
+			bids.push(bid)
+		}
+		return decodeStoredValue(value, read => {
+			const auction = read.record('auction')
+			const clearing = auction.optional('clearing', auction.record)
+			return {
+				universeId,
+				timestamp: read.bigint('timestamp'),
+				collateral: collateralPresentation(read.address('collateralToken')),
+				collateralAllowance: read.bigint('collateralAllowance'),
+				auction: {
+					address: auction.address('address'),
+					opened: auction.boolean('opened'),
+					finalized: auction.boolean('finalized'),
+					closesAt: auction.bigint('closesAt'),
+					inventoryAttoRep: auction.bigint('inventoryAttoRep'),
+					shortfallAttoEth: auction.bigint('shortfallAttoEth'),
+					lotAttoEth: auction.bigint('lotAttoEth'),
+					minimumCollateralAttoRepPerLot: auction.bigint('minimumCollateralAttoRepPerLot'),
+					maximumAdmissibleBidAttoRepPerLot: auction.bigint('maximumAdmissibleBidAttoRepPerLot'),
+					repGrid: auction.bigint('repGrid'),
+					clearing: clearing && { attoRepPerLot: clearing.bigint('attoRepPerLot'), filledLots: clearing.optional('filledLots', clearing.bigint) },
+					refundAttoEth: auction.bigint('refundAttoEth'),
+					bidStart: auction.bigint('bidStart'),
+					totalBidCount: auction.bigint('totalBidCount'),
+					bids,
+				},
+			}
+		})
+	})
 }
 
 /** Authenticate one selected vault directly, including its original branch after later forks. */
@@ -79,10 +151,10 @@ export async function loadSecurityPoolBranchAuction(client: ReadClient, security
  */
 export async function isCanonicalAuctionVaultImplementation(client: ReadClient, implementation: Address, blockNumber: bigint) {
 	try {
-		verifyRuntimeCode(await client.getCode({ address: implementation, blockNumber }), `0x${vaultArtifact.evm.deployedBytecode.object}`, vaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault implementation')
+		verifyRuntimeCode(await client.getCode({ address: implementation, blockNumber }), `0x${vaultArtifact.evm.deployedBytecode.object}`, vaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault contract')
 		return true
 	} catch (error) {
-		if (error instanceof Error && ['Unrecognized auction vault implementation runtime code.', 'Inconsistent auction vault implementation immutable values.'].includes(error.message)) return false
+		if (error instanceof Error && [contractCodeUnverified('auction vault contract'), contractSettingsMismatch('auction vault contract')].includes(error.message)) return false
 		throw error
 	}
 }
@@ -91,7 +163,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	const read = (address: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ abi: vaultIdentityAbi, address, functionName, args, blockNumber })
 	const vaultCode = await client.getCode({ address: vault, blockNumber })
 	const bindings = decodeAuctionVaultBindings(vaultCode)
-	if (bindings === undefined) throw new Error('Unrecognized auction vault runtime code.')
+	if (bindings === undefined) throw new Error(auctionErrors.positionCode)
 	const [ownerValue, capitalValue, auctionValue, idValue, controllerValue, protocolValue, factoryValue] = await Promise.all([
 		read(vault, 'owner'),
 		read(vault, 'initialCapital'),
@@ -103,15 +175,15 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	])
 	const bidder = requireAddressValue(ownerValue, 'auction vault owner')
 	const initialCapital = requireAddressValue(capitalValue, 'initial auction capital')
-	const auction = requireAddressValue(auctionValue, 'vault auction')
-	const bidId = requireBigintValue(idValue, 'vault bid ID')
+	const auction = requireAddressValue(auctionValue, 'position auction')
+	const bidId = requireBigintValue(idValue, 'position bid ID')
 	// The clone's code is the only authority for its bindings; the getters must agree with it.
-	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId })
-	if (predictAuctionVaultAddress({ implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }) !== getAddress(vault)) throw new Error('Auction vault address does not match its bindings.')
-	const controller = requireAddressValue(controllerValue, 'fork coordinator')
-	const zoltar = requireAddressValue(protocolValue, 'security pool protocol')
+	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }, 'auction vault')
+	if (predictAuctionVaultAddress({ implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }) !== getAddress(vault)) throw new Error(auctionErrors.positionAddress)
+	const controller = requireAddressValue(controllerValue, 'fork contract')
+	const zoltar = requireAddressValue(protocolValue, 'universe contract for the security pool')
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error('Auction vault uses unrecognized security pool infrastructure.')
+	if (getAddress(requireAddressValue(factoryValue, 'security pool deployment contract')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error(auctionErrors.positionPool)
 	const [universeValue, capitalRoot, capitalProtocol, auctionRoot, auctionCapital, auctionFork, auctionUniverse, engineValue, controllerRoot, implementationValue] = await Promise.all([
 		read(initialCapital, 'universeId'),
 		read(initialCapital, 'securityPool'),
@@ -125,48 +197,48 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		read(auction, 'vaultImplementation'),
 	])
 	const initialUniverse = requireBigintValue(universeValue, 'initial auction universe')
-	const engine = requireAddressValue(engineValue, 'auction engine')
-	if (getAddress(requireAddressValue(implementationValue, 'vault implementation')) !== bindings.implementation) throw new Error('Auction vault uses another implementation.')
+	const engine = requireAddressValue(engineValue, 'auction bidding contract')
+	if (getAddress(requireAddressValue(implementationValue, 'auction vault contract template')) !== bindings.implementation) throw new Error(auctionErrors.positionVersion)
 	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(securityPool, 'capitalLedger', [initialUniverse]), read(controller, 'repairAuctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
 	if (
-		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'module security pool')) !== getAddress(securityPool)) ||
-		getAddress(requireAddressValue(capitalProtocol, 'capital protocol')) !== getAddress(zoltar) ||
+		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'security pool linked to the auction')) !== getAddress(securityPool)) ||
+		getAddress(requireAddressValue(capitalProtocol, 'universe contract linked to pool capital')) !== getAddress(zoltar) ||
 		getAddress(requireAddressValue(auctionCapital, 'auction capital')) !== getAddress(initialCapital) ||
-		getAddress(requireAddressValue(auctionFork, 'auction fork authority')) !== getAddress(controller) ||
+		getAddress(requireAddressValue(auctionFork, 'auction fork contract')) !== getAddress(controller) ||
 		requireBigintValue(auctionUniverse, 'auction universe') !== initialUniverse ||
-		getAddress(requireAddressValue(canonicalCapital, 'canonical capital')) !== getAddress(initialCapital) ||
-		getAddress(requireAddressValue(canonicalAuction, 'canonical auction')) !== getAddress(auction) ||
-		getAddress(requireAddressValue(engineController, 'engine controller')) !== getAddress(auction) ||
+		getAddress(requireAddressValue(canonicalCapital, 'pool capital contract')) !== getAddress(initialCapital) ||
+		getAddress(requireAddressValue(canonicalAuction, 'pool auction')) !== getAddress(auction) ||
+		getAddress(requireAddressValue(engineController, 'auction contract address')) !== getAddress(auction) ||
 		getAddress(requireAddressValue(bid[0], 'bid owner')) !== getAddress(bidder) ||
-		getAddress(requireAddressValue(bid[1], 'bid vault')) !== getAddress(vault) ||
+		getAddress(requireAddressValue(bid[1], 'bid position')) !== getAddress(vault) ||
 		requireBigintValue(registeredId, 'registered bid') !== bidId
 	)
-		throw new Error('Auction vault does not belong to the selected security pool and bidder.')
+		throw new Error(auctionErrors.positionNotFromPool)
 	await Promise.all([
 		client.getCode({ address: securityPool, blockNumber }).then(code => verifyRuntimeCode(code, getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')),
 		...[
-			{ address: controller, artifact: forkArtifact, label: 'fork coordinator' },
+			{ address: controller, artifact: forkArtifact, label: 'fork contract' },
 			{ address: auction, artifact: auctionArtifact, label: 'security pool auction' },
-			{ address: engine, artifact: engineArtifact, label: 'auction engine' },
-			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction vault implementation' },
+			{ address: engine, artifact: engineArtifact, label: 'auction bidding contract' },
+			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction vault contract' },
 		].map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)),
 	])
 	const rep = requireAddressValue(await read(zoltar, 'getRepToken', [initialUniverse]), 'initial universe REP')
 	await verifyCapitalLedgerClone(client, securityPool, initialCapital, initialUniverse, rep, blockNumber)
 	await verifyAuctionCapitalCustody(client, securityPool, initialCapital, blockNumber)
 	const finalized = await read(engine, 'finalized')
-	if (typeof finalized !== 'boolean') throw new Error('Invalid auction finalization state.')
+	if (typeof finalized !== 'boolean') throw new Error(auctionErrors.closingStatus)
 	let filledLots = 0n
 	let materialized = false
 	if (finalized) {
 		const fill = requireObjectValue(await read(engine, 'previewBid', [bidId]), 'winning auction fill')
 		filledLots = requireBigintValue(Reflect.get(fill, 'filledLots'), 'winning auction lots')
-		if (getAddress(requireAddressValue(Reflect.get(fill, 'vault'), 'fill vault')) !== getAddress(vault) || getAddress(requireAddressValue(Reflect.get(fill, 'bidder'), 'fill bidder')) !== getAddress(bidder)) throw new Error('Auction fill identity mismatch.')
+		if (getAddress(requireAddressValue(Reflect.get(fill, 'vault'), 'filled position')) !== getAddress(vault) || getAddress(requireAddressValue(Reflect.get(fill, 'bidder'), 'fill bidder')) !== getAddress(bidder)) throw new Error(auctionErrors.fillMismatch)
 		if (filledLots > 0n) {
-			const position = requireObjectValue(await read(initialCapital, 'repairAuctionPosition', [bidId]), 'auction position')
+			const position = requireObjectValue(await read(initialCapital, 'repairAuctionPosition', [bidId]), 'auction vault')
 			const materializedValue = Reflect.get(position, 'materialized')
-			if (getAddress(requireAddressValue(Reflect.get(position, 'vault'), 'position vault')) !== getAddress(vault) || typeof materializedValue !== 'boolean') throw new Error('Invalid auction position identity.')
+			if (getAddress(requireAddressValue(Reflect.get(position, 'vault'), 'position address')) !== getAddress(vault) || typeof materializedValue !== 'boolean') throw new Error(auctionErrors.positionMismatch)
 			materialized = materializedValue
 		}
 	}
@@ -185,21 +257,21 @@ async function verifyAuctionCapitalCustody(client: ReadClient, securityPool: Add
 		read(securityPool, 'services'),
 		read(securityPool, 'repairAuctionDeployer'),
 	])
-	if (getAddress(requireAddressValue(capitalServices, 'capital services')) !== getAddress(requireAddressValue(securityPoolServices, 'security pool services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
-		throw new Error('Auction custody uses another services authority or deployer.')
+	if (getAddress(requireAddressValue(capitalServices, 'pool operations address')) !== getAddress(requireAddressValue(securityPoolServices, 'pool operations contract')) || getAddress(requireAddressValue(deployer, 'auction setup contract')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
+		throw new Error(auctionErrors.collateralContractMismatch)
 	const modules = [
-		{ value: lifecycle, artifact: lifecycleArtifact, label: 'capital lifecycle delegate', getter: 'implementation', authority: undefined },
-		{ value: repairAuctionDelegate, artifact: auctionDelegateArtifact, label: 'capital auction delegate', getter: 'implementation', authority: undefined },
-		{ value: securityPoolServices, artifact: servicesArtifact, label: 'security pool services', getter: 'securityPool', authority: securityPool },
+		{ value: lifecycle, artifact: lifecycleArtifact, label: 'pool setup contract', getter: 'implementation', authority: undefined },
+		{ value: repairAuctionDelegate, artifact: auctionDelegateArtifact, label: 'pool auction contract', getter: 'implementation', authority: undefined },
+		{ value: securityPoolServices, artifact: servicesArtifact, label: 'pool operations contract', getter: 'securityPool', authority: securityPool },
 	]
 	await Promise.all([
-		verifyCapitalModuleClone(client, requireAddressValue(index, 'commitment index'), indexArtifact, capitalLedger, 'commitment index', blockNumber),
-		verifyCapitalModuleClone(client, requireAddressValue(fees, 'capital fee streams'), feesArtifact, capitalLedger, 'capital fee streams', blockNumber),
+		verifyCapitalModuleClone(client, requireAddressValue(index, 'pool capacity contract'), indexArtifact, capitalLedger, 'pool capacity contract', blockNumber),
+		verifyCapitalModuleClone(client, requireAddressValue(fees, 'pool fees contract'), feesArtifact, capitalLedger, 'pool fees contract', blockNumber),
 		...modules.map(async module => {
 			const address = requireAddressValue(module.value, module.label)
 			const [code, authority] = await Promise.all([client.getCode({ address, blockNumber }), client.readContract({ abi: module.artifact.abi, address, functionName: module.getter, blockNumber })])
 			verifyRuntimeCode(code, `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)
-			if (getAddress(requireAddressValue(authority, 'custody module authority')) !== getAddress(module.authority ?? address)) throw new Error(`${module.label} belongs to another authority.`)
+			if (getAddress(requireAddressValue(authority, 'contract linked to auction collateral')) !== getAddress(module.authority ?? address)) throw new Error(contractLinkMismatch(module.label))
 		}),
 	])
 }

@@ -102,7 +102,7 @@ scope.onmessage = event => {
 			if (message.type === 'init') {
 				if (enginePromise !== undefined) throw new Error('Simulation worker was already initialized')
 				const dependencies = globalThis.zoltarSimulationEngineDependencies
-				if (dependencies === undefined) throw new Error('Simulation engine dependencies were not registered before worker initialization')
+				if (dependencies === undefined) throw new Error('The simulation could not start because its setup was incomplete.')
 				enginePromise = createSimulationEngine({
 					genesisOutcome: message.genesisOutcome,
 					dependencies,
@@ -139,7 +139,7 @@ scope.onmessage = event => {
 		} catch (error) {
 			postEvent({
 				...(message.type === 'init' ? {} : { id: message.id }),
-				message: error instanceof Error ? error.message : 'Simulation worker request failed',
+				message: error instanceof Error ? error.message : 'The simulation could not complete this action.',
 				type: 'error',
 			})
 		}

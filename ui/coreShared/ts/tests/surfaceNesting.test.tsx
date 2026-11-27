@@ -45,12 +45,10 @@ describe('flat nested surfaces', () => {
 		expect(timelineItemRule).toContain('background: transparent')
 	})
 
-	test('aligns workflow actions as rows and keeps share totals with the distribution', () => {
+	test('keeps share totals with the distribution', () => {
 		const cssSource = readFeatureCssSource('statoblastShared')
 		const distributionRule = cssSource.match(/\.trading-share-distribution \.ranked-bar-item-value button\.currency-value\.copyable \{[^}]*\}/)?.[0]
 
-		expect(cssSource).toContain('.vault-action-launcher-grid {\n\tgrid-template-columns: minmax(0, 1fr)')
-		expect(cssSource).toContain('.vault-action-launcher-grid .action-launcher-card {')
 		expect(cssSource).toContain('.question-ledger-strip-stats button.currency-value.copyable')
 		expect(cssSource).toContain('.trading-holdings-layout {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(distributionRule).toContain('white-space: nowrap')

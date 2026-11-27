@@ -1,10 +1,11 @@
-import * as simulationCopy from '../copy/simulation.js'
+import { formatTimeAdvance } from '../copy/simulation.js'
 
-export const SIMULATION_TIME_PRESETS = [
-	{ label: simulationCopy.plus10Minutes, seconds: 10n * 60n },
-	{ label: simulationCopy.plus1Hour, seconds: 60n * 60n },
-	{ label: simulationCopy.plus1Day, seconds: 24n * 60n * 60n },
-	{ label: simulationCopy.plus1Week, seconds: 7n * 24n * 60n * 60n },
-	{ label: simulationCopy.plus1Month, seconds: 30n * 24n * 60n * 60n },
-	{ label: simulationCopy.plus1Year, seconds: 365n * 24n * 60n * 60n },
-] as const
+function preset(amount: bigint, unit: Parameters<typeof formatTimeAdvance>[1], secondsPerUnit: bigint) {
+	return { label: formatTimeAdvance(amount, unit), seconds: amount * secondsPerUnit }
+}
+
+const minute = 60n
+const hour = 60n * minute
+const day = 24n * hour
+
+export const SIMULATION_TIME_PRESETS = [preset(10n, 'min', minute), preset(1n, 'hour', hour), preset(1n, 'day', day), preset(1n, 'week', 7n * day), preset(1n, 'month', 30n * day), preset(1n, 'year', 365n * day)] as const

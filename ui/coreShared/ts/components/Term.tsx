@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 
-export type TermDefinition = {
+type TermDefinition = {
 	definition: string
 	href: string
 	label: string

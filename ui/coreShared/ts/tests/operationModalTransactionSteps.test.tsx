@@ -21,6 +21,38 @@ installDomTestLifecycle()
 const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
 const step = { contractLabel: undefined, title: 'Send withdrawal', description: 'Withdraw REP.', contractAddress: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
 
+test('shows the checked review in place of the mounted form and restores its focused action on cancel', async () => {
+	const start = () => {
+		const controller = createTransactionStepController(undefined, true, true)
+		controller.setPlan([step])
+		void controller.review().catch(() => undefined)
+	}
+	const rendered = await renderIntoDocument(
+		<OperationModal isOpen onClose={() => undefined} title='Withdraw'>
+			<input aria-label='REP amount' defaultValue='3' />
+			<button type='button' onClick={start}>
+				Review withdrawal
+			</button>
+		</OperationModal>,
+	)
+	try {
+		const queries = within(rendered.container)
+		const input = queries.getByRole('textbox', { name: 'REP amount' })
+		const action = queries.getByRole('button', { name: 'Review withdrawal' })
+		action.focus()
+		await act(() => fireEvent.click(action))
+		expect(input.isConnected).toBe(true)
+		expect(input.closest('.operation-modal-body')?.hasAttribute('hidden')).toBe(true)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Cancel' })))
+		expect(input.closest('.operation-modal-body')?.hasAttribute('hidden')).toBe(false)
+		expect(input.getAttribute('value')).toBe('3')
+		expect(document.activeElement).toBe(action)
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+	}
+})
+
 test('returns an embedded failed transaction to its form for review before resubmission', async () => {
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	let attempts = 0
