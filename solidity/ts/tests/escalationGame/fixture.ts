@@ -158,9 +158,9 @@ export function useEscalationGameFixture() {
 		)
 	}
 
-	const deployForkContinuationEscalationGame = async () => {
+	const deployForkContinuationEscalationGame = async (elapsedAtFork = 0n) => {
 		const deployment = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		await startEscalationFromFork(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, elapsedAtFork)
 		return deployment
 	}
 
@@ -180,7 +180,8 @@ export function useEscalationGameFixture() {
 		)
 
 	const advanceForkContinuationPastStart = async (escalationGameAddress: Address, targetAttritionCost = reportBond + 1n) => {
-		await resumeEscalationFromFork(escalationGameAddress)
+		const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt' })
+		if (resumedAt === 0n) await resumeEscalationFromFork(escalationGameAddress)
 		const forkResumedAt = await client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGameAddress,
@@ -188,7 +189,9 @@ export function useEscalationGameFixture() {
 			args: [],
 		})
 		const elapsedAtTargetCost = await readTimeSinceStartFromAttritionCost(client, escalationGameAddress, targetAttritionCost)
-		const elapsedAfterResume = elapsedAtTargetCost > FRESH_FORK_RESPONSE_PERIOD ? elapsedAtTargetCost : FRESH_FORK_RESPONSE_PERIOD
+		const elapsedAtFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkElapsedAtStart' })
+		const remainingCurveTime = elapsedAtTargetCost - elapsedAtFork
+		const elapsedAfterResume = remainingCurveTime > FRESH_FORK_RESPONSE_PERIOD ? remainingCurveTime : FRESH_FORK_RESPONSE_PERIOD
 		await mockWindow.setTime(forkResumedAt + elapsedAfterResume + 1n)
 	}
 

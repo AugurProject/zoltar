@@ -5,7 +5,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		createQuestion: ['external(QuestionData,string[])'],
 	},
 	'solidity/contracts/Zoltar.sol': {
-		forkUniverse: ['public(uint248,uint256)'],
+		forkUniverse: ['public(uint248,uint256,uint256)'],
 		burnRep: ['external(uint248,uint256)'],
 		deployChild: ['public(uint248,uint256)'],
 		addRepToMigrationBalance: ['public(uint248,uint256)'],
@@ -127,7 +127,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
-	'solidity/contracts/Zoltar.sol': '7820943e20dcb5ea796e2c00af55219042cb772133f0844c8d79dcd2ae30c938',
+	'solidity/contracts/Zoltar.sol': 'addc5c6c0466f7a483c7bb451777af79e698d4f3c5f97149cd7d98bcf7600af5',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
 	'solidity/contracts/statoblast/EscalationGame.sol': 'ace27e1a535bc7d088e2634d1d30c96644c610ad9a9fb014e3fc31e036d4d63a',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -161,7 +161,7 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 		'oracleRepExposure',
 		'isPriceReportingOpen',
 	],
-	'solidity/contracts/statoblast/QuestionLedger.sol': ['accountingModule', 'factory', 'operationsDelegate'],
+	'solidity/contracts/statoblast/QuestionLedger.sol': ['accountingModule', 'factory', 'operationsDelegate', 'questionAdmissionPolicy', 'originUniverseId'],
 }
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)

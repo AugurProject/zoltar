@@ -32,6 +32,8 @@ describe('escalation game preparation', () => {
 		expect(await code(predicted)).not.toBe('0x')
 		// Preparation does not start the activation clock or attach the game to the pool.
 		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: predicted, functionName: 'activationTime' })).toBe(0n)
+		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: predicted, functionName: 'hasReachedNonDecision' })).toBe(false)
+		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: predicted, functionName: 'getEscalationGameEndDate' })).toBe((1n << 256n) - 1n)
 		expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'escalationGame' })).toBe(zeroAddress)
 		// Only the factory can start a prepared game.
 		const outsider = fixture.other()

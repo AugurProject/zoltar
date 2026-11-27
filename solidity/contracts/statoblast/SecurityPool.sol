@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Constants } from '../Constants.sol';
 import { CheckedCast } from '../CheckedCast.sol';
 
 import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
@@ -131,6 +132,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	/// the leading arguments; the creator chooses only the configuration that follows.
 	constructor(ISecurityPoolFactory _factory, Deployers memory deployment, OriginConfig memory origin, uint256 horizon, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
+		require(config.minimumPurchaseFeeAttoEth <= type(uint128).max, 'Minimum purchase fee exceeds fee stream capacity');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid security pool economics');
 		require(address(deployment.repairAuctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
@@ -140,6 +142,11 @@ contract SecurityPool is ISecurityPoolSettlement {
 		require(origin.reportPriorityFeeAttoEthPerGas > 0, 'Initial priority fee zero');
 		require(origin.reportPriorityFeeAttoEthPerGas <= _factory.maximumReportPriorityFeeAttoEthPerGas(), 'Initial report priority fee exceeds OpenOracle limits');
 		require(origin.securityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
+		require(origin.securityMultiplierBps <= uint256(Constants.MAX_ATTO_REP) * 10_000, 'Security multiplier exceeds REP supply');
+		uint256 a = origin.securityMultiplierBps;
+		uint256 b = 10_000;
+		while (b != 0) (a, b) = (b, a % b);
+		require(origin.securityMultiplierBps / a <= Constants.MAX_ATTO_REP, 'Repair grid exceeds REP supply');
 		factory = _factory;
 		zoltar = _factory.zoltar();
 		originUniverseId = origin.universeId;
@@ -157,7 +164,8 @@ contract SecurityPool is ISecurityPoolSettlement {
 			uint256 tokenUniverse = abi.decode(encodedUniverse, (uint256));
 			require(tokenUniverse > type(uint248).max || token != address(zoltar.getRepToken(uint248(tokenUniverse))), 'REP cannot be security pool collateral');
 		}
-		require(origin.minimumReportCollateral > 0 && origin.minimumReportCollateral <= type(uint128).max, 'Invalid report collateral floor');
+		require(origin.minimumReportCollateral > 0 && origin.minimumReportCollateral <= _factory.maximumReportCollateral(), 'Invalid report collateral floor');
+		require(config.minimumCommitmentAttoEth <= 100 * (uint256(type(uint128).max) - origin.minimumReportCollateral), 'Minimum commitment exceeds report exposure');
 		collateralToken = origin.collateralToken;
 		minimumReportCollateral = origin.minimumReportCollateral;
 		initialReportPriorityFeeAttoEthPerGas = origin.reportPriorityFeeAttoEthPerGas;

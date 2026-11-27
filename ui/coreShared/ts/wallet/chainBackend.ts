@@ -56,7 +56,10 @@ export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'
 		validateBeforeSubmit?: () => Promise<void>
 		/** Rebuild calldata for the same target after a failed state check, before a new confirmation. */
 		refreshReviewData?: () => Promise<Hex>
-		readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined
+		/** Decode refreshed raw calldata so technical arguments match the transaction being reviewed. */
+		readReviewArgs?: (data: Hex) => readonly unknown[] | undefined
+		/** Estimate values may move without another confirmation when the step validates its signed limits. */
+		readReviewRows?: (() => readonly { label: string; value: string; allowValueChange?: boolean }[]) | undefined
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean
 		oracleOutcome?: { settlerRewardAttoEth: bigint; returnToWallet: boolean }

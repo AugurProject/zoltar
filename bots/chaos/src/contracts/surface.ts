@@ -303,6 +303,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolForkCoordinator', 'finalizeBranch', 'lifecycle-obligation', 'statoblast.auction.finalize-route'),
 	entry('SecurityPoolForkCoordinator', 'freeze', 'excluded-dangerous', undefined, 'Fork freeze belongs to the shared owner branch workflow, not a standalone randomized mutation.'),
 	entry('SecurityPoolForkCoordinator', 'initialize', 'role-restricted', undefined, 'Only the bound protocol accounting, security pool, fork, or auction authority may invoke this component callback.'),
+	entry('SecurityPoolForkCoordinator', 'prepareSourceMigration', 'excluded-dangerous', undefined, 'Early source REP admission is an explicit frozen-pool migration step; randomized preparation must not choose when custody REP is burned into migration credit.'),
 	entry('SecurityPoolForkCoordinator', 'prepareBranch', 'excluded-dangerous', undefined, 'Shared branch deployment is a bounded owner fork workflow coordinated before recording a branch choice.'),
 	entry('SecurityPoolForkCoordinator', 'recoverUnchosenCash', 'excluded-dangerous', undefined, 'Unchosen cash recovery consumes independent share recovery rights and requires an explicit amount and source-owner intent.'),
 	entry('SecurityPoolForkCoordinator', 'startBranch', 'excluded-dangerous', undefined, 'Branch opening requires the completed owner-choice window and shared capital import; use the security pool fork workflow.'),

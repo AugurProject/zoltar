@@ -39,7 +39,8 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		(amountToWithdrawAttoRep, burnAmountAttoRep) = _computeCarriedWinningWithdrawal(outcomeIndex, proof.amountAttoRep, proof.cumulativeAmountAttoRep);
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditExternalClaimOwners, (forkCarrySourceGame, depositor, proof.parentDepositIndex, amountToWithdrawAttoRep, burnAmountAttoRep)));
 		_burnWinningHaircut(burnAmountAttoRep, winnerHaircutPaidByFork);
-		emit ClaimDeposit(depositor, outcome, proof.parentDepositIndex, originalDepositAmountAttoRep, amountToWithdrawAttoRep, burnAmountAttoRep, true);
+		if (winnerHaircutPaidByFork) emit WinningHaircutPrepaid(outcome, proof.parentDepositIndex, burnAmountAttoRep);
+		emit ClaimDeposit(depositor, outcome, proof.parentDepositIndex, originalDepositAmountAttoRep, amountToWithdrawAttoRep, winnerHaircutPaidByFork ? 0 : burnAmountAttoRep, true);
 	}
 
 	function withdrawDeposit(uint256 depositIndex, BinaryOutcomes.BinaryOutcome outcome) public returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {
@@ -74,11 +75,13 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			return;
 		}
 		require(_totalUnresolvedPrincipal() == 0, 'Principal remains');
-		totalDisputeStakedAttoRep -= forkCarryDisputeStakedAttoRep;
+		uint256 reconciledEscrow = forkCarryDisputeStakedAttoRep;
+		totalDisputeStakedAttoRep -= reconciledEscrow;
 		forkCarryDisputeStakedAttoRep = 0;
 		require(totalDisputeStakedAttoRep == 0, 'Escrowed REP remains');
 		uint256 amountAttoRep = _reporterRepBalance();
-		require(amountAttoRep > 0, 'No sweepable REP');
+		require(amountAttoRep > 0 || reconciledEscrow > 0, 'No sweepable REP');
+		if (amountAttoRep == 0) return;
 		_safeTransferRep(address(questionLedger), amountAttoRep);
 		// Continuation backing predates every child-local owner class. Burning its
 		// terminal residual prevents both late capture and ownerless stranding.

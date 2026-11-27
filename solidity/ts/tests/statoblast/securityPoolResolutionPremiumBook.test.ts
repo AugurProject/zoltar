@@ -36,6 +36,68 @@ describe('Statoblast: question-linked resolution premium expiry', () => {
 		await node.setBaselineSnapshot()
 	})
 
+	test.each([false, true])('#1623 low-decimal premium ownership is independent of checkpoint frequency (chunked: %s)', async chunked => {
+		await fund(1n, 52n)
+		await schedule(1n, 3 * day)
+		let earned = 0n
+		let unused = 0n
+		for (const timestamp of chunked ? [day / 2, day, (day * 3) / 2, 2 * day, (day * 5) / 2, 3 * day, 3 * day + 1] : [3 * day + 1]) {
+			const cash = await checkpoint(timestamp)
+			earned += cash[0]
+			unused += cash[1]
+		}
+		expect(earned).toBe(2n)
+		expect(unused).toBe(50n)
+	})
+
+	test.each([false, true])('#1623 inherited cash allocation starts its own stable conversion epoch (chunked: %s)', async chunked => {
+		await fund(1n, 52n)
+		await schedule(1n, 3 * day)
+		await checkpoint(day / 2)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freeze', args: [0n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'choose', args: [0n, 1n, 1n, 2n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChild', args: [0n, 1n] }))
+		let earned = 0n
+		let unused = 0n
+		for (const timestamp of chunked ? [day, 2 * day, 3 * day, 3 * day + 1] : [3 * day + 1]) {
+			const cash = await checkpoint(timestamp, 1n)
+			earned += cash[0]
+			unused += cash[1]
+		}
+		expect([earned, unused]).toEqual([1n, 25n])
+		expect((await totals(1n)).slice(0, 2)).toEqual([0n, 0n])
+	})
+
+	test('#1623 an early fractional refund preserves the cash needed to price new funding', async () => {
+		await fund(1n, 1n)
+		await fund(2n, 9n)
+		await schedule(1n, day)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freeze', args: [0n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'choose', args: [0n, 1n, 1n, 10n] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChild', args: [0n, 1n] }))
+		expect(await checkpoint(day + 1, 1n)).toEqual([0n, 0n])
+		expect((await totals(1n))[0]).toBe(1n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'fund', args: [1n, 3n, 1n] }))
+		expect((await totals(1n))[0]).toBe(2n)
+	})
+
+	test('#1623 funding and cancellation start solvent conversion epochs', async () => {
+		await fund(1n, 52n)
+		await schedule(1n, 3 * day)
+		const first = await checkpoint(day / 2)
+		await fund(2n, 52n)
+		const cancel = {
+			...target(),
+			functionName: 'cancel' as const,
+			args: [0n, 2n] as const,
+		}
+		const cancelled = (await client.simulateContract(cancel)).result
+		await writeContractAndWait(client, () => client.writeContract(cancel))
+		const last = await checkpoint(3 * day + 1)
+		expect(first[0] + first[1] + cancelled + last[0] + last[1]).toBe(104n)
+		expect((await totals()).slice(0, 2)).toEqual([0n, 0n])
+	})
+
 	test.each([false, true])('#1246 two one-unit premiums earn completely across the funded window (chunked: %s)', async chunked => {
 		await fund(1n, 1n)
 		await fund(2n, 1n)

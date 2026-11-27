@@ -92,6 +92,18 @@ describe('Question Data', () => {
 		return { description: '', startTime: now + 100000n, endTime: now + 200000n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '', ...fields }
 	}
 
+	for (const fields of [{ numTicks: 1n }, { displayValueMin: -1n }, { displayValueMax: 1n }, { answerUnit: 'USD' }]) {
+		for (const labels of [
+			['Yes', 'No'],
+			['Red', 'Green', 'Blue'],
+		]) {
+			test(`#1727 categorical questions reject reserved scalar fields ${JSON.stringify(fields, (_, value) => (typeof value === 'bigint' ? value.toString() : value))} with ${labels.length} outcomes`, async () => {
+				const question = await futureQuestion({ title: 'Canonical categorical identity', ...fields })
+				await expect(createQuestion(client, question, sortStringArrayByKeccak(labels))).rejects.toThrow('Categorical scalar fields must be zero or empty')
+			})
+		}
+	}
+
 	const createScalarParityQuestion = async (question: ScalarParityQuestion) => {
 		const questionData = await futureQuestion({ title: `scalar parity ${question.name}`, description: 'scalar parity fixture', numTicks: question.numTicks, displayValueMin: question.displayValueMin, displayValueMax: question.displayValueMax, answerUnit: question.answerUnit })
 		await createQuestion(client, questionData, [])

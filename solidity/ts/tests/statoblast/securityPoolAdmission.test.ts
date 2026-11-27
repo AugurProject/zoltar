@@ -6,6 +6,7 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_QuestionForker_QuestionForker as nativeForkArtifact,
+	statoblast_QuestionLedger_QuestionLedger as ledgerArtifact,
 	statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact,
 	test_statoblast_QuestionAdmissionPolicyHarness_QuestionAdmissionPolicyHarness as policyArtifact,
 } from '../../types/contractArtifact'
@@ -73,6 +74,7 @@ describe('Statoblast: pluggable question admission', () => {
 		await fixture.authorize(100n * unit, fixture.owner(), securityPool)
 		await fixture.mint(10n * unit, fixture.base.questionId, { namespace: securityPool })
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
+		expect(await fixture.owner().readContract({ abi: ledgerArtifact.abi, address: fixture.poolFor(fixture.base.questionId, fixture.base.genesisUniverse, zeroAddress, securityPool).questionLedger, functionName: 'additionalMintCapacityAttoEth' })).toBe(0n)
 		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: securityPool })).rejects.toThrow('Question rejected by admission policy')
 		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, true] }))
 		await expect(fixture.mint(unit, fixture.base.questionId, { namespace: securityPool })).rejects.toThrow('Admission unavailable')
@@ -103,6 +105,8 @@ describe('Statoblast: pluggable question admission', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: nativeForkArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'prepareSecurityPoolQuestion', args: [parent, child] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: policyArtifact.abi, address: policy, functionName: 'setState', args: [false, false] }))
+		const descendant = await owner.readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'getQuestionLedger', args: [fixture.secondQuestionId, child] })
+		expect(await owner.readContract({ abi: ledgerArtifact.abi, address: descendant, functionName: 'additionalMintCapacityAttoEth' })).toBe(0n)
 		await expect(owner.writeContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'createCompleteSet', args: [child, fixture.secondQuestionId, unit, owner.account.address, 0n, 2n * unit - unit], value: 0n })).rejects.toThrow('Question rejected by admission policy')
 	})
 })

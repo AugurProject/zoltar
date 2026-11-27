@@ -62,7 +62,7 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '9fce09c68c109d4ffabc5f85f0813ec2d92515318b265554fa40270759a1a006',
+		compiledAbiFingerprint: '7a728c799e95d6d3eff2780e2074b1888a27cdea22cd49f4ec9bae56cfc2a653',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the [fork haircut](./glossary.html#fork-haircut), and mints branch-specific [child REP](./glossary.html#child-rep).',
 		readAbiFingerprint: 'af953dbf8c9829c81943e2873905308a3a57839625fa5f1ee8e7812f3438883d',
@@ -133,7 +133,7 @@ export const coreContractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
-				call: '`forkUniverse(universeId, questionId)`',
+				call: '`forkUniverse(universeId, questionId, maximumThresholdAttoRep)`',
 				caller: 'Any address able to fund the current fork threshold',
 				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the uncredited fork haircut.',
 				declarations: [
@@ -141,7 +141,7 @@ export const coreContractReferences: ContractReference[] = [
 						name: 'forkUniverse',
 					},
 				],
-				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP; a child must have reached its parent fork timestamp plus ten weeks. Genesis REP requires allowance; child REP is burned directly without allowance.',
+				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP; the live fork threshold must not exceed the caller’s maximum; a child must have reached its parent fork timestamp plus ten weeks. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: 'The REP burn events (genesis REP `Transfer` to the burn address, or child REP `Transfer` and `Burn`), then `UniverseForked`',
 			},
 			{
@@ -398,13 +398,14 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'df50e386d46580c7d08a2f108b0e26c2fc2f369b4da8e1eb64ab844c5bd35bec',
+		compiledAbiFingerprint: '2647769477e5121d2e89224b05f229b250ab0b20ca4c22f1b5f0d70ea53c93c4',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every security pool from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: 'd50a5cce841c9778e1262fb054b44a5e8b300a0e64076329eff4394989897109',
+		readAbiFingerprint: '0dde49d1ab3c93ffa7ff588b0344cfb09d1c75f6d8547026ce3bf6e7603e0bef',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a security pool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed security pools that have configured their namespace; a deployed security pool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getQuestionOriginId` includes the caller security pool namespace. `securityPoolOf` returns the factory-deployed security pool a ledger belongs to; `sharedPriceFeeds` is indexed by security pool and universe. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured feed-factory ceiling used to reject over-cap security pool creation before setup. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a security pool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed security pools that have configured their namespace; a deployed security pool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getQuestionOriginId` includes the caller security pool namespace. `securityPoolOf` returns the factory-deployed security pool a ledger belongs to; `sharedPriceFeeds` is indexed by security pool and universe. `maximumReportCollateral` exposes the largest collateral report floor whose escalation halt fits the oracle amount domain. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured feed-factory ceiling used to reject over-cap security pool creation before setup. `zoltar` identifies the protocol root.',
 		readDeclarations: [
+			{ name: 'maximumReportCollateral' },
 			{ name: 'maximumReportPriorityFeeAttoEthPerGas' },
 			{
 				name: 'questionLedgerDeploymentCount',

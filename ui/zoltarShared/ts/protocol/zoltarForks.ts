@@ -63,12 +63,12 @@ export async function migrateInternalRepInZoltar(client: WriteClient, universeId
 	return { action: 'splitMigrationRep', amountAttoRep, hash, outcomeIndexes, universeId } satisfies ZoltarMigrationActionResult
 }
 
-export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
+export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint, maximumThresholdAttoRep: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getZoltarAddress(),
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'forkUniverse',
-		args: [universeId, questionId],
+		args: [universeId, questionId, maximumThresholdAttoRep],
 	}))
 	return { action: 'forkZoltar', hash, questionId: formatQuestionIdHex(questionId), universeId } satisfies ZoltarForkActionResult
 }

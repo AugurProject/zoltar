@@ -6,7 +6,7 @@ import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindo
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { approveToken, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance, overrideGenesisTheoreticalSupply, setupTestAccounts, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
 import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, getZoltarForkThreshold, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import {
@@ -48,7 +48,13 @@ describe('Statoblast: central reporter custody', () => {
 	const balance = async (game: Address) => await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'balanceOfGame', args: [game] })
 	const book = async (universe = 0n) => await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'books', args: [universe] })
 	const createChild = async (outcome: bigint) => {
-		await rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'createChild', args: [0n, outcome] }))
+		await rootCall(
+			encodeFunctionData({
+				abi: artifact.abi,
+				functionName: 'createChild',
+				args: [0n, outcome, false],
+			}),
+		)
 		return BigInt.asUintN(248, BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [0n, outcome]))))
 	}
 
@@ -64,6 +70,36 @@ describe('Statoblast: central reporter custody', () => {
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
 		await createQuestion(owner, data, outcomes)
 		questionId = getQuestionId(data, outcomes)
+	})
+
+	test('#1667 protected parent payout does not prepare unrelated live migration inventory', async () => {
+		const finalGame = await createGame(questionId)
+		const liveGame = await createGame(questionId + 1n)
+		await deposit(finalGame, 10n * unit)
+		await deposit(liveGame, 20n * unit)
+		await writeContractAndWait(owner, () =>
+			owner.writeContract({
+				abi: harness.abi,
+				address: finalGame,
+				functionName: 'schedule',
+				args: [900],
+			}),
+		)
+		await overrideGenesisTheoreticalSupply(ethereum, owner, getRepTokenAddress(0n), 1000n * unit)
+		await approveToken(owner, getRepTokenAddress(0n), getZoltarAddress())
+		await ethereum.setTime(1000n)
+		await forkUniverse(owner, 0n, questionId)
+		const remaining = await owner.readContract({
+			abi: zoltarArtifact.abi,
+			address: getZoltarAddress(),
+			functionName: 'getUniverseTheoreticalSupplyAttoRep',
+			args: [0n],
+		})
+		await addRepToMigrationBalance(owner, 0n, remaining)
+		await expect(rootCall(encodeFunctionData({ abi: artifact.abi, functionName: 'freezeFork', args: [0n] }))).rejects.toThrow('Migration exceeds theoretical supply')
+		await withdraw(finalGame, 10n * unit)
+		expect(await balance(finalGame)).toBe(0n)
+		expect(await balance(liveGame)).toBe(20n * unit)
 	})
 
 	test('keeps separately funded question balances and rejects unauthenticated or unfunded credits', async () => {

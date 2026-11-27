@@ -88,6 +88,7 @@ interface IQuestionLedger {
 }
 
 interface ISecurityPoolFactory {
+	function maximumReportCollateral() external view returns (uint256);
 	function maximumReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function zoltar() external view returns (Zoltar);
 	function prepareSecurityPoolPriceFeed(IQuestionLedger source, uint248 universeId) external returns (address);

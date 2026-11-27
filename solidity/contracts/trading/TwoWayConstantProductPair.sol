@@ -146,6 +146,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function removeLiquidity(uint256 liquidity, uint256 minYes, uint256 minNo, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 yesOut, uint256 noOut) {
+		require(recipient != address(this), 'Recipient is pair');
 		require(recipient != address(0), 'Recipient is zero');
 		require(liquidity > 0, 'Liquidity is zero');
 		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
@@ -170,6 +171,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function swapExactInput(bool yesForNo, uint256 amountIn, uint256 minAmountOut, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountOut, uint256 feeAmount) {
+		require(recipient != address(this), 'Recipient is pair');
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
 		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();
@@ -185,6 +187,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountIn, uint256 feeAmount) {
+		require(recipient != address(this), 'Recipient is pair');
 		_requireLifecycleOpen(true);
 		require(recipient != address(0), 'Recipient is zero');
 		(uint256 yesReserve, uint256 noReserve) = _effectiveReserves();

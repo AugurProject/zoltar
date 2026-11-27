@@ -43,6 +43,30 @@ describe('Escalation Game: carried proof payouts', () => {
 		client = fixture.client
 	})
 
+	test('#1670 exact payout exhaustion still reconciles inherited logical escrow', async () => {
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 100n * reportBond)
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, -FRESH_FORK_RESPONSE_PERIOD)
+		await initializeSnapshotFromSourceViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
+			parent.escalationGameAddress,
+			zeroHash(),
+			[zeroPeakArray(), zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.No)],
+			[0n, 0n, 1n],
+			[0n, 0n, 100n * reportBond],
+			[zeroHash(), zeroHash(), await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.No)],
+		)
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 300n * reportBond)
+		await mockWindow.setTime((await readEscalationGameEndDate(client, child.escalationGameAddress)) + DAY)
+		await fixture.claimWinningDepositAndReadClaimLog(child.testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
+		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress), 0n, 'winner payout and haircut exhaust custody exactly')
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'totalDisputeStakedAttoRep' }), 100n * reportBond)
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'sweepResidualRepToQuestionLedger' }))
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName: 'totalDisputeStakedAttoRep' }), 0n)
+	})
+
 	test('carried proof pays its authenticated depositor without consulting vault escrow', async () => {
 		const parent = await deployEscalationGameTestQuestionLedger()
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
@@ -237,7 +261,8 @@ describe('Escalation Game: carried proof payouts', () => {
 			await depositOnOutcomeViaProofTestQuestionLedger(source.testQuestionLedgerAddress, addressString(0x0000000000050000000000000000000000000000n + BigInt(ownerIndex)), QuestionOutcome.Yes, reportBond)
 		}
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, -FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(
 			child.testQuestionLedgerAddress,
 			source.escalationGameAddress,
@@ -247,8 +272,9 @@ describe('Escalation Game: carried proof payouts', () => {
 			[0n, 65n * reportBond, 0n],
 			[zeroHash(), await readNullifierRoot(client, source.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
-		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 66n * reportBond)
+		await assert.rejects(depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 66n * reportBond), /Invalid deposit preview/)
 		await resumeEscalationFromFork(child.escalationGameAddress)
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 66n * reportBond)
 
 		assert.strictEqual(await readCarryLeafCount(client, child.escalationGameAddress, QuestionOutcome.No), 1n)
 		assert.strictEqual(await getEscrowedRepByVault(client, child.escalationGameAddress, client.account.address), 66n * reportBond)

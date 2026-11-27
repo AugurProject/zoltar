@@ -120,9 +120,11 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		const q2FromA1 = (await cash(trader.account.address)) - before
 		expect(q2FromA1).toBe(quoteA1)
 		// Recovery of unassigned cash at both generations.
+		const originRecovery = await trader.simulateContract({ ...coordinator, functionName: 'recoverUnchosenCash', args: [U0, q2, 10n * unit] })
 		before = await cash(trader.account.address)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'recoverUnchosenCash', args: [U0, q2, 10n * unit] }))
 		const q2FromU0 = (await cash(trader.account.address)) - before
+		expect(originRecovery.result).toBe(q2FromU0)
 		before = await cash(trader.account.address)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'recoverUnchosenCash', args: [A, q2, 10n * unit] }))
 		const q2FromA = (await cash(trader.account.address)) - before
@@ -134,7 +136,7 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		expect(Number(await owner.readContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'systemState' }))).toBe(0)
 		await expect(trader.simulateContract({ ...shares1, functionName: 'migrate', args: [A * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 		before = await cash(trader.account.address)
-		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'redeemShares' }))
+		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'redeemShares', args: [] }))
 		const q1FromA = (await cash(trader.account.address)) - before
 		before = await cash(trader.account.address)
 		await writeContractAndWait(trader, () => trader.writeContract({ ...coordinator, functionName: 'recoverUnchosenCash', args: [U0, q1, 10n * unit] }))

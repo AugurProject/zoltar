@@ -15,17 +15,16 @@ import {
 	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 	ORACLE_FEE_PERCENTAGE,
 	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	ORACLE_MULTIPLIER,
 	ORACLE_PROTOCOL_FEE,
 	ORACLE_SETTLEMENT_TIME,
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, bigint, number, number, number, number, number, Address, bigint, bigint, bigint]
+type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, bigint, number, number, number, number, number, Address, bigint, bigint]
 
 async function deployConfiguredFeed(client: ReturnType<ReturnType<typeof useSecurityPoolFixture>['owner']>, args: OracleCoordinatorConstructorArgs, securityPool: Address) {
 	const worker = getInfraContractAddresses().sharedPoolPriceFeedDeploymentWorker
-	const config = await deployContract(client, encodeDeployData({ abi: configArtifact.abi, bytecode: `0x${configArtifact.evm.bytecode.object}`, args: [args[2], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], worker] }))
+	const config = await deployContract(client, encodeDeployData({ abi: configArtifact.abi, bytecode: `0x${configArtifact.evm.bytecode.object}`, args: [args[2], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], worker] }))
 	const request = { abi: feedWorkerArtifact.abi, address: worker, functionName: 'deployImplementation', args: [config, args[0], args[3], getInfraContractAddresses().securityPoolFactory, securityPool] } as const
 	const { result } = await client.simulateContract(request)
 	await writeContractAndWait(client, () => client.writeContract(request))
@@ -48,7 +47,6 @@ describe('Security pool oracle configuration guards', () => {
 		zeroAddress,
 		ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 		ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-		ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	]
 
 	test('coordinator constructor rejects a priority fee that would exhaust OpenOracle report limits', async () => {
@@ -57,6 +55,7 @@ describe('Security pool oracle configuration guards', () => {
 		maximumArgs[3] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
 		const maximumCoordinator = await deployConfiguredFeed(client, maximumArgs, fixture.securityPool)
 		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: maximumCoordinator, functionName: 'initialReportPriorityFeeAttoEthPerGas' }), MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS)
+		assert.ok((await client.readContract({ abi: feedArtifact.abi, address: maximumCoordinator, functionName: 'getRequestPriceCostAttoEth' })) <= (1n << 96n) - 1n)
 
 		const invalidArgs = getOracleCoordinatorConstructorArgs()
 		invalidArgs[3] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n
@@ -119,12 +118,6 @@ describe('Security pool oracle configuration guards', () => {
 					args[12] = 9999n
 				},
 				message: /max settlement base fee multiplier/i,
-			},
-			{
-				change: args => {
-					args[13] = 10001n
-				},
-				message: /minimum liquidation price distance/i,
 			},
 		]
 		for (const entry of cases) {

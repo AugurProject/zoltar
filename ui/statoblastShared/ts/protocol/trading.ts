@@ -9,7 +9,7 @@ import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
-import { encodeFunctionData, getAddress, maxUint256, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeFunctionData, getAddress, maxUint256, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_QuestionLedger_QuestionLedger, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -285,8 +285,11 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 		if (winner === 'none') throw new Error(tradingCopy.poolResolutionRequired)
 		return { amount: balances[getReportingOutcomeValue(winner)], balances, blockNumber, winner }
 	}
-	let reviewedBalance = await readBalance(initialBlock.number)
-	const upfrontQuote = checksTransactionReview(client) ? undefined : await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber)
+	// Authenticate the immutable pool/collateral binding once per action; payout
+	// amounts and share balances are still refreshed at every review checkpoint.
+	const [initialBalance, collateral] = await Promise.all([readBalance(initialBlock.number), loadTradingCollateralIdentity(client, questionLedgerAddress, initialBlock.number)])
+	let reviewedBalance = initialBalance
+	let reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber, collateral)
 	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
@@ -299,21 +302,29 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 			...callParams,
 			contractAddress: questionLedgerAddress,
 			reviewTitle: tradingCopy.redeemResolvedShares,
-			reviewDescription: tradingCopy.redeemSharesReview,
+			requireReview: true,
+			reviewDescription: reviewedQuote.description,
 			readReviewRows: () => reviewRows,
+			readReviewArgs: data => {
+				const decoded = decodeFunctionData({ abi: callParams.abi, data })
+				if (decoded.functionName !== callParams.functionName) throw new Error(changedSinceReview)
+				return decoded.args
+			},
 			refreshReviewData: async () => {
 				reviewedBalance = await readBalance((await client.getBlock()).number)
+				reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber, collateral)
 				return encodeFunctionData(callParams)
 			},
 			validateBeforeSubmit: async () => {
 				const { amount, balances, blockNumber, winner } = await readBalance((await client.getBlock()).number)
 				if (winner !== reviewedBalance.winner || amount !== reviewedBalance.amount) throw new Error(changedSinceReview)
 				if (amount === 0n) throw new Error(tradingCopy.redemptionInsufficientShares)
-				reviewRows = redemptionRows(await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber), amount, balances, [winner])
+				const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber, collateral)
+				reviewRows = redemptionRows(quote, amount, balances, [winner])
 			},
 		},
 	])
-	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: upfrontQuote?.description ?? tradingCopy.redeemSharesReview }))
+	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: reviewedQuote.description }))
 	return {
 		action: 'redeemShares',
 		hash,
@@ -490,8 +501,9 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	return { action: 'createCompleteSet', hash, questionLedgerAddress, universeId } satisfies TradingActionResult
 }
 export async function redeemCompleteSetInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, amount: bigint) {
-	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	const upfrontQuote = checksTransactionReview(client) ? undefined : await readRedemptionQuote(client, questionLedgerAddress, amount, (await client.getBlock()).number)
+	const [universeId, initialBlock] = await Promise.all([readQuestionLedgerUniverseId(client, questionLedgerAddress), client.getBlock()])
+	const collateral = await loadTradingCollateralIdentity(client, questionLedgerAddress, initialBlock.number)
+	const reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, amount, initialBlock.number, collateral)
 	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
@@ -504,7 +516,8 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 			...callParams,
 			contractAddress: questionLedgerAddress,
 			reviewTitle: tradingCopy.redeemCompleteSets,
-			reviewDescription: tradingCopy.redeemSetsReview,
+			requireReview: true,
+			reviewDescription: reviewedQuote.description,
 			readReviewRows: () => reviewRows,
 			validateBeforeSubmit: async () => {
 				const { number: blockNumber } = await client.getBlock()
@@ -515,12 +528,12 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 					if (balances.some(balance => amount > balance)) throw new Error(tradingCopy.redemptionInsufficientShares)
 					return balances
 				}
-				const [balances, quote] = await Promise.all([readBalances(), readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber)])
+				const [balances, quote] = await Promise.all([readBalances(), readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber, collateral)])
 				reviewRows = redemptionRows(quote, amount, balances, ['yes', 'no', 'invalid'])
 			},
 		},
 	])
-	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: upfrontQuote?.description ?? tradingCopy.redeemSetsReview }))
+	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: reviewedQuote.description }))
 	return {
 		action: 'redeemCompleteSet',
 		hash,
@@ -529,12 +542,16 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 	} satisfies TradingActionResult
 }
 
-async function readRedemptionQuote(client: Pick<ReadClient, 'readContract' | 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
-	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
+async function readRedemptionQuote(client: Pick<ReadClient, 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined, collateral: Awaited<ReturnType<typeof loadTradingCollateralIdentity>>) {
 	const { cash, rep: recovery } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
 	const collateralAmount = formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)
 	const repAmount = formatCurrencyBalanceWithUnit(recovery, commonCopy.rep)
-	return { collateralAmount, repAmount, recovery, decimals: collateral.decimals, description: tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount) }
+	return {
+		collateralAmount,
+		repAmount,
+		decimals: collateral.decimals,
+		description: tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount),
+	}
 }
 
 function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, amount: bigint, balances: readonly [bigint, bigint, bigint], outcomes: readonly ReportingOutcomeKey[]) {
@@ -543,7 +560,7 @@ function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, 
 			const balance = balances[getReportingOutcomeValue(outcome)]
 			return { label: tradingCopy.formatOutcomeShares(getShareOutcomeLabel(outcome)), value: `${formatCurrencyBalance(balance, quote.decimals)} → ${formatCurrencyBalance(balance - amount, quote.decimals)}` }
 		}),
-		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount },
-		...(quote.recovery === 0n ? [] : [{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount }]),
+		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount, allowValueChange: true },
+		{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount, allowValueChange: true },
 	]
 }

@@ -48,6 +48,20 @@ contract SecurityPoolResolutionPremiumBook {
 		uint48 securityPoolEndTime;
 		uint48 securityPoolFundedEndTime;
 	}
+	// Conversion prices stay fixed between changes to the funding basket. Earned
+	// fractions remain earned across checkpoints; unused premiums own rounding dust.
+	// Funding and cancellation start a new epoch: fractions still below one cash
+	// unit then belong to the remaining premium basket. Each child starts its own
+	// epoch at the cash allocation chosen for that branch.
+	struct ConversionEpoch {
+		uint256 cash;
+		uint256 units;
+		uint256 earnedUnits;
+		uint256 unusedUnits;
+		uint256 earnedCash;
+		uint256 unusedCash;
+	}
+	mapping(uint248 => ConversionEpoch) private conversionEpochs;
 	mapping(uint248 => Book) private books;
 	mapping(uint64 => Question) private questions;
 	mapping(uint248 => uint256) public branchCash;
@@ -88,6 +102,7 @@ contract SecurityPoolResolutionPremiumBook {
 		book.units += units;
 		require(book.units <= MAXIMUM_BOOK_UNITS, 'Premium unit domain exceeded');
 		book.cash += cash;
+		delete conversionEpochs[universe];
 		totalCash += cash;
 		_write(book, id, state);
 		units = Math.ceilDiv(units, UNIT_SCALE);
@@ -133,6 +148,7 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.units == 0) return 0;
 		_removeSchedule(book, state);
 		unusedCash = _takeUnits(book, state.units);
+		delete conversionEpochs[universe];
 		_write(book, id, Question({units: 0, rate: 0, securityPoolStartTime: 0, securityPoolEndTime: 0, securityPoolFundedEndTime: 0}));
 	}
 	function checkpoint(uint248 universe, uint48 securityPoolTimestamp) external onlyServices returns (uint256 earnedCash, uint256 unusedCash) {
@@ -146,17 +162,16 @@ contract SecurityPoolResolutionPremiumBook {
 			// Full-window tails belong to earned income, including a one-unit premium.
 			earned += tailThrough - tailPreviouslyEarned;
 		}
-		if (earned != 0) earnedCash = _takeUnits(book, earned);
+		uint256 unused;
 		if (securityPoolTimestamp > book.minimumFinalAfter) {
 			(, uint256 prefix) = tree.prefix(book.tailRoot, securityPoolTimestamp - 1);
-			uint256 unused;
 			unchecked {
 				unused = prefix - book.refundedPrefix;
 			}
 			book.refundedPrefix = prefix;
 			book.refundedBefore = securityPoolTimestamp;
-			if (unused != 0) unusedCash = _takeUnits(book, unused);
 		}
+		(earnedCash, unusedCash) = _takeCheckpointUnits(book, conversionEpochs[universe], earned, unused);
 		book.securityPoolTimestamp = securityPoolTimestamp;
 	}
 	function freeze(uint248 universe) external onlyServices {
@@ -225,6 +240,30 @@ contract SecurityPoolResolutionPremiumBook {
 			state.units -= uint256(state.rate) * (end - state.securityPoolStartTime);
 		state.securityPoolStartTime = book.securityPoolTimestamp;
 	}
+	function _takeCheckpointUnits(Book storage book, ConversionEpoch storage epoch, uint256 earned, uint256 unused) private returns (uint256 earnedCash, uint256 unusedCash) {
+		if (earned == 0 && unused == 0) return (0, 0);
+		if (epoch.units == 0) {
+			epoch.cash = book.cash;
+			epoch.units = book.units;
+		}
+		epoch.earnedUnits += earned;
+		epoch.unusedUnits += unused;
+		uint256 nextEarnedCash = Math.mulDiv(epoch.cash, epoch.earnedUnits, epoch.units);
+		// Only terminal reconciliation awards raw rounding dust. Paying it early
+		// could exhaust cash while live question units still need funding prices.
+		uint256 nextUnusedCash =
+			earned + unused == book.units
+				? epoch.cash - nextEarnedCash
+				: Math.mulDiv(epoch.cash, epoch.unusedUnits, epoch.units);
+		earnedCash = nextEarnedCash - epoch.earnedCash;
+		unusedCash = nextUnusedCash - epoch.unusedCash;
+		epoch.earnedCash = nextEarnedCash;
+		epoch.unusedCash = nextUnusedCash;
+		book.units -= earned + unused;
+		book.cash -= earnedCash + unusedCash;
+		totalCash -= earnedCash + unusedCash;
+	}
+
 	function _takeUnits(Book storage book, uint256 units) private returns (uint256 cash) {
 		cash = units == book.units ? book.cash : Math.mulDiv(book.cash, units, book.units);
 		book.units -= units;

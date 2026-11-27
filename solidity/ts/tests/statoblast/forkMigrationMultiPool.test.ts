@@ -142,7 +142,7 @@ describe('Statoblast: shared security pool multi-branch migration', () => {
 			/ShareToken migrated source balance is locked/,
 		)
 		// #1561: both production burn entrypoints reject the forked source pool.
-		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemShares' }), /Pool inactive/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemShares', args: [] }), /Pool inactive/)
 		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemCompleteSet', args: [1n] }), /Forked/)
 		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: questionLedgerAddresses.shareToken, functionName: 'burnCompleteSets', args: [genesisUniverse, holderAddress, 1n] }), /not authorized/)
 		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: questionLedgerAddresses.shareToken, functionName: 'burnTokenIdAndGetRemainingSupply', args: [parentYesTokenId, holderAddress] }), /not authorized/)

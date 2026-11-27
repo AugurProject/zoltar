@@ -2,6 +2,7 @@ import { loadCompleteSetRedemptionQuote } from '../../../../ui/statoblastShared/
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_SecurityPoolPurchase_SecurityPoolPurchase as purchaseArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamArtifact,
@@ -26,6 +27,19 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		const bookId = await fixture.owner().readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [fixture.base.genesisUniverse] })
 		return (await fixture.owner().readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, fixture.base.questionId] }))[0]
 	}
+
+	test('#1706 public fee schedule matches the applied rounded end', async () => {
+		await fixture.prepare()
+		await fixture.mint(100n * unit)
+		const state = await question()
+		const helper = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'quoteHelper' })
+		const [rate, stop] = await fixture.owner().readContract({ abi: purchaseArtifact.abi, address: helper, functionName: 'feeStream', args: [fixture.poolFor(fixture.base.questionId).questionLedger] })
+		expect([rate, stop]).toEqual([state.feeRateAttoEthPerSecond, BigInt(state.feeEnd)])
+		const settlement = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
+		const book = await fixture.owner().readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const discarded = await fixture.owner().readContract({ abi: bookArtifact.abi, address: book, functionName: 'normalizeFeeStream', args: [1n, 86_999n, 86_400n, 599n] })
+		expect([...discarded]).toEqual([0n, 0n])
+	})
 
 	test('#1246 purchase premium quotes use the same fractional backing as minting', async () => {
 		await fixture.prepare()
@@ -157,18 +171,21 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'demandAttoEth' })).toBe(demand)
 	})
 
-	test('#1633 reviewed redemption pays the checkpointed quote at the same timestamp', async () => {
+	test('#1633 native redemption accepts accrued holding fees without a collateral minimum', async () => {
 		await fixture.prepare()
 		const client = fixture.other()
 		await fixture.mint(100n * unit)
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
+		const shares = unit
+		const reviewedCash = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares] })
 		await fixture.base.mockWindow.advanceTime(120n)
 		const saved = await fixture.base.mockWindow.anvilSnapshot()
 		await fixture.base.mockWindow.advanceTime(1n)
-		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
-		const shares = unit
-		const stale = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares] })
+		const publicQuote = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares] })
 		const quote = await loadCompleteSetRedemptionQuote(client, pool, shares, await client.getBlockNumber())
-		expect(quote.cash).toBeLessThan(stale)
+		expect(quote.cash).toBe(publicQuote)
+		expect(quote.cash).toBeLessThan(reviewedCash)
+		expect(quote.cash).toBeLessThan(shares)
 		const token = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		const before = await getERC20Balance(client, token, client.account.address)
 		await fixture.base.mockWindow.anvilRevert(saved)

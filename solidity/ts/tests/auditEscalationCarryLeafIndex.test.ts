@@ -59,7 +59,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 
 	const deployContinuation = async (source: Address) => {
 		const continuation = await deployGame()
-		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: continuation.escalationGame, functionName: 'startFromFork', args: [REPORT_BOND, NON_DECISION_THRESHOLD, 0n, QuestionOutcome.None, false, 0n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: continuation.escalationGame, functionName: 'startFromFork', args: [REPORT_BOND, NON_DECISION_THRESHOLD, -FRESH_FORK_RESPONSE_PERIOD, QuestionOutcome.None, false, 0n] }))
 		const sourceYes = await readYesState(source)
 		const yesPeaks = [...sourceYes.currentPeaks]
 		for (let outcome = 0; outcome < 3; outcome++) {
@@ -72,11 +72,12 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 				}),
 			)
 		}
+		// Preserve the inherited activation delay, then open local reporting through the real resume gate.
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: continuation.questionLedger, functionName: 'resumeEscalationGameFromFork', args: [] }))
 		return continuation
 	}
 
-	const finalizeContinuation = async ({ escalationGame, questionLedger }: Game) => {
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'resumeEscalationGameFromFork', args: [] }))
+	const finalizeContinuation = async ({ escalationGame }: Game) => {
 		const forkResumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkResumedAt' })
 		const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getEscalationGameEndDate' })
 		await mockWindow.setTime((endDate > forkResumedAt + FRESH_FORK_RESPONSE_PERIOD ? endDate : forkResumedAt + FRESH_FORK_RESPONSE_PERIOD) + 1n)

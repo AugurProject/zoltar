@@ -50,7 +50,10 @@ describe('Shared security pool child fee clock', () => {
 		await splitMigrationRep(owner, base.genesisUniverse, reportingRep, [1n])
 		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		const child = getChildUniverseId(base.genesisUniverse, 1n)
-		const frozenCash = await owner.readContract({ ...securityPool, functionName: 'quoteQuestionSettlement', args: [parent, 10n * unit] })
+		const sourceSettlement = await owner.readContract({ ...securityPool, functionName: 'settlement' })
+		const frozenCash = await owner.readContract({ abi: settlementArtifact.abi, address: sourceSettlement, functionName: 'quoteRedemption', args: [parent, 10n * unit] })
+		expect(frozenCash).toBeGreaterThan(0n)
+		expect(await owner.readContract({ ...securityPool, functionName: 'quoteQuestionSettlement', args: [parent, 10n * unit] })).toBe(0n)
 		await base.mockWindow.setTime(forkTime + 63n * DAY + delay)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'finalizeBranch', args: [child] }))

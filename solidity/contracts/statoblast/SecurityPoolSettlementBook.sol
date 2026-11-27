@@ -282,6 +282,15 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		emit SettlementRedeemed(bookId, questionId, outcomeShares, unitsBurned, cashAttoEth);
 	}
 
+	/// @notice Effective stream after applying the shared horizon, budget and end grid.
+	function normalizeFeeStream(uint96 rate, uint48 end, uint48 clock, uint256 budget) public view returns (uint96, uint48) {
+		if (rate == 0) return (0, 0);
+		uint256 last = Math.min(Math.min(end, FEE_END_LIMIT - 1), uint256(clock) + budget / rate);
+		last -= last % feeEndGranularity;
+		if (last <= clock) return (0, 0);
+		return (rate, uint48(last));
+	}
+
 	/// @notice Replace one prospective collateral fee stream after checkpointing every old stream.
 	/// @dev Clamp the end to the fee budget above the backing floor and FEE_END_LIMIT, then round it
 	/// down to feeEndGranularity. Runoff pauses accrual globally; pausing never extends the absolute
@@ -293,12 +302,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		require(frozenBookId == 0, 'Final claim fees closed');
 		uint48 feeClockTimestamp = _feeTimestamp(book);
 		require(rateAttoEthPerSecond == 0 || (state.finalAfter == 0 && end > feeClockTimestamp), 'Invalid question fee interval');
-		if (rateAttoEthPerSecond != 0) {
-			uint256 last = Math.min(Math.min(end, FEE_END_LIMIT - 1), feeClockTimestamp + _feeBudget(bookId, book, state) / rateAttoEthPerSecond);
-			last -= last % feeEndGranularity;
-			if (last <= feeClockTimestamp) rateAttoEthPerSecond = 0;
-			else end = uint48(last);
-		}
+		(rateAttoEthPerSecond, end) = normalizeFeeStream(rateAttoEthPerSecond, end, feeClockTimestamp, _feeBudget(bookId, book, state));
 		uint48 nextEnd = rateAttoEthPerSecond == 0 ? 0 : end;
 		uint256 previousRate = state.feeRateAttoEthPerSecond;
 		// An unchanged end receives one net write; only a moved stream is removed and re-added.
@@ -366,9 +370,42 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		return _quoteRedemption(bookId, questionId, outcomeShares, _book(bookId).securityPoolTimestamp);
 	}
 
-	/// @notice Quotes checkpointed balances using the supplied clock to determine whether a named reservation comes first.
+	/// @notice Executable collateral proceeds after fees through the supplied redemption clock.
 	function quoteRedemptionAt(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 securityPoolTimestamp) external view returns (uint256, uint256) {
-		return _quoteRedemption(bookId, questionId, outcomeShares, securityPoolTimestamp);
+		return quoteRedemptionThrough(bookId, questionId, outcomeShares, securityPoolTimestamp, securityPoolTimestamp);
+	}
+	/// @notice Project fees only through the effective capital price checkpoint, retaining the current finality clock.
+	function quoteRedemptionThrough(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 securityPoolTimestamp, uint48 feeThrough) public view returns (uint256, uint256) {
+		Book storage book = _book(bookId);
+		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
+		if (book.isSealed && frozenBookId == 0) return (0, 0);
+		if (frozenBookId != 0 || book.isSealed)
+			return _quoteRedemption(bookId, questionId, outcomeShares, securityPoolTimestamp);
+		require(securityPoolTimestamp >= book.securityPoolTimestamp && securityPoolTimestamp <= block.timestamp, 'Invalid settlement clock');
+		uint256 cash = book.cashAttoEth;
+		uint256 units = book.units;
+		uint256 remainder = feeRemainders[bookId];
+		uint48 previousFeeTime = _feeTimestamp(book);
+		uint48 nextFeeTime =
+			uint48(Math.max(book.securityPoolTimestamp, Math.min(securityPoolTimestamp, feeThrough))) +
+				book.feeTimeOffset;
+		if (feeModes[uint64(tree.floor(book.feeModeRoot, previousFeeTime))].funded && nextFeeTime > previousFeeTime) {
+			uint256 fees = _feeIntegral(book, nextFeeTime) - _feeIntegral(book, previousFeeTime);
+			(uint256 cashFees, uint256 nextRemainder) = SettlementMath.feeCash(fees, _netCash(bookId, book), units, remainder);
+			cash -= cashFees;
+			units -= fees;
+			remainder = nextRemainder;
+			uint48 end = uint48(Math.min(nextFeeTime, state.feeEnd));
+			if (end > previousFeeTime) state.units -= state.feeRateAttoEthPerSecond * (end - previousFeeTime);
+		}
+		if (state.outcomeSupplyAttoShares == 0) return (0, 0);
+		require(outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
+		uint256 burned = SettlementMath.unitsForRedeemedShares(state.units, state.outcomeSupplyAttoShares, outcomeShares);
+		if (_isMature(book, state.finalAfter, securityPoolTimestamp)) {
+			uint256 reserved = SettlementMath.cashForUnits(cash, units, remainder, state.units);
+			return (SettlementMath.cashForUnits(reserved, state.units, 0, burned), _descaled(burned));
+		}
+		return (SettlementMath.cashForUnits(cash, units, remainder, burned), _descaled(burned));
 	}
 
 	function _quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 securityPoolTimestamp) private view returns (uint256 cashAttoEth, uint256 unitsBurned) {
@@ -394,6 +431,13 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	/// @notice Quote REP directly from outcome-share ownership, before rounding collateral claim units.
 	function quoteRecoveryRep(uint64 bookId, uint256 questionId, uint256 outcomeShares) external view returns (uint256) {
+		(, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
+		if (_book(bookId).isSealed && frozenBookId == 0) return 0;
+		return historicalRecoveryRep(bookId, questionId, outcomeShares);
+	}
+
+	/// @notice Historical allocation retained for sealed-source fork accounting.
+	function historicalRecoveryRep(uint64 bookId, uint256 questionId, uint256 outcomeShares) public view returns (uint256) {
 		Book storage book = _book(bookId);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		if (state.outcomeSupplyAttoShares == 0) return 0;
