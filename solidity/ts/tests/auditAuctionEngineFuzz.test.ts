@@ -284,13 +284,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 			const modelProblems = specViolations(config, bids, combo.maximum, combo.floor, expected, expected.fills)
 			if (modelProblems.length !== 0) throw new Error(`MODEL violates the specification (${modelProblems.join('; ')}): ${context()}`)
 			const { fills, ...expectedFields } = expected
-			if (
-				actual.attoRepPerLot !== expectedFields.attoRepPerLot ||
-				actual.filledLots !== expectedFields.filledLots ||
-				actual.raisedAttoEth !== expectedFields.raisedAttoEth ||
-				actual.soldAttoRep !== expectedFields.soldAttoRep ||
-				actual.raiseLimitReached !== expectedFields.raiseLimitReached
-			)
+			if (actual.attoRepPerLot !== expectedFields.attoRepPerLot || actual.filledLots !== expectedFields.filledLots || actual.raisedAttoEth !== expectedFields.raisedAttoEth || actual.soldAttoRep !== expectedFields.soldAttoRep || actual.raiseLimitReached !== expectedFields.raiseLimitReached)
 				expect({ context: context(), ...actual }).toEqual({ context: context(), ...expectedFields })
 			// A bid that was ever provably excluded never fills, whatever came later.
 			for (const id of engine.everRefundable) if (fills.get(id) !== 0n) throw new Error(`EARLY-REFUNDABLE BID FILLS LATER: bid ${id} fills ${fills.get(id)} in ${context()}`)
@@ -541,6 +535,8 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 	test('access control and argument validation', async () => {
 		await resetClock()
 		const engine = await createEngine({ grid: 7n, lot: 1000n, target: 3n, inventory: 7n * 20n + 3n })
+		// Bidding opens at start and must close later, so every engine starts before the shared deadline.
+		const empty = await createEngine({ grid: 21n, lot: 10n ** 18n, target: 8n, inventory: 21n * 1000n })
 		const reasonOf = async (data: Hex, from = controller) => {
 			try {
 				await client.call({ account: from, to: engine.address, data })
@@ -586,7 +582,6 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		expect(await reasonOf(engineCall.previewBid(2n))).toContain('bid does not exist')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'allocateAndRemoveFees', args: [1n, 0n, 0n] }))).toBe('no revert')
 		// An auction nobody bid in closes empty for every raise limit and floor, and pays nothing.
-		const empty = await createEngine({ grid: 21n, lot: 10n ** 18n, target: 8n, inventory: 21n * 1000n })
 		await checkOpenState(empty)
 		await finalizeAndCheck(empty, 8n, 42n, true)
 	})

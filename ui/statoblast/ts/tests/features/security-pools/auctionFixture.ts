@@ -44,7 +44,7 @@ export async function auctionFixture() {
 		bids: [owner, false, false, 2n, 60n * unit],
 		previewBid: [owner, 1n, unit, 100n * unit, unit],
 		clearing: [100n * unit, 1n, unit, 100n * unit, false],
-		repairAuctionPositions: [[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit]],
+		repairAuctionPositions: [[owner, 100n * unit, unit, 0n, false, 7n * unit, 9n * unit]],
 	})
 	fixture.set(capital, 'universeId', 42n)
 	fixture.set(auctionAddress, 'universeId', 42n)

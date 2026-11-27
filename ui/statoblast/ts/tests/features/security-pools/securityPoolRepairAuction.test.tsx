@@ -177,7 +177,7 @@ test('funded winners show live fees until their bid is claimed, then the claim s
 	expect(claim.disabled).toBe(false)
 	expect(button(view.container, 'Claim all bids').disabled).toBe(false)
 	fixture.values['bids'] = [owner, false, true, 2n, 60n * unit]
-	fixture.values['repairAuctionPositions'] = [[owner, 8n, 100n * unit, unit, 0n, true, true, 0n, 0n]]
+	fixture.values['repairAuctionPositions'] = [[owner, 100n * unit, unit, 0n, true, 0n, 0n]]
 	fixture.values['unclaimedRepairAuctionBids'] = 0n
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(view.container.textContent).toContain('This bid is claimed.'))
@@ -200,7 +200,7 @@ test('every closed bid, winning or not, gets its own claim and one claim-all act
 	const lost = await auctionFixture()
 	lost.values['finalized'] = true
 	lost.values['previewBid'] = [owner, 0n, 0n, 0n, 2n * unit]
-	lost.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, 0n, false, false, 0n, 0n]]
+	lost.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, false, 0n, 0n]]
 	const losing = await renderIntoDocument(<SecurityPoolRepairAuction fork={lost.fork} bidder={owner} actions={actions} />)
 	// The open auction's saved page shows first; wait for the finalized read.
 	await waitFor(() => expect(claimButtons(losing.container).map(node => node.disabled)).toEqual([false]))
@@ -210,8 +210,8 @@ test('every closed bid, winning or not, gets its own claim and one claim-all act
 	won.values['bidderBidCount'] = 2n
 	won.values['unclaimedRepairAuctionBids'] = 2n
 	won.values['repairAuctionPositions'] = [
-		[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit],
-		[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit],
+		[owner, 100n * unit, unit, 0n, false, 7n * unit, 9n * unit],
+		[owner, 100n * unit, unit, 0n, false, 7n * unit, 9n * unit],
 	]
 	const winning = await renderIntoDocument(<SecurityPoolRepairAuction fork={won.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(winning)
@@ -257,9 +257,9 @@ test('an early refund becomes available once better bids exclude the bid and clo
 	fixture.values['earlyRefundAttoEth'] = 0n
 	fixture.values['bids'] = [owner, true, false, 2n, 60n * unit]
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(refund.disabled).toBe(true))
+	await waitFor(() => expect(view.container.textContent).toContain('This bid’s unused collateral was refunded.'))
 	expect(button(view.container, 'Withdraw this bid’s refund')).toBe(refund)
-	expect(view.container.textContent).toContain('This bid’s unused collateral was refunded.')
+	expect(refund.disabled).toBe(true)
 	expect(view.container.textContent).not.toContain('Credited collateral refund')
 })
 

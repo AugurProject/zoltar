@@ -15,6 +15,7 @@ const zoltar = getAddress('0x8888888888888888888888888888888888888888')
 const streams = getAddress('0x9999999999999999999999999999999999999999')
 const settlement = getAddress('0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa')
 const book = getAddress('0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB')
+const engine = getAddress('0xcccccccccccccccccccccccccccccccccccccccc')
 const services = getAddress('0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC')
 const kinds: Readonly<Record<string, string>> = {
 	[ledger]: 'securityPoolCapitalLedger',
@@ -25,6 +26,7 @@ const kinds: Readonly<Record<string, string>> = {
 	[settlement]: 'securityPoolSettlement',
 	[other]: 'securityPoolRepairAuction',
 	[book]: 'securityPoolSettlementBook',
+	[engine]: 'securityPoolUniformPriceRepairAuction',
 }
 
 type Outputs = Readonly<Record<string, readonly unknown[] | ((args: readonly unknown[]) => readonly unknown[])>>
@@ -256,7 +258,7 @@ test('a bidder reports its unclaimed bids and the winning lots outside its accou
 	const auction = {
 		repairAuctionCohort: [other, 9n, 4n, 125n, 5n],
 		unclaimedRepairAuctionBids: (args: readonly unknown[]) => [args[0] === owner ? 2n : 0n],
-		engine: [other],
+		engine: [engine],
 		bidderBidCount: (args: readonly unknown[]) => [args[0] === owner ? BigInt(bidIds.length) : 0n],
 		bidderBidId: (args: readonly unknown[]) => [bidIds[Number(args[1])]],
 		repairAuctionPositions: (args: readonly unknown[]) => [Array.isArray(args[0]) ? args[0].map(lots) : []],

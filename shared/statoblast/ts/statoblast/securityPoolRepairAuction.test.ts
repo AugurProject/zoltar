@@ -28,12 +28,7 @@ const auction: Address = '0x0000000000000000000000000000000000000009'
 const engine: Address = '0x0000000000000000000000000000000000000010'
 const unit = 10n ** 18n
 const hash: Hex = `0x${'11'.repeat(32)}`
-const abi = parseAbi([
-	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)',
-	'function refundBid(uint256 bidId,address recipient) returns (uint256)',
-	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)',
-])
+const abi = parseAbi(['function open()', 'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)', 'function refundBid(uint256 bidId,address recipient) returns (uint256)', 'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)'])
 function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?: bigint; walletAttoEth?: bigint; finalized?: boolean; opened?: boolean } = {}) {
 	const calls: { functionName: string; address: Address; blockNumber: bigint; args?: readonly unknown[] }[] = []
 	const opened = options.opened ?? true
@@ -183,7 +178,7 @@ describe('security pool collateral repair auction SDK', () => {
 		}
 		await expect(load(fixture({ bids: [securityPool, false, false, 2n, 5n * unit] }))).rejects.toThrow('another wallet')
 		await expect(load(fixture({ previewBid: [securityPool, 1n, unit, 6n * unit, unit] }, { finalized: true }))).rejects.toThrow('fill identity')
-		await expect(load(fixture({ repairAuctionPosition: [securityPool, 0n, 6n * unit, unit, 30n, false, false, 7n, 9n] }, { finalized: true }))).rejects.toThrow('capital position identity')
+		await expect(load(fixture({ repairAuctionPosition: [securityPool, 6n * unit, unit, 30n, false, 7n, 9n] }, { finalized: true }))).rejects.toThrow('capital position identity')
 	})
 	test('opening needs both funded exposure budgets, a fresh observation and the immutable deadline', async () => {
 		const snapshot = await load(fixture({}, { opened: false }))

@@ -13,12 +13,7 @@ import { renderHookWithProps } from '../../support/renderHook.js'
 import { capital, owner, token, unit } from './capitalFixture.js'
 import { auctionFixture, auctionAddress } from './auctionFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
-const abi = parseAbi([
-	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256)',
-	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[])',
-	'function refundBid(uint256 bidId,address recipient) returns (uint256)',
-])
+const abi = parseAbi(['function open()', 'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256)', 'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[])', 'function refundBid(uint256 bidId,address recipient) returns (uint256)'])
 async function setup(configure: (fixture: Awaited<ReturnType<typeof auctionFixture>>) => void = () => undefined) {
 	const fixture = await auctionFixture()
 	configure(fixture)
@@ -223,7 +218,7 @@ test('winners expose live principal and fees until their bid is claimed', async 
 	expect(last(state.requests).reviewDescription).toContain('Its winning lots join this wallet’s position')
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['bids'] = [owner, false, true, 2n, 60n * unit]
-	state.values['repairAuctionPositions'] = [[owner, 8n, 100n * unit, unit, 0n, true, true, 0n, 0n]]
+	state.values['repairAuctionPositions'] = [[owner, 100n * unit, unit, 0n, true, 0n, 0n]]
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('This bid is claimed.')
 	await act(() => state.hook.state().refresh())
 	await waitFor(() => expect(state.hook.state().snapshot?.auction?.bids[0]?.claimed).toBe(true))
@@ -234,7 +229,7 @@ test('claiming all bids sends every claimable bid in one transaction, losing bid
 	const state = await setup(fixture => {
 		fixture.values['finalized'] = true
 		fixture.values['previewBid'] = [owner, 0n, 0n, 0n, 2n * unit]
-		fixture.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, 0n, false, false, 0n, 0n]]
+		fixture.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, false, 0n, 0n]]
 	})
 	expect(firstBid(state, 'losing bid')).toMatchObject({ claimable: true, claimed: false, position: undefined })
 	expect(state.hook.state().claimableBidIds).toEqual([1n])
@@ -244,7 +239,7 @@ test('claiming all bids sends every claimable bid in one transaction, losing bid
 	expect(state.labels.at(-1)).toBe('Claim all bids')
 	await last(state.requests).validateBeforeSubmit?.()
 	// Someone else claimed it meanwhile: nothing is left to send.
-	state.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, 0n, true, false, 0n, 0n]]
+	state.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, true, 0n, 0n]]
 	state.values['unclaimedRepairAuctionBids'] = 0n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('No bids')
 	await act(() => state.hook.state().refresh())

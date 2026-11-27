@@ -3,12 +3,7 @@ import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { SecurityPoolAuctionSnapshot } from './securityPoolAuctionRead.js'
 export { loadSecurityPoolAuctionSnapshot, loadSecurityPoolAuctionClaimableBidIds, type SecurityPoolAuctionSnapshot, type SecurityPoolAuctionBid } from './securityPoolAuctionRead.js'
 
-const abi = parseAbi([
-	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)',
-	'function refundBid(uint256 bidId,address recipient) returns (uint256 amountAttoEth)',
-	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)',
-])
+const abi = parseAbi(['function open()', 'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)', 'function refundBid(uint256 bidId,address recipient) returns (uint256 amountAttoEth)', 'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)'])
 const ATTO_UNITS = 10n ** 18n
 const BPS = 10_000n
 const secondsPerDay = 86_400n
