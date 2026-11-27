@@ -35,8 +35,8 @@ def prefixReserved : Source.Stmt := .block [
     .varDecl .bool "_ret_hasNonZeroScalarReservedBits_0" none,
     .captureReturn ["_ret_hasNonZeroScalarReservedBits_0"] (.internalCall ["_ret_hasNonZeroScalarReservedBits_0"] reservedKey [.var "_ic_arg_0"]),
     .assign (.var "_sol_hoist_0") (.var "_ret_hasNonZeroScalarReservedBits_0")],
-  .varDecl .bool "#view1566" (some (.var "_sol_hoist_0")),
-  .ifElse (.var "#view1566") (.returnValues [.byteArray [77,97,108,102,111,114,109,101,100]]) .skip]
+  .varDecl .bool "#view1593" (some (.var "_sol_hoist_0")),
+  .ifElse (.var "#view1593") (.returnValues [.byteArray [77,97,108,102,111,114,109,101,100]]) .skip]
 
 def prefixInvalidBody : Source.Stmt :=
   match (validPrefix[12]? : Option Source.Stmt) with
@@ -50,7 +50,7 @@ theorem prefixReservedExecution (fuel : Nat) (c : Context) (r : Runtime) (n k : 
   let s := r.pushScope.declareLocal "_sol_hoist_0" (.word 0)
   let a := s.pushScope.declareLocal "_ic_arg_0" (.word (Answer.encode n k))
   let b := a.declareLocal "_ret_hasNonZeroScalarReservedBits_0" (.word 0)
-  let d := s.declareLocal "#view1566" (.word 0)
+  let d := s.declareLocal "#view1593" (.word 0)
   have A := Answer.fit n k N valid
   have arg : Stmt.eval (fuel+30) model.core.table c s.pushScope (.varDecl .uint256 "_ic_arg_0" (some (.castOp .uintCleanup 256 (.var "answer"))))=pure (.normal a) := by
     apply Inv32Hoist.declEval (fuel+29)
@@ -75,12 +75,12 @@ theorem prefixReservedExecution (fuel : Nat) (c : Context) (r : Runtime) (n k : 
       ((Inv32FloorStart.seqStep _ _ _ _ _ _ _ call).trans
       ((Inv32FloorStart.seqStep _ _ _ _ _ _ [] copy).trans (by rw [Stmt.evalList]))))
     exact Inv32Hoist.block (fuel+30) model.core.table c s b _ run
-  have view : Stmt.eval (fuel+31) model.core.table c s (.varDecl .bool "#view1566" (some (.var "_sol_hoist_0")))=pure (.normal d) := by
+  have view : Stmt.eval (fuel+31) model.core.table c s (.varDecl .bool "#view1593" (some (.var "_sol_hoist_0")))=pure (.normal d) := by
     apply Inv32Hoist.declEval (fuel+30)
     · apply prefixVar
       rfl
     · rfl
-  have guard := prefixFalse (fuel+29) model.core.table c d "#view1566" (.returnValues [.byteArray [77,97,108,102,111,114,109,101,100]]) rfl
+  have guard := prefixFalse (fuel+29) model.core.table c d "#view1593" (.returnValues [.byteArray [77,97,108,102,111,114,109,101,100]]) rfl
   have z := Inv32Hoist.zeroBool (fuel+30) model.core.table c r.pushScope "_sol_hoist_0"
   have run := (Inv32FloorStart.seqStep _ _ _ _ _ _ _ z).trans
     ((Inv32FloorStart.seqStep _ _ _ _ _ _ _ inner).trans

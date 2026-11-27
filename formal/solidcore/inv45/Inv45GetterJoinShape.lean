@@ -22,7 +22,7 @@ def joinBlock : Source.Stmt := .block
 def validSumBlock? : Source.Stmt → Option Source.Stmt
   | .block [_,_,_,.block (.ifElse _ (.block scalar) _ :: _)] =>
     match scalar.getLast? with
-    | some (.block [_,_,_,.ifElse (.var "#cond1619") yes .skip]) => some yes
+    | some (.block [_,_,_,.ifElse (.var "#cond1646") yes .skip]) => some yes
     | _ => none
   | _ => none
 
