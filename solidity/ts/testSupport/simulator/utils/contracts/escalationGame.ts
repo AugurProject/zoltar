@@ -320,8 +320,6 @@ export const readCarryLeafCount = async (client: ReadClient, escalationGame: Acc
 
 export const readCarryTotal = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => (await getEscalationGameOutcomeState(client, escalationGame, outcome)).currentCarryTotalAttoRep
 
-export const readNullifierRoot = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => (await getEscalationGameOutcomeState(client, escalationGame, outcome)).currentNullifierRoot
-
 export const readIsForkCarryFundingComplete = async (client: ReadClient, escalationGame: AccountAddress) =>
 	await client.readContract({
 		abi: statoblast_EscalationGame_EscalationGame.abi,

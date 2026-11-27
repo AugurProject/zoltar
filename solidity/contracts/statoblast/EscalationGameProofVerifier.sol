@@ -9,7 +9,6 @@ import {
 	MAX_ATANH_ITERATIONS,
 	MAX_EXP_ITERATIONS,
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
-	NULLIFIER_DEPTH,
 	SCALE
 } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
@@ -54,21 +53,16 @@ contract EscalationGameProofVerifier {
 		}
 	}
 
-	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
-		return
-			computeAllocatedWinningWithdrawal(depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
-	}
-
 	// Ordinary claims partition one immutable cumulative payout curve. The
 	// differences telescope even when a reward window or haircut rounds down.
 	function computeOrdinaryWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) external pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 start = cumulativeAmountAttoRep - depositAmountAttoRep;
-		(uint256 payoutEnd, uint256 burnEnd) = computeAllocatedWinningWithdrawal(cumulativeAmountAttoRep, cumulativeAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
-		(uint256 payoutStart, uint256 burnStart) = computeAllocatedWinningWithdrawal(start, start, start, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+		(uint256 payoutEnd, uint256 burnEnd) = computeAllocatedWinningWithdrawal(cumulativeAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
+		(uint256 payoutStart, uint256 burnStart) = computeAllocatedWinningWithdrawal(start, start, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, actualForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 		return (payoutEnd - payoutStart, burnEnd - burnStart);
 	}
 
-	function computeAllocatedWinningWithdrawal(uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) public pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+	function computeAllocatedWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep, uint256 bindingCapitalAttoRep, uint256 winningOutcomeBalanceAttoRep, uint256 actualForkThresholdAttoRep, uint256 nonDecisionThresholdAttoRep) public pure returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 depositStartAttoRep = cumulativeAmountAttoRep - depositAmountAttoRep;
 		uint256 rewardEligibleCapAttoRep = bindingCapitalAttoRep + bindingCapitalAttoRep / EXCESS_REWARD_WINDOW_DIVISOR;
 		uint256 rewardEligiblePrincipalAttoRep =
@@ -76,7 +70,7 @@ contract EscalationGameProofVerifier {
 				? winningOutcomeBalanceAttoRep
 				: rewardEligibleCapAttoRep;
 		if (rewardEligiblePrincipalAttoRep == 0) {
-			amountToWithdrawAttoRep = principalAttoRep;
+			amountToWithdrawAttoRep = depositAmountAttoRep;
 		} else {
 			uint256 eligibleEndAttoRep =
 				cumulativeAmountAttoRep < rewardEligibleCapAttoRep ? cumulativeAmountAttoRep : rewardEligibleCapAttoRep;
@@ -92,7 +86,7 @@ contract EscalationGameProofVerifier {
 				(rewardEligibleDepositAttoRep *
 					((bindingCapitalAttoRep * Constants.ESCALATION_BURN_NUMERATOR) /
 						Constants.ESCALATION_PAYOUT_DENOMINATOR)) / rewardEligiblePrincipalAttoRep;
-			amountToWithdrawAttoRep = principalAttoRep + rewardAttoRep;
+			amountToWithdrawAttoRep = depositAmountAttoRep + rewardAttoRep;
 		}
 		if (actualForkThresholdAttoRep < nonDecisionThresholdAttoRep) {
 			amountToWithdrawAttoRep =
@@ -131,13 +125,6 @@ contract EscalationGameProofVerifier {
 		) return yesBalanceAttoRep;
 		return noBalanceAttoRep;
 	}
-	function computeEmptyNullifierRoot() external pure returns (bytes32 root) {
-		root = bytes32(0);
-		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
-			root = MerkleMountainRange.hashParent(root, root);
-		}
-	}
-
 	function computeLnRatioScaled(uint256 lowValue, uint256 highValue) external pure returns (uint256) {
 		require(lowValue != 0 && highValue >= lowValue, 'Invalid logarithm inputs');
 		uint256 normalizedLow = lowValue;
@@ -159,10 +146,6 @@ contract EscalationGameProofVerifier {
 		uint256 z = Math.mulDiv(diff, SCALE, sum);
 		if (z == 0) return log2Count * LN2_SCALED;
 		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z);
-	}
-
-	function getCurrentCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) external pure returns (uint256 peakHeight, uint256 peakStartIndex) {
-		return _getCarryPeakForLeaf(leafCount, leafIndex);
 	}
 
 	function _getCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) private pure returns (uint256 peakHeight, uint256 peakStartIndex) {
@@ -242,21 +225,6 @@ contract EscalationGameProofVerifier {
 			writeIndex += 1;
 		}
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
-	}
-
-	function computeNullifierRoot(uint256 leafIndex, bytes32[] calldata siblings, bytes32 leafValue) external pure returns (bytes32 root) {
-		require(siblings.length == NULLIFIER_DEPTH, 'Bad nullifier length');
-		root = leafValue;
-		require(leafIndex <= type(uint64).max, 'Nullifier leaf index exceeds 64 bits');
-		uint256 path = leafIndex;
-		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
-			bytes32 siblingHash = siblings[depth];
-			if (((path >> depth) & 1) == 0) {
-				root = MerkleMountainRange.hashParent(root, siblingHash);
-			} else {
-				root = MerkleMountainRange.hashParent(siblingHash, root);
-			}
-		}
 	}
 
 	function _computeAtanhScaled(uint256 z) private pure returns (uint256 atanhScaled) {

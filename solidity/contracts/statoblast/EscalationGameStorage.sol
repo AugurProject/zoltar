@@ -24,18 +24,12 @@ abstract contract EscalationGameStorage {
 	uint256 internal nextNodeId = 1;
 	// Game-local node ID -> deposit node; zero is the absent-node sentinel.
 	mapping(uint256 => Node) public nodes;
-	struct VaultAccounting {
-		uint256 unresolvedAttoRep;
-		// Original unconsumed principal indexed by BinaryOutcome (Invalid, Yes, No).
-		uint256[3] localUnresolvedPrincipalByOutcome;
-	}
-	mapping(address => VaultAccounting) internal vaultAccounting;
+	// Vault -> original unconsumed local principal indexed by BinaryOutcome (Invalid, Yes, No).
+	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVault;
 
 	// Logical escrow: unsettled local/bundle principal plus remaining inherited
 	// backing. This is not the token balance or a budget for winner rewards.
 	uint256 public totalDisputeStakedAttoRep;
-	// Original local principal still represented by unconsumed claims.
-	uint256 internal totalLocalUnresolvedAttoRep;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 	bool public winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBackingAttoRep;
@@ -74,24 +68,13 @@ abstract contract EscalationGameStorage {
 		}
 	}
 
-	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal pure returns (bool) {
-		// Ordinary and resumed games close when the curve passes the median.
-		// Equality remains open, matching finality; resuming adds no grace period.
-		return provisionalResolution == BinaryOutcomes.BinaryOutcome.None;
-	}
-
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
-		if (ordinarySettlementInitialized)
-			return vaultAccounting[vault].localUnresolvedPrincipalByOutcome[uint8(ordinarySettlementOutcome)];
-		return vaultAccounting[vault].unresolvedAttoRep;
+		uint256[3] storage principal = localUnresolvedPrincipalByVault[vault];
+		if (ordinarySettlementInitialized) return principal[uint8(ordinarySettlementOutcome)];
+		return principal[0] + principal[1] + principal[2];
 	}
 
 	function _isRetiredOrdinaryOutcome(uint8 outcomeIndex) internal view returns (bool) {
 		return ordinarySettlementInitialized && outcomeIndex != uint8(ordinarySettlementOutcome);
-	}
-
-	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {
-		vaultAccounting[bundleId].unresolvedAttoRep += amountAttoRep;
-		totalDisputeStakedAttoRep += amountAttoRep;
 	}
 }

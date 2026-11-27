@@ -316,9 +316,9 @@ contract QuestionLedger is QuestionLedgerStorage {
 	}
 
 	/// @notice Forker-only: installs the next bounded outcome of the inherited carry snapshot.
-	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot) external onlyForker {
+	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep) external onlyForker {
 		require(address(escalationGame) != address(0x0), 'Game missing');
-		escalationGame.initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot);
+		escalationGame.initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep);
 	}
 
 	/// @notice Resumes a paused fork-continuation escalation game once its carry is funded; callable by anyone.

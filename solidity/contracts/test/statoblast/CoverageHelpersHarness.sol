@@ -128,14 +128,6 @@ contract CoverageHelpersHarness {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
 	}
 
-	function computeEmptyNullifierRoot() external view returns (bytes32) {
-		return proofVerifier.computeEmptyNullifierRoot();
-	}
-
-	function getCurrentCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) external view returns (uint256 peakHeight, uint256 peakStartIndex) {
-		return proofVerifier.getCurrentCarryPeakForLeaf(leafCount, leafIndex);
-	}
-
 	function bagCarryPeaks(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes, uint256 leafCount) external view returns (bytes32) {
 		return proofVerifier.bagCarryPeaks(peakHashes, leafCount);
 	}
@@ -150,10 +142,6 @@ contract CoverageHelpersHarness {
 	function computeMerkleMountainRangeRootFromProof(bytes32 leafHash, uint256 leafCount, uint256 leafIndex, uint256 peakHeight, bytes32[] calldata siblings) external view returns (bytes32) {
 		return
 			proofVerifier.computeMerkleMountainRangeRootFromProof(leafHash, leafCount, leafIndex, peakHeight, siblings);
-	}
-
-	function computeNullifierRoot(uint256 parentDepositIndex, bytes32[] calldata siblings, bytes32 leafValue) external view returns (bytes32) {
-		return proofVerifier.computeNullifierRoot(parentDepositIndex, siblings, leafValue);
 	}
 
 	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) external pure returns (string memory) {

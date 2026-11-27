@@ -1,9 +1,6 @@
 import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
-const NULLIFIER_DEPTH = 64
-const NULLIFIER_PATH_MASK = (1n << BigInt(NULLIFIER_DEPTH)) - 1n
-
 type EscalationGameNode = readonly [bigint, Address, bigint, bigint, bigint, bigint, bigint]
 
 type CarryProofReadClient = {
@@ -15,12 +12,9 @@ type CreateCarryProofParameters = {
 	leafIndex: bigint
 	merkleMountainRangePeakIndex: bigint
 	merkleMountainRangeSiblings: readonly Hex[]
-	nullifierSiblings: readonly Hex[]
 	parentDepositIndex: bigint
 	sourceNodeId?: bigint | undefined
 }
-
-const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
 
 const readCarryNode = async (client: CarryProofReadClient, escalationGameAddress: Address, nodeId: bigint) =>
 	await client.readContract({
@@ -36,63 +30,6 @@ export const hashCarryLeaf = (depositor: Address, outcome: bigint | number, amou
 	keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [depositor, BigInt(outcome), amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId]))
 
 export const computeForkContinuationParentDepositIndex = (escalationGameAddress: Address, outcome: bigint | number, depositIndex: bigint) => (BigInt(escalationGameAddress) << 96n) | (BigInt(outcome) << 88n) | depositIndex
-
-const buildZeroHashes = () => {
-	const zeroHashes: Hex[] = [zeroHash()]
-	let previousZeroHash = zeroHash()
-	for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-		previousZeroHash = hashParent(previousZeroHash, previousZeroHash)
-		zeroHashes.push(previousZeroHash)
-	}
-	return zeroHashes
-}
-
-export class SparseNullifierTree {
-	private readonly zeroHashes = buildZeroHashes()
-	private readonly nodes = new Map<string, Hex>()
-	private readonly pathMask = NULLIFIER_PATH_MASK
-	root: Hex = this.zeroHashAt(NULLIFIER_DEPTH)
-
-	private zeroHashAt(depth: number) {
-		const hash = this.zeroHashes[depth]
-		if (hash === undefined) throw new Error(`Missing nullifier zero hash at depth ${depth.toString()}`)
-		return hash
-	}
-
-	private getPath(leafIndex: bigint) {
-		if (leafIndex < 0n || leafIndex > this.pathMask) throw new Error('Nullifier leaf index exceeds 64 bits')
-		return leafIndex
-	}
-
-	getProof(leafIndex: bigint) {
-		const path = this.getPath(leafIndex)
-		const siblings: Hex[] = []
-		let nodeIndex = path
-		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-			const siblingIndex = nodeIndex ^ 1n
-			const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashAt(depth)
-			siblings.push(siblingHash)
-			nodeIndex >>= 1n
-		}
-		return siblings
-	}
-
-	consume(leafIndex: bigint) {
-		const path = this.getPath(leafIndex)
-		let nodeIndex = path
-		let nodeHash = `0x${'0'.repeat(63)}1` as Hex
-		this.nodes.set(`0:${nodeIndex}`, nodeHash)
-		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-			const isRightNode = (nodeIndex & 1n) === 1n
-			const siblingIndex = nodeIndex ^ 1n
-			const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashAt(depth)
-			nodeHash = isRightNode ? hashParent(siblingHash, nodeHash) : hashParent(nodeHash, siblingHash)
-			nodeIndex >>= 1n
-			this.nodes.set(`${depth + 1}:${nodeIndex}`, nodeHash)
-		}
-		this.root = nodeHash
-	}
-}
 
 export const readCarryLeafHash = async (client: CarryProofReadClient, escalationGameAddress: Address, nodeId: bigint) => {
 	const node = await readCarryNode(client, escalationGameAddress, nodeId)
@@ -117,6 +54,5 @@ export const createCarryProof = async (client: CarryProofReadClient, escalationG
 		leafIndex: parameters.leafIndex,
 		merkleMountainRangeSiblings: parameters.merkleMountainRangeSiblings,
 		merkleMountainRangePeakIndex: parameters.merkleMountainRangePeakIndex,
-		nullifierSiblings: parameters.nullifierSiblings,
 	}
 }

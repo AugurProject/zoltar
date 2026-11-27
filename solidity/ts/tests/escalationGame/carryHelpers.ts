@@ -90,7 +90,6 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
-		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
 	) =>
 		await completeSnapshot(
 			async () =>
@@ -98,7 +97,7 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 					abi: initializeForkCarrySnapshotAbi,
 					address: testQuestionLedgerAddress,
 					functionName: 'initializeForkCarrySnapshot',
-					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals],
 				}),
 		)
 
@@ -108,7 +107,6 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
 		inheritedResolutionBalances: readonly [bigint, bigint, bigint],
-		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
 	) =>
 		await completeSnapshot(
 			async () =>
@@ -116,7 +114,7 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
 					address: testQuestionLedgerAddress,
 					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
-					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots],
+					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances],
 				}),
 		)
 
@@ -127,7 +125,6 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
-		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
 	) =>
 		await completeSnapshot(
 			async () =>
@@ -135,7 +132,7 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 					abi: initializeForkCarrySnapshotFromSourceAbi,
 					address: testQuestionLedgerAddress,
 					functionName: 'initializeForkCarrySnapshotFromSource',
-					args: [sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+					args: [sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals],
 				}),
 		)
 
@@ -195,12 +192,10 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 			const snapshotPeaks = snapshot[0][snapshotIndex]
 			const snapshotLeafCount = snapshot[1][snapshotIndex]
 			const snapshotCarryTotal = snapshot[2][snapshotIndex]
-			const snapshotNullifierRoot = snapshot[3][snapshotIndex]
 			const snapshotRoot = roots[snapshotIndex]
 			assert.deepStrictEqual(snapshotPeaks, state.currentPeaks, `${label}: exported peaks should match outcome ${outcome.toString()} state`)
 			assert.strictEqual(snapshotLeafCount, state.currentLeafCount, `${label}: exported leaf count should match outcome ${outcome.toString()} state`)
 			assert.strictEqual(snapshotCarryTotal, state.currentCarryTotalAttoRep, `${label}: exported carry total should match outcome ${outcome.toString()} state`)
-			assert.strictEqual(snapshotNullifierRoot, state.currentNullifierRoot, `${label}: exported nullifier should match outcome ${outcome.toString()} state`)
 			assert.strictEqual(state.currentCarryTotalAttoRep, state.inheritedUnresolvedTotalAttoRep + state.localUnresolvedTotalAttoRep, `${label}: carry total should equal inherited plus local unresolved REP`)
 
 			for (let peakHeight = 0; peakHeight < 64; peakHeight += 1) {
