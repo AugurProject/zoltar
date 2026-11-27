@@ -216,32 +216,31 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.
 	/// @dev Complete-set exits use the current collateral-per-share rate after fee
 	/// accrual, preserving the exchange rate for remaining complete sets.
-	function redeemCompleteSet(uint256 amountAttoShares, uint256 minimumCollateral, uint256 minimumRecoveryRep) external isOperational {
+	function redeemCompleteSet(uint256 amountAttoShares, uint256 minimumRecoveryRep) external isOperational {
 		updateSettlementCollateral();
 		uint256 repBefore = repToken.balanceOf(msg.sender);
 		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
-		_requireRedemptionMinima(settlementCollateralRedeemedAttoEth, repBefore, minimumCollateral, minimumRecoveryRep);
+		_requireRecoveryRepMinimum(repBefore, minimumRecoveryRep);
 		refreshSecurityPoolFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
 
 	/// @notice Burns the caller's winning-outcome shares after finalization and sends their settlement collateral in the configured token.
-	function redeemShares(uint256 minimumCollateral, uint256 minimumRecoveryRep) external {
+	function redeemShares(uint256 minimumRecoveryRep) external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
 		uint256 repBefore = repToken.balanceOf(msg.sender);
 		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
 		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
-		_requireRedemptionMinima(settlementCollateralRedeemedAttoEth, repBefore, minimumCollateral, minimumRecoveryRep);
+		_requireRecoveryRepMinimum(repBefore, minimumRecoveryRep);
 		refreshSecurityPoolFees();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
 
-	function _requireRedemptionMinima(uint256 paidCash, uint256 repBefore, uint256 minimumCollateral, uint256 minimumRecoveryRep) private view {
-		require(paidCash >= minimumCollateral, 'Minimum collateral not met');
+	function _requireRecoveryRepMinimum(uint256 repBefore, uint256 minimumRecoveryRep) private view {
 		require(repToken.balanceOf(msg.sender) - repBefore >= minimumRecoveryRep, 'Minimum recovery REP not met');
 	}
 

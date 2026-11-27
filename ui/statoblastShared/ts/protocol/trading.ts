@@ -9,7 +9,7 @@ import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
-import { encodeFunctionData, getAddress, maxUint256, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeFunctionData, getAddress, maxUint256, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_QuestionLedger_QuestionLedger, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -285,13 +285,16 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 		if (winner === 'none') throw new Error(tradingCopy.poolResolutionRequired)
 		return { amount: balances[getReportingOutcomeValue(winner)], balances, blockNumber, winner }
 	}
-	let reviewedBalance = await readBalance(initialBlock.number)
-	let reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber)
-	const callParams = {
+	// Authenticate the immutable pool/collateral binding once per action; payout
+	// amounts and share balances are still refreshed at every review checkpoint.
+	const [initialBalance, collateral] = await Promise.all([readBalance(initialBlock.number), loadTradingCollateralIdentity(client, questionLedgerAddress, initialBlock.number)])
+	let reviewedBalance = initialBalance
+	let reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber, collateral)
+	let callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemShares',
-		args: [reviewedQuote.minimumCash, reviewedQuote.minimumRep],
+		args: [reviewedQuote.minimumRep],
 	} as const
 	let reviewRows: ReturnType<typeof redemptionRows> = []
 	client.onTransactionPlan?.([
@@ -302,19 +305,24 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 			requireReview: true,
 			reviewDescription: reviewedQuote.description,
 			readReviewRows: () => reviewRows,
+			readReviewArgs: data => {
+				const decoded = decodeFunctionData({ abi: callParams.abi, data })
+				if (decoded.functionName !== callParams.functionName) throw new Error(changedSinceReview)
+				return decoded.args
+			},
 			refreshReviewData: async () => {
 				reviewedBalance = await readBalance((await client.getBlock()).number)
-				reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber)
-				callParams.args = [reviewedQuote.minimumCash, reviewedQuote.minimumRep]
+				reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber, collateral)
+				callParams = { ...callParams, args: [reviewedQuote.minimumRep] }
 				return encodeFunctionData(callParams)
 			},
 			validateBeforeSubmit: async () => {
 				const { amount, balances, blockNumber, winner } = await readBalance((await client.getBlock()).number)
 				if (winner !== reviewedBalance.winner || amount !== reviewedBalance.amount) throw new Error(changedSinceReview)
 				if (amount === 0n) throw new Error(tradingCopy.redemptionInsufficientShares)
-				const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber)
-				requireRedemptionMinima(quote, reviewedQuote)
-				reviewRows = redemptionRows(quote, amount, balances, [winner])
+				const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber, collateral)
+				requireRecoveryRepMinimum(quote, reviewedQuote)
+				reviewRows = redemptionRows(quote, reviewedQuote.minimumRep, amount, balances, [winner])
 			},
 		},
 	])
@@ -495,13 +503,14 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	return { action: 'createCompleteSet', hash, questionLedgerAddress, universeId } satisfies TradingActionResult
 }
 export async function redeemCompleteSetInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, amount: bigint) {
-	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	const reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, amount, (await client.getBlock()).number)
+	const [universeId, initialBlock] = await Promise.all([readQuestionLedgerUniverseId(client, questionLedgerAddress), client.getBlock()])
+	const collateral = await loadTradingCollateralIdentity(client, questionLedgerAddress, initialBlock.number)
+	const reviewedQuote = await readRedemptionQuote(client, questionLedgerAddress, amount, initialBlock.number, collateral)
 	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemCompleteSet',
-		args: [amount, reviewedQuote.minimumCash, reviewedQuote.minimumRep],
+		args: [amount, reviewedQuote.minimumRep],
 	} as const
 	let reviewRows: ReturnType<typeof redemptionRows> = []
 	client.onTransactionPlan?.([
@@ -521,9 +530,9 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 					if (balances.some(balance => amount > balance)) throw new Error(tradingCopy.redemptionInsufficientShares)
 					return balances
 				}
-				const [balances, quote] = await Promise.all([readBalances(), readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber)])
-				requireRedemptionMinima(quote, reviewedQuote)
-				reviewRows = redemptionRows(quote, amount, balances, ['yes', 'no', 'invalid'])
+				const [balances, quote] = await Promise.all([readBalances(), readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber, collateral)])
+				requireRecoveryRepMinimum(quote, reviewedQuote)
+				reviewRows = redemptionRows(quote, reviewedQuote.minimumRep, amount, balances, ['yes', 'no', 'invalid'])
 			},
 		},
 	])
@@ -536,36 +545,33 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 	} satisfies TradingActionResult
 }
 
-async function readRedemptionQuote(client: Pick<ReadClient, 'readContract' | 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
-	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
+async function readRedemptionQuote(client: Pick<ReadClient, 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined, collateral: Awaited<ReturnType<typeof loadTradingCollateralIdentity>>) {
 	const { cash, rep: recovery } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
 	const collateralAmount = formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)
 	const repAmount = formatCurrencyBalanceWithUnit(recovery, commonCopy.rep)
-	const minimumCash = (cash * 9950n) / 10000n
 	const minimumRep = (requireBigintValue(recovery, 'recovery REP quote') * 9950n) / 10000n
 	return {
-		cash,
 		collateralAmount,
 		repAmount,
 		recovery,
-		minimumCash,
 		minimumRep,
 		decimals: collateral.decimals,
-		description: `${tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount)} Minimum payouts (0.5% tolerance): ${formatCurrencyBalanceWithUnit(minimumCash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(minimumRep, 'REP')}.`,
+		description: tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount),
 	}
 }
 
-function requireRedemptionMinima(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, reviewed: Awaited<ReturnType<typeof readRedemptionQuote>>) {
-	if (quote.cash < reviewed.minimumCash || quote.recovery < reviewed.minimumRep) throw new Error('Redemption payout changed. Review the amount again.')
+function requireRecoveryRepMinimum(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, reviewed: Awaited<ReturnType<typeof readRedemptionQuote>>) {
+	if (quote.recovery < reviewed.minimumRep) throw new Error('Recovery REP payout changed. Review the amount again.')
 }
 
-function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, amount: bigint, balances: readonly [bigint, bigint, bigint], outcomes: readonly ReportingOutcomeKey[]) {
+function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, minimumRep: bigint, amount: bigint, balances: readonly [bigint, bigint, bigint], outcomes: readonly ReportingOutcomeKey[]) {
 	return [
 		...outcomes.map(outcome => {
 			const balance = balances[getReportingOutcomeValue(outcome)]
 			return { label: tradingCopy.formatOutcomeShares(getShareOutcomeLabel(outcome)), value: `${formatCurrencyBalance(balance, quote.decimals)} → ${formatCurrencyBalance(balance - amount, quote.decimals)}` }
 		}),
-		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount },
+		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount, allowValueChange: true },
 		...(quote.recovery === 0n ? [] : [{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount }]),
+		{ label: tradingCopy.minimumRecoveryRep, value: formatCurrencyBalanceWithUnit(minimumRep, commonCopy.rep) },
 	]
 }

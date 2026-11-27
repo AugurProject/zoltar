@@ -216,7 +216,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 			const quoteCash = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
 			const quoteRep = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
 			const before = { cash: await e2e.cash(trader.account.address), rep: await e2e.rep(universe, trader.account.address) }
-			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [10n * unit, 0n, 0n], gas: BRANCH_GAS }))
+			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [10n * unit, 0n], gas: BRANCH_GAS }))
 			const got = { cash: (await e2e.cash(trader.account.address)) - before.cash, rep: (await e2e.rep(universe, trader.account.address)) - before.rep }
 			expect(got).toEqual({ cash: quoteCash, rep: quoteRep })
 			q2Cash += got.cash

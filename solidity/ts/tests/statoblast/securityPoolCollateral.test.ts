@@ -232,10 +232,10 @@ describe('ERC20 security pool collateral', () => {
 		expect(before - (await balance())).toBe(cash + quote[0])
 		const pool = fixture.poolFor(fixture.base.questionId, undefined, undefined, securityPool).questionLedger
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setFee', args: [100n] }))
-		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [cash, 0n, 0n] }))).rejects.toThrow('Collateral transfer amount mismatch')
+		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [cash, 0n] }))).rejects.toThrow('Collateral transfer amount mismatch')
 		expect(await balance()).toBe(before - cash - quote[0])
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setFee', args: [0n] }))
-		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [cash, 0n, 0n] }))
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [cash, 0n] }))
 		expect(await balance()).toBe(before - quote[0])
 		const factory = await deployContract(owner, encodeDeployData({ abi: factoryArtifact.abi, bytecode: `0x${factoryArtifact.evm.bytecode.object}`, args: [getInfraContractAddresses().securityPoolFactory, 30n] }))
 		const router = await deployContract(owner, encodeDeployData({ abi: routerArtifact.abi, bytecode: `0x${routerArtifact.evm.bytecode.object}`, args: [factory] }))

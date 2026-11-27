@@ -231,7 +231,8 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 					check: async retrying => {
 						if (retrying && expected.refreshReviewData !== undefined) {
 							const data = await expected.refreshReviewData()
-							const args = options?.readReviewArgs === undefined ? originalTransaction.args : options.readReviewArgs(data)
+							const readReviewArgs = options?.readReviewArgs ?? expected.readReviewArgs
+							const args = readReviewArgs === undefined ? originalTransaction.args : readReviewArgs(data)
 							originalTransaction = { ...originalTransaction, args, data }
 							controller.setTechnicalRows(stepIndex, [...getPreparedTransactionTechnicalRows(originalTransaction), { label: appCopy.network, value: client.chain.name }])
 						}
@@ -243,7 +244,16 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 						if (performance.now() - checkedAt > 30_000) {
 							await check(originalTransaction)
 							const currentRows = readRows()
-							if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(reviewCopy.changedSinceReview)
+							if (
+								reviewedRows !== undefined &&
+								currentRows !== undefined &&
+								(reviewedRows.length !== currentRows.length ||
+									reviewedRows.some((row, index) => {
+										const current = currentRows[index]
+										return current === undefined || row.label !== current.label || row.allowValueChange !== current.allowValueChange || (!row.allowValueChange && row.value !== current.value)
+									}))
+							)
+								throw new Error(reviewCopy.changedSinceReview)
 						}
 						await prepareToSend(amount)
 					},

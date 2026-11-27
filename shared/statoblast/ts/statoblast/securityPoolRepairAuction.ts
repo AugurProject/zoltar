@@ -107,11 +107,11 @@ export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapsho
 	if (minimumAttoRepPerLot > auction.maximumBidAttoRepPerLot) throw new Error('The minimum REP per lot exceeds the auction inventory.')
 	if (targetHealthFactorBps < minimumSecurityPoolHealthFactorBps) throw new Error(`Choose a health target of at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%.`)
 	const requiredPrincipalPerLotAttoRep = uint(minimumSecurityPoolAuctionRepPerLot(auction, targetHealthFactorBps), 'Required REP per lot')
+	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
+	uint(auction.depositedAttoEth + bidAttoEth, 'Total bid collateral', 128)
 	if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot) throw new Error('Better funded bids leave no admissible new limit.')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
 	if (minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) throw new Error(auction.maximumAdmissibleBidAttoRepPerLot === 0n ? 'Better funded bids leave no admissible new limit.' : `Better funded bids exclude this limit. Use at most ${formatEther(auction.maximumAdmissibleBidAttoRepPerLot)} REP per lot.`)
-	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
-	uint(auction.depositedAttoEth + bidAttoEth, 'Total bid collateral', 128)
 	return {
 		...terms,
 		bidAttoEth,

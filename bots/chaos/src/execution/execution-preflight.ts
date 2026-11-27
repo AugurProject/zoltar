@@ -5,7 +5,7 @@ import { unsignedQuantity } from './safety.ts'
 import { type ExecutionEnvironment, type CanonicalCallAnchor, OperationRediscoveryRequired } from './execution-context.ts'
 import { exactAttestedTokenBalance, exactAttestedOpenOracleCredit, exactAttestedErc1155Balance, agreedExactCall, agreedMaximumGasEstimate } from './execution-quorum.ts'
 
-const completeSetRedemptionSelector = encodeFunctionData({ abi: questionLedgerAbi, functionName: 'redeemCompleteSet', args: [0n] }).slice(0, 10)
+const completeSetRedemptionSelector = encodeFunctionData({ abi: questionLedgerAbi, functionName: 'redeemCompleteSet', args: [0n, 0n] }).slice(0, 10)
 // Both RPC estimates can use the current timestamp and omit the fee checkpoint
 // paid when a full redemption lands in a later second. The reproduced checkpoint
 // raised the estimate by about 256,000 gas.

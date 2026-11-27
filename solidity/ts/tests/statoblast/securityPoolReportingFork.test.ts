@@ -161,12 +161,17 @@ describe('Statoblast: native fork reporter registration', () => {
 		const validUntil = await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'priceValidUntil' })
 		const now = (await owner.getBlock()).timestamp
 		await fixture.base.mockWindow.setTime(stale ? validUntil + DAY : now + (validUntil - now) / 2n)
+		const saved = await fixture.base.mockWindow.anvilSnapshot()
+		await fixture.base.mockWindow.advanceTime(1n)
 		const quote = await trader.readContract({ ...pool, functionName: 'attoSharesToAttoEth', args: [10n * unit] })
 		expect(quote).toBeLessThan(10n * unit)
-		// Both simulations run against the same block. The accepted floor and the
-		// immediately higher rejected floor establish the exact executable payout.
-		await expect(trader.simulateContract({ ...pool, functionName: 'redeemCompleteSet', args: [10n * unit, quote, 0n] })).resolves.toBeDefined()
-		await expect(trader.simulateContract({ ...pool, functionName: 'redeemCompleteSet', args: [10n * unit, quote + 1n, 0n] })).rejects.toThrow('Minimum collateral not met')
+		const collateral = await trader.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
+		const balance = await getERC20Balance(trader, collateral, trader.account.address)
+		// Include the redemption at the exact quoted timestamp, preserving the
+		// quote-versus-execution assertion without imposing a collateral floor.
+		await fixture.base.mockWindow.anvilRevert(saved)
+		await writeContractAndWait(trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [10n * unit, 0n] }))
+		expect((await getERC20Balance(trader, collateral, trader.account.address)) - balance).toBe(quote)
 	})
 
 	test('#1739 sealed active source shares quote no executable proceeds while the child remains funded', async () => {

@@ -1,13 +1,13 @@
 import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { changedSinceReview } from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, redeemCompleteSetInQuestionLedger, redeemSharesInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { reportOutcomeInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { forkTriggerChangedSinceReview } from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createBlockWithTimestamp, createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, spyOn, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, parseAbi, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -1203,7 +1203,7 @@ test('a timeout while re-reading a game preparation requirement can retry withou
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 })
 
-test('writeContract sends the exact refreshed calldata from a confirmed review', async () => {
+test.each(['writeContract', 'sendTransaction'] as const)('%s sends the exact refreshed calldata and updates its technical arguments', async method => {
 	const { client, sendTransaction } = setup()
 	const writeContract = mock(async () => hash)
 	const call = mock(async () => ({ data: '0x' as const }))
@@ -1212,8 +1212,13 @@ test('writeContract sends the exact refreshed calldata from a confirmed review',
 	const validateBeforeSubmit = mock(async () => undefined)
 	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
 	const reviewed = createReviewedClient({ ...client, call, writeContract, sendTransaction }, undefined, undefined, undefined, true)
-	reviewed.onTransactionPlan?.([{ ...parameters, contractAddress: account, validateBeforeSubmit, refreshReviewData: async () => refreshed }])
-	const sending = reviewed.writeContract(parameters)
+	reviewed.onTransactionPlan?.([{ ...parameters, contractAddress: account, validateBeforeSubmit, refreshReviewData: async () => refreshed, readReviewArgs: data => decodeFunctionData({ abi: parameters.abi, data }).args }])
+	const sendRaw = () => {
+		const data = encodeFunctionData(parameters)
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: parameters.functionName, args: parameters.args, data, value: undefined })
+		return reviewed.sendTransaction({ to: account, data, gas: parameters.gas })
+	}
+	const sending = method === 'writeContract' ? reviewed.writeContract(parameters) : sendRaw()
 	void sending.catch(() => undefined)
 	await waitForStarted()
 	await Bun.sleep(5)
@@ -1229,6 +1234,107 @@ test('writeContract sends the exact refreshed calldata from a confirmed review',
 	await expect(sending).resolves.toBe(hash)
 	expect(writeContract).not.toHaveBeenCalled()
 	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ to: account, data: refreshed, gas: 50_000n }))
+})
+
+test.each(['complete sets', 'winning shares'] as const)('aged %s review accepts falling collateral and still blocks a recovery REP shortfall', async operation => {
+	const unit = 10n ** 18n
+	const { client, receipt, sendTransaction } = setup()
+	let cash = unit
+	let recovery = 2n * unit
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const createNativeClient = () =>
+		createReviewedClient(
+			{
+				...client,
+				sendTransaction,
+				call: async () => ({ data: '0x' }),
+				estimateGas: async () => 100_000n,
+				getBlock: async () => ({ ...createBlockWithTimestamp(1n), number: 1n }),
+				multicall: createMulticallStub(({ contracts }) => {
+					expect(contracts.map(contract => contract.functionName)).toEqual(['refreshSecurityPoolFees', 'attoSharesToAttoEth', 'attoSharesToAttoRep'])
+					return [undefined, cash, recovery]
+				}),
+				readContract: createReadContractStub(request => {
+					if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
+					if (request.functionName === 'services' || request.functionName === 'settlement' || request.functionName === 'shareToken' || request.functionName === 'questionForker') return account
+					if (request.functionName === 'securityPoolFactory' || request.functionName === 'securityPoolOf') return account
+					if (request.functionName === 'isSecurityPool') return true
+					if (request.functionName === 'universeId') return 0n
+					if (request.functionName === 'balanceOfShares') return [unit, unit, unit]
+					if (request.functionName === 'getQuestionOutcome') return 1n
+					throw new Error(`Unexpected native redemption read: ${request.functionName}`)
+				}),
+				waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
+			},
+			undefined,
+			undefined,
+			undefined,
+			true,
+		)
+	const redeem = () => {
+		const reviewed = createNativeClient()
+		return operation === 'complete sets' ? redeemCompleteSetInQuestionLedger(reviewed, account, unit) : redeemSharesInQuestionLedger(reviewed, account)
+	}
+	try {
+		const sending = redeem()
+		void sending.catch(() => undefined)
+		await waitForTransactionStep(0)
+		cash = 0n
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		for (let attempt = 0; attempt < 100 && sendTransaction.mock.calls.length === 0 && transactionSteps.value?.reviewCheck?.status !== 'changed'; attempt += 1) await Bun.sleep(1)
+		expect(transactionSteps.value?.reviewCheck?.status).not.toBe('changed')
+		await expect(sending).resolves.toMatchObject({ hash })
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+		const data = sendTransaction.mock.calls[0]?.[0].data
+		if (data === undefined) throw new Error('Missing native redemption calldata')
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256)', 'function redeemCompleteSet(uint256,uint256)']), data }).args).toEqual(operation === 'complete sets' ? [unit, (2n * unit * 9950n) / 10000n] : [(2n * unit * 9950n) / 10000n])
+		transactionSteps.value?.cancel()
+		now.mockReturnValue(0)
+		// A new action uses a fresh controller and retains its reviewed positive REP floor.
+		const blocked = redeem()
+		void blocked.catch(() => undefined)
+		await waitForTransactionStep(0)
+		recovery = 0n
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		await expect(blocked).rejects.toThrow('Recovery REP payout changed')
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		now.mockRestore()
+	}
+})
+
+test('an aged review sends when only an explicitly variable estimate changes', async () => {
+	const { client, sendTransaction } = setup()
+	let collateral = '1 WETH'
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call: async () => ({ data: '0x01' }) }, undefined, undefined, undefined, true)
+	try {
+		reviewed.onTransactionPlan?.([
+			{
+				functionName: 'redeemShares',
+				contractAddress: account,
+				readReviewRows: () => [
+					{ label: 'Estimated collateral received', value: collateral, allowValueChange: true },
+					{ label: 'Minimum recovery REP', value: '0 REP' },
+				],
+			},
+		])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'redeemShares', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		void sending.catch(() => undefined)
+		await waitForTransactionStep(0)
+		collateral = '0 WETH'
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		for (let attempt = 0; attempt < 100 && sendTransaction.mock.calls.length === 0 && transactionSteps.value?.reviewCheck?.status !== 'changed'; attempt += 1) await Bun.sleep(1)
+		expect(transactionSteps.value?.reviewCheck?.status).not.toBe('changed')
+		await expect(sending).resolves.toBe(hash)
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		now.mockRestore()
+	}
 })
 
 test('an aged review exposes changed rows and requires a fresh review confirmation before sending', async () => {

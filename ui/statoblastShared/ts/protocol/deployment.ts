@@ -1,3 +1,6 @@
+import * as deploymentCopy from '../copy/deployment.js'
+import { deploymentErrors } from '../copy/protocolErrors.js'
+import { questionDataContract, universeContract } from '../copy/app.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { bytesToHex, encodeDeployData, getCreateAddress, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -42,7 +45,7 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	sharedPoolPriceFeedFactory: '0xb73435a3cce3ce807c3106c927b8ab75ea13be4331a6e0d377d3c8a38aae205f',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x88eafa805bab8e3d8378632ad561144c0760abcf5ae312c4cff5636a31e81a01',
+	securityPoolFactory: '0x802715b54c53b1f2ab2053cbc9ac280ee3e3abc08a5ca12baf4a0604ec049a87',
 	questionForker: '0xb943c51de2f1dfb06aef9404c0d9966fbb9aa76664f2d82fa63a5e6f4255ec39',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
 	shareTokenFactory: '0x5d36307371a5737f98c283875104baa32da56c9a035e6d8bea8f90565d345eb0',
@@ -51,21 +54,21 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xb53f8f99f6606dc8c4b4efd8e9564c8806e31ab2abe9256d5bfe24d7b5e98e6f',
+	securityPoolFactory: '0xf3e709b069ff3629431e5ec1908b439281892f4d641e6d3c3984844b00f8f957',
 	questionForker: '0x264856bf82d587a858c772b8b7157495f3115d9e9453a02d19654f6770c4f1a9',
 	shareTokenFactory: '0x455b37ed5b6e81f95dc8f7d0820f7d53d13738634e28fe21cf1d2973d5f7c10f',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
 	const groups = Object.values(artifact.evm.deployedBytecode.immutableReferences)
-	if (groups.length !== addresses.length) throw new Error(`Unexpected deployment immutable layout: ${groups.length.toString()} immutables, ${addresses.length.toString()} addresses, runtime ${artifact.evm.deployedBytecode.object.length.toString()} characters`)
+	if (groups.length !== addresses.length) throw new Error(deploymentErrors.contractCodeInvalid)
 	const code = hexToBytes(`0x${artifact.evm.deployedBytecode.object}`)
 	for (const [index, group] of groups.entries()) {
 		const address = addresses[index]
-		if (address === undefined) throw new Error('Missing deployment immutable')
+		if (address === undefined) throw new Error(deploymentErrors.contractAddressMissing)
 		const padded = hexToBytes(toHex(hexToBytes(address), { size: 32 }))
 		for (const reference of group) {
-			if (reference.length !== 32 || code.slice(reference.start, reference.start + reference.length).some(byte => byte !== 0)) throw new Error('Unexpected deployment immutable bytes')
+			if (reference.length !== 32 || code.slice(reference.start, reference.start + reference.length).some(byte => byte !== 0)) throw new Error(deploymentErrors.contractCodeInvalid)
 			code.set(padded, reference.start)
 		}
 	}
@@ -78,7 +81,7 @@ function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number
 	if (module.id === 'securityPoolForkCoordinatorDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
 	if (module.id === 'securityPoolCapitalLedgerDeployer') {
 		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
-		if (chunkDeployer === undefined) throw new Error('Missing creation-code chunk deployer layout')
+		if (chunkDeployer === undefined) throw new Error(deploymentErrors.libraryLayoutMissing)
 		const chunkIds = Object.keys(chunkDeployer.artifact.evm.deployedBytecode.immutableReferences)
 		return runtimeWithAddresses(
 			module.artifact,
@@ -90,7 +93,7 @@ function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number
 	// SecurityPoolCreationCodeDeployer immutables instead of by position.
 	if (module.id === 'securityPoolRepairAuctionDeployer') {
 		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
-		if (chunkDeployer === undefined) throw new Error('Missing creation-code chunk deployer layout')
+		if (chunkDeployer === undefined) throw new Error(deploymentErrors.libraryLayoutMissing)
 		const chunkIds = Object.keys(chunkDeployer.artifact.evm.deployedBytecode.immutableReferences)
 		const chunkAddresses = [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })]
 		const vaultImplementation = getCreateAddress({ from: addresses[module.id], nonce: 3n })
@@ -124,7 +127,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	sharedPoolPriceFeedFactory: '0x4d73909e89ec06f2a851a21ae9a6621981a8528469b6e0592c07a8559a8f853c',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x619f233279b6e490c5f5021ae79632871e77deccae3a776b017888a67bdb778d',
+	securityPoolFactory: '0xf6967ec0da0d1966c6515de26c64cd2c828529241197acd3ef7fbb1b059e350a',
 	questionForker: '0x7efa736bc98b0f7b5d9509444128d978d790c3bd8a956762be8d617803f4b686',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
 	shareTokenFactory: '0x1655d4e1bf272dd2e2bc32d38ba9a8d59a48ad0b59af85903158fda48fbe1532',
@@ -133,7 +136,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xf966c9f62698857ac5fb1227ae1058ec69d2fb54616b035c7ee54174d02e9b04',
+	securityPoolFactory: '0x17a1c58b0d51e1f57578b7192c2b5c97f9bbb241ec2968c26d2a504c862fd27c',
 	questionForker: '0x59d35895876398c2c1a5c365a685119bcdcbfb027d4842d98bdf8054e2a24ce9',
 	shareTokenFactory: '0x1f5876886ea35c0073eca2754f24d6d375c6e73706337a9868c2eebeb67a0e0f',
 }
@@ -149,26 +152,27 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		// Statoblast replaces the deployment status oracle step: the statoblast oracle
 		// must monitor additional Statoblast contracts, so it is deployed with
 		// a different constructor argument list (and therefore a different address).
-		...getZoltarDeploymentSteps(profile, wait).map(step =>
-			step.id === 'deploymentStatusOracle'
-				? {
-						...step,
-						address: getDeploymentStatusOracleAddress(profile),
-						deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
-					}
-				: step,
-		),
+		...getZoltarDeploymentSteps(profile, wait).map(step => {
+			if (step.id === 'zoltar') return { ...step, label: universeContract }
+			if (step.id === 'zoltarQuestionData') return { ...step, label: questionDataContract }
+			if (step.id !== 'deploymentStatusOracle') return step
+			return {
+				...step,
+				address: getDeploymentStatusOracleAddress(profile),
+				deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
+			}
+		}),
 
 		{
 			id: 'questionLedgerOperationsDelegate',
-			label: 'QuestionLedgerOperationsDelegate',
+			label: deploymentCopy.questionActionsContract,
 			address: addresses.questionLedgerOperationsDelegate,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getQuestionLedgerOperationsDelegateByteCode()),
 		},
 		{
 			id: 'questionLedgerEventEmitter',
-			label: 'QuestionLedgerAccountingModule',
+			label: deploymentCopy.questionBalancesContract,
 			address: addresses.questionLedgerEventEmitter,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getQuestionLedgerAccountingModuleByteCode()),
@@ -182,49 +186,49 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		},
 		{
 			id: 'shareTokenFactory',
-			label: 'ShareTokenFactory',
+			label: deploymentCopy.shareTokenDeploymentContract,
 			address: addresses.shareTokenFactory,
 			dependencies: ['proxyDeployer', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getShareTokenFactoryByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'sharedPoolPriceFeedDeploymentWorker',
-			label: 'SharedPoolPriceFeedDeploymentWorker',
+			label: deploymentCopy.priceFeedDeploymentSupport,
 			address: addresses.sharedPoolPriceFeedDeploymentWorker,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedDeploymentWorkerByteCode()),
 		},
 		{
 			id: 'sharedPoolPriceFeedFactory',
-			label: 'SharedPoolPriceFeedFactory',
+			label: deploymentCopy.priceFeedDeploymentContract,
 			address: addresses.sharedPoolPriceFeedFactory,
 			dependencies: ['proxyDeployer', 'sharedPoolPriceFeedDeploymentWorker'],
 			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedFactoryByteCode(profile.wethAddress)),
 		},
 		{
 			id: 'questionForker',
-			label: 'QuestionForker',
+			label: deploymentCopy.forkContract,
 			address: addresses.questionForker,
 			dependencies: ['proxyDeployer', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getQuestionForkerByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'escalationGameDepositDelegate',
-			label: 'EscalationGameDepositDelegate',
+			label: deploymentCopy.reportingDepositsContract,
 			address: addresses.escalationGameDepositDelegate,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`),
 		},
 		{
 			id: 'escalationGameFactory',
-			label: 'EscalationGameFactory',
+			label: deploymentCopy.reportingGameDeploymentContract,
 			address: addresses.escalationGameFactory,
 			dependencies: ['proxyDeployer', 'escalationGameDepositDelegate'],
 			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameDepositDelegate)),
 		},
 		{
 			id: 'securityPoolFactory',
-			label: 'SecurityPoolFactory',
+			label: deploymentCopy.poolDeploymentContract,
 			address: addresses.securityPoolFactory,
 			dependencies: ['proxyDeployer', 'questionForker', 'questionLedgerOperationsDelegate', 'questionLedgerEventEmitter', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'sharedPoolPriceFeedFactory'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses)),
@@ -245,6 +249,18 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		...step,
 		...(expectedRuntimeCodeHashes?.[step.id] === undefined ? {} : { expectedRuntimeCodeHash: expectedRuntimeCodeHashes[step.id] }),
 	}))
+}
+
+export function getStatoblastUiDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile()) {
+	const labels: Partial<Record<DeploymentStepId, string>> = {
+		reputationToken: deploymentCopy.genesisRepToken,
+		deploymentStatusOracle: deploymentCopy.deploymentStatusContract,
+		multicall3: deploymentCopy.batchReadContract,
+	}
+	return getDeploymentSteps(profile).map(step => {
+		const label = labels[step.id] ?? step.label
+		return { ...step, label, verificationLabel: label }
+	})
 }
 
 /**
@@ -299,7 +315,7 @@ function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()):
 
 export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
 	const profile = getRuntimeNetworkProfile()
-	const steps = getDeploymentSteps(profile)
+	const steps = getStatoblastUiDeploymentSteps(profile)
 	const oracleAddress = getDeploymentStatusOracleAddress(profile)
 	const oracleCode = await client.getCode({ address: oracleAddress })
 	if (profile.id === 'simulation') {
@@ -310,7 +326,7 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 		return buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	}
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	if (oracleStep === undefined) throw new Error('Deployment plan is missing its deployment status oracle step')
+	if (oracleStep === undefined) throw new Error(deploymentErrors.statusCheckMissing)
 	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) return await loadDeploymentStatusSnapshotFromCode(client, steps)
 	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	// The oracle mask only says a step was recorded; a step whose address holds no code is reported as not deployed.

@@ -163,18 +163,17 @@ describe('Statoblast: central security pool and native question integration', ()
 		}
 	})
 
-	test('#1679 native redemption enforces collateral and REP minima atomically', async () => {
+	test('#1679 native redemption enforces its recovery REP minimum atomically', async () => {
 		await fixture.prepare()
 		await fixture.mint()
 		const trader = fixture.other()
 		const pool = fixture.poolFor(fixture.base.questionId)
 		const before = await balanceOfShares(trader, pool.shareToken, fixture.base.genesisUniverse, trader.account.address)
-		const abi = parseAbi(['function redeemCompleteSet(uint256 shares,uint256 minimumCash,uint256 minimumRep)'])
-		const redeem = (cash: bigint, rep: bigint) => writeContractAndWait(trader, () => trader.writeContract({ abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [before[0], cash, rep] }))
-		await expect(redeem(1n << 200n, 0n)).rejects.toThrow('Minimum collateral not met')
-		await expect(redeem(0n, 1n)).rejects.toThrow('Minimum recovery REP not met')
+		const abi = parseAbi(['function redeemCompleteSet(uint256 shares,uint256 minimumRep)'])
+		const redeem = (rep: bigint) => writeContractAndWait(trader, () => trader.writeContract({ abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [before[0], rep] }))
+		await expect(redeem(1n)).rejects.toThrow('Minimum recovery REP not met')
 		expect(await balanceOfShares(trader, pool.shareToken, fixture.base.genesisUniverse, trader.account.address)).toEqual(before)
-		await redeem(0n, 0n)
+		await redeem(0n)
 	})
 
 	test('two questions consume one capacity budget while REP remains in one ledger', async () => {

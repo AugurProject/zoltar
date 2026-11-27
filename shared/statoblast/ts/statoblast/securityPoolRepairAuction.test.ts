@@ -350,7 +350,7 @@ test('#1634 opening coverage must include the final rounded lot product', async 
 
 test('#1652 preflight identifies cumulative escrow exhaustion before bid ranking', async () => {
 	const snapshot = await load(fixture({ depositedAttoEth: (1n << 128n) - 1n, maximumAdmissibleBidAttoRepPerLot: 0n }))
-	expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('Total auction bid escrow')
+	expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('Total bid collateral')
 })
 
 test('#1646 fallback searches lower grid bands when the largest affordable lot rounds poorly', async () => {

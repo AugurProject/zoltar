@@ -142,8 +142,8 @@ describe('Statoblast: shared security pool multi-branch migration', () => {
 			/ShareToken migrated source balance is locked/,
 		)
 		// #1561: both production burn entrypoints reject the forked source pool.
-		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemShares', args: [0n, 0n] }), /Pool inactive/)
-		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemCompleteSet', args: [1n, 0n, 0n] }), /Forked/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemShares', args: [0n] }), /Pool inactive/)
+		await assert.rejects(openInterestHolder.writeContract({ abi: poolArtifact.abi, address: questionLedgerAddresses.questionLedger, functionName: 'redeemCompleteSet', args: [1n, 0n] }), /Forked/)
 		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: questionLedgerAddresses.shareToken, functionName: 'burnCompleteSets', args: [genesisUniverse, holderAddress, 1n] }), /not authorized/)
 		await assert.rejects(openInterestHolder.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: questionLedgerAddresses.shareToken, functionName: 'burnTokenIdAndGetRemainingSupply', args: [parentYesTokenId, holderAddress] }), /not authorized/)
 		// Recovery consumes independent rights, not locked branch entitlements.
@@ -236,7 +236,7 @@ describe('Statoblast: shared security pool multi-branch migration', () => {
 				const recovery = await client.readContract({ ...securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [childPool, amount] })
 				expect(recovery).toBeGreaterThan(0n)
 				const balanceBefore = await getERC20Balance(client, getRepTokenAddress(child), fixture.other().account.address)
-				await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [amount, 0n, 0n] }))
+				await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemCompleteSet', args: [amount, 0n] }))
 				expect(await getERC20Balance(client, getRepTokenAddress(child), fixture.other().account.address)).toBe(balanceBefore + recovery)
 				paid += cash
 				expect(await collateralBalance(client, fixture.securityPool, settlement)).toBe(cashBefore - paid)

@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: '3df5b0cffe8a5dd4c2e300c7b9e8d561b93d8e28a9f60b8a575c500cf8a20097',
+	compiledAbiFingerprint: '3456347390b995b05e88bc0518154f2cdd76dc25294113be0e93762af8495d0e',
 	name: 'QuestionLedger',
 	interactionNotes: 'See the [security pool module boundaries](./contract-inventory.html#security-pool-boundary) for capital, settlement, and reporter custody.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
@@ -168,7 +168,7 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`redeemCompleteSet(amountAttoShares, minimumCollateral, minimumRecoveryRep)`',
+			call: '`redeemCompleteSet(amountAttoShares, minimumRecoveryRep)`',
 			caller: 'A complete-set holder',
 			effect: 'Burns complete sets and pays their current collateral and recovery REP entitlement. Released exposure becomes available to the security pool.',
 			declarations: [
@@ -176,11 +176,11 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'redeemCompleteSet',
 				},
 			],
-			preconditions: 'Operational unforked universe; holder has all outcome shares; actual collateral and recovery REP meet the caller’s minima. Zero minima permit disposal of worthless shares.',
+			preconditions: 'Operational unforked universe; holder has all outcome shares; actual recovery REP meets the caller’s minimum. Collateral is paid at its execution-time value without a caller-supplied floor. A zero REP minimum permits disposal of worthless shares.',
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`redeemShares(minimumCollateral, minimumRecoveryRep)`',
+			call: '`redeemShares(minimumRecoveryRep)`',
 			caller: 'A winning-share holder',
 			effect: 'Burns winning shares and pays their central collateral and recovery REP entitlement.',
 			declarations: [
@@ -188,7 +188,7 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'redeemShares',
 				},
 			],
-			preconditions: 'Operational question with a final outcome; finalized claims retain their protected settlement path; actual collateral and recovery REP meet the caller’s minima.',
+			preconditions: 'Operational question with a final outcome; finalized claims retain their protected settlement path; actual recovery REP meets the caller’s minimum. Collateral is paid at its execution-time value without a caller-supplied floor.',
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
