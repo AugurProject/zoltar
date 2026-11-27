@@ -66,7 +66,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	if (signature === selector('snapshotQuestion(address)')) return encodeAbiParameters([{ type: 'tuple', components: Array.from({ length: 6 }, () => uint256) }], [[supply, cash, market.settlementRecoveryAttoRep ?? 0n, cash, 0n, timestamp]])
 	if (signature === selector('question(uint64,uint256)')) return encodeAbiParameters([{ type: 'tuple', components: Array.from({ length: 7 }, () => uint256) }, uint256], [[cash, supply, 0n, rate, timestamp, end, market.mintFees?.feePrincipalAttoEth ?? cash], 0n])
 	if (signature === selector('books(uint64)'))
-		return encodeAbiParameters([uint256, uint256, uint256, uint256, uint256, uint256, uint256, boolean, uint256, uint256, uint256, boolean, uint256, uint256, uint256, uint256], [cash, cash * 1_000_000_000n, 0n, 0n, 0n, 0n, timestamp, false, 0n, 0n, 0n, true, 0n, 0n, 0n, market.settlementRecoveryAttoRep ?? 0n])
+		return encodeAbiParameters([uint256, uint256, uint256, uint256, uint256, uint256, uint256, boolean, uint256, uint256, boolean, uint256, uint256, uint256, uint256], [cash, cash * 1_000_000_000n, 0n, 0n, 0n, 0n, timestamp, false, 0n, 0n, true, 0n, 0n, 0n, market.settlementRecoveryAttoRep ?? 0n])
 	if (signature === selector('attoSharesToAttoEth(uint256)')) {
 		const shares = BigInt(`0x${data.slice(10)}`)
 		return encodeAbiParameters([uint256], [redemptionAttoEth ?? (supply === 0n ? shares : (shares * cash) / supply)])

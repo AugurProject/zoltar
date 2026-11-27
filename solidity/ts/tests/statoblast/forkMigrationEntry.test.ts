@@ -153,8 +153,9 @@ describe('Statoblast: shared security pool fork entry', () => {
 		expect(await owner.readContract({ ...victim, functionName: 'systemState' })).toBe(0n)
 		const attack = () => (functionName === 'createChildUniverse' ? attacker.writeContract({ ...forker, functionName, args: [counterfeit, 1n] }) : attacker.writeContract({ ...forker, functionName, args: [counterfeit, universe] }))
 		// The counterfeit names its own universe as the target, which no longer descends from it, for the two
-		// question entrypoints; createChildUniverse targets a real child and reaches the provenance check.
-		await expect(writeContractAndWait(attacker, attack)).rejects.toThrow(functionName === 'createChildUniverse' ? 'Child pool is not from the source factory' : 'Target universe does not descend from source')
+		// question entrypoints; createChildUniverse targets a real child and reaches the provenance check,
+		// which rejects the real pool because its parent is not the counterfeit source.
+		await expect(writeContractAndWait(attacker, attack)).rejects.toThrow(functionName === 'createChildUniverse' ? 'Child pool does not continue the source' : 'Target universe does not descend from source')
 		expect(await owner.readContract({ ...victim, functionName: 'systemState' })).toBe(0n)
 	})
 })

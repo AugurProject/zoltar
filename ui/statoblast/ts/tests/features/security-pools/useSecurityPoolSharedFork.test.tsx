@@ -38,7 +38,7 @@ async function setup(overrides: Parameters<typeof capitalSnapshot>[0] = {}, extr
 				choices: [1n, chosen],
 				getChildUniverseId: 42n,
 				getRepToken: token,
-				branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, prepared || chosen, started, ready],
+				branches: [0n, 1n, 0n, 0n, 0n, 100n * unit, prepared || chosen, started, ready, zeroAddress, 0n],
 				universes: [900n, 7n, 0n, false, 0n],
 				zoltarQuestionData: token,
 				questions: ['Fork question', 0n, 0n, 0n, 0n, 0n, 0n, ''],

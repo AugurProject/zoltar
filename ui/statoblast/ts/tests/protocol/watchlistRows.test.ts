@@ -62,7 +62,7 @@ test('saved questions and pools share a block-pinned fork read before reading a 
 						return result(7n)
 					case 'branches':
 						expect(call.address).toBe(controller)
-						return result([0n, 2n, 0n, 0n, 0n, 0n, true, false, false])
+						return result([0n, 2n, 0n, 0n, 0n, 0n, true, false, false, zeroAddress, 0n])
 					case 'annualFeeBps':
 					case 'purchaseFeeBps':
 					case 'minimumPurchaseFeeAttoEth':
