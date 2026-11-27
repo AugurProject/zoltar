@@ -314,7 +314,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 	const submit = async (engine: Engine, lots: bigint, min: bigint, bidder: Address) => {
 		const candidate: ModelBid = { id: BigInt(engine.bids.length) + 1n, lots, min, bidder }
 		const excluded = cannotWin(engine.config, [...engine.bids, candidate], candidate)
-		const data = encodeFunctionData({ abi: engineArtifact.abi, functionName: 'submitBid', args: [bidder, addressString(0xa000n + candidate.id), 12_000n, lots, min] })
+		const data = encodeFunctionData({ abi: engineArtifact.abi, functionName: 'submitBid', args: [bidder, lots, min] })
 		if (excluded) {
 			let reason = ''
 			try {
@@ -392,9 +392,9 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		bids.forEach((bid, index) => {
 			const outcome = fillResults[index]
 			if (outcome === undefined || !outcome.success) throw new Error(`previewBid(${bid.id}) reverted: ${context}`)
-			const fillWords = wordsOf(outcome.returnData, 7)
-			const fill = { filledLots: wordAt(fillWords, 3), usedAttoEth: wordAt(fillWords, 4), principalAttoRep: wordAt(fillWords, 5), refundAttoEth: wordAt(fillWords, 6) }
-			if (wordAt(fillWords, 0) !== BigInt(bid.bidder) || wordAt(fillWords, 1) !== 0xa000n + bid.id || wordAt(fillWords, 2) !== 12_000n) throw new Error(`previewBid(${bid.id}) returns another bid's identity: ${context}`)
+			const fillWords = wordsOf(outcome.returnData, 5)
+			const fill = { filledLots: wordAt(fillWords, 1), usedAttoEth: wordAt(fillWords, 2), principalAttoRep: wordAt(fillWords, 3), refundAttoEth: wordAt(fillWords, 4) }
+			if (wordAt(fillWords, 0) !== BigInt(bid.bidder)) throw new Error(`previewBid(${bid.id}) returns another bid's identity: ${context}`)
 			const modelFill = fills.get(bid.id) ?? 0n
 			chainFills.set(bid.id, fill.filledLots)
 			if (fill.filledLots !== modelFill || fill.usedAttoEth !== modelFill * config.lot || fill.principalAttoRep !== modelFill * expected.attoRepPerLot || fill.refundAttoEth !== (bid.lots - modelFill) * config.lot)
@@ -575,7 +575,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 			}
 			return 'no revert'
 		}
-		const bid = (lots: bigint, min: bigint, bidder = bidderPool[0], vault = addressString(0xa001n)) => encodeFunctionData({ abi: engineArtifact.abi, functionName: 'submitBid', args: [bidder ?? controller, vault, 12_000n, lots, min] })
+		const bid = (lots: bigint, min: bigint, bidder = bidderPool[0]) => encodeFunctionData({ abi: engineArtifact.abi, functionName: 'submitBid', args: [bidder ?? controller, lots, min] })
 		expect(await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'maximumBidAttoRepPerLot' })).toBe(140n)
 		expect(await reasonOf(bid(1n, 14n), stranger)).toContain('Only the auction controller')
 		expect(await reasonOf(bid(1n, 14n))).toContain('Auction bid collateral missing')
@@ -587,7 +587,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		expect(await reasonOf(bid(1n, 0n))).toContain('REP price grid')
 		expect(await reasonOf(bid(1n, 15n))).toContain('REP price grid')
 		expect(await reasonOf(bid(1n, 147n))).toContain('exceeds the REP inventory per lot')
-		expect(await reasonOf(bid(1n, 14n, addressString(0n)))).toContain('bidder and vault are required')
+		expect(await reasonOf(bid(1n, 14n, addressString(0n)))).toContain('Auction bidder is required')
 		expect(await reasonOf(engineCall.preview(4n, 0n))).toContain('raise limit exceeds its target')
 		expect(await reasonOf(engineCall.preview(3n, 8n))).toContain('floor must use the REP price grid')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'finalize', args: [3n, 0n] }))).toContain('bidding window has not closed')
