@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { canonicalLifecyclePresence, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { classifiedMethod } from '../support/canonical-contracts.ts'
 import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
-import { address, hash, pendingPoolReportFixture, snapshotFixture } from './fixture.ts'
+import { address, pendingPoolReportFixture, snapshotFixture } from './fixture.ts'
 
 const options = {
 	allowHighRisk: true,
@@ -23,25 +23,19 @@ const options = {
 } as const
 
 describe('raw lifecycle identity audit', () => {
-	test('keeps auction refund withdrawals seed-independent within one authenticated generation', () => {
+	test('keeps auction bid refunds seed-independent for one bid', () => {
 		const snapshot = snapshotFixture()
-		const refundGeneration = hash(400)
-		const auction = { ...auctionFixture(), address: address(40), pendingEthRefund: '123', pendingEthRefundGeneration: refundGeneration }
+		const auction = { ...auctionFixture(), address: address(40), finalized: true, refundableBidIds: ['1'] }
 		snapshot.auctions = [auction]
-		const metadata = (seed: number) => urgentOperationPlans(snapshot, { ...options, seed }).find(plan => plan.definitionId === 'statoblast.auction.withdraw-refund')?.metadata
-		expect(metadata(1)).toEqual({ auction: address(40), refundGeneration })
+		const metadata = (seed: number) => urgentOperationPlans(snapshot, { ...options, seed }).find(plan => plan.definitionId === 'statoblast.auction.settle-bids')?.metadata
+		expect(metadata(1)).toEqual({ auction: address(40), bidId: '1' })
 		expect(metadata(0xffff_fffe)).toEqual(metadata(1))
 		expect(canonicalLifecyclePresence(snapshot, { ...options, allowHighRisk: false })).toContainEqual({
 			blocksNovelty: true,
-			definitionId: 'statoblast.auction.withdraw-refund',
+			definitionId: 'statoblast.auction.settle-bids',
 			ecosystem: 'statoblast',
-			metadata: { auction: address(40), refundGeneration },
+			metadata: { auction: address(40), bidId: '1' },
 		})
-		auction.pendingEthRefund = '456'
-		expect(metadata(1)).toEqual({ auction: address(40), refundGeneration })
-		expect(canonicalLifecyclePresence(snapshot, options)).toContainEqual({ blocksNovelty: true, definitionId: 'statoblast.auction.withdraw-refund', ecosystem: 'statoblast', metadata: { auction: address(40), refundGeneration } })
-		auction.pendingEthRefundGeneration = hash(401)
-		expect(metadata(1)).toEqual({ auction: address(40), refundGeneration: hash(401) })
 	})
 
 	test('keeps reporter resumption present independently of funding', () => {

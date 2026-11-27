@@ -47,7 +47,6 @@ export type PoolDeploymentReplay = {
 }
 
 export type AuctionLifecycleReplay = {
-	opensAt?: bigint
 	closesAt?: bigint
 	lotAttoEth?: bigint
 	targetLots?: bigint
@@ -1034,7 +1033,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'RepairAuctionStarted') {
 		state.auctions.set(log.emitter, {
-			opensAt: requireBigInt(log.args, 'opensAt'),
 			closesAt: requireBigInt(log.args, 'closesAt'),
 			lotAttoEth: requireBigInt(log.args, 'lotAttoEth'),
 			targetLots: requireBigInt(log.args, 'targetLots'),

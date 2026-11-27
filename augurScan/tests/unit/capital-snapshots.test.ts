@@ -248,14 +248,15 @@ test('a bidder reports its unclaimed bids and the winning lots outside its accou
 	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader(overrides, calls))).readResult
 	// Bid 2 won 500 REP of lots and is unclaimed; bid 5 filled nothing and is unclaimed; bid 6 won lots and was claimed.
 	const lots = (bidId: unknown) => {
-		if (bidId === 2n) return { bidder: owner, positionId: 0n, principal: 500n, commitment: 10n, liquidationStarted: 1_700_000_000, claimed: false, materialized: false, earnedAttoEth: 5n, earnedAttoRep: 8n }
-		if (bidId === 6n) return { bidder: owner, positionId: 7n, principal: 300n, commitment: 6n, liquidationStarted: 0, claimed: true, materialized: true, earnedAttoEth: 0n, earnedAttoRep: 0n }
-		return { bidder: owner, positionId: 0n, principal: 0n, commitment: 0n, liquidationStarted: 0, claimed: false, materialized: false, earnedAttoEth: 0n, earnedAttoRep: 0n }
+		if (bidId === 2n) return { bidder: owner, principal: 500n, commitment: 10n, liquidationStarted: 1_700_000_000, claimed: false, earnedAttoEth: 5n, earnedAttoRep: 8n }
+		if (bidId === 6n) return { bidder: owner, principal: 300n, commitment: 6n, liquidationStarted: 0, claimed: true, earnedAttoEth: 0n, earnedAttoRep: 0n }
+		return { bidder: owner, principal: 0n, commitment: 0n, liquidationStarted: 0, claimed: false, earnedAttoEth: 0n, earnedAttoRep: 0n }
 	}
 	const bidIds = [2n, 5n, 6n]
 	const auction = {
 		repairAuctionCohort: [other, 9n, 4n, 125n, 5n],
 		unclaimedRepairAuctionBids: (args: readonly unknown[]) => [args[0] === owner ? 2n : 0n],
+		engine: [other],
 		bidderBidCount: (args: readonly unknown[]) => [args[0] === owner ? BigInt(bidIds.length) : 0n],
 		bidderBidId: (args: readonly unknown[]) => [bidIds[Number(args[1])]],
 		repairAuctionPositions: (args: readonly unknown[]) => [Array.isArray(args[0]) ? args[0].map(lots) : []],

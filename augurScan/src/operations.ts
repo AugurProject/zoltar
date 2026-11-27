@@ -149,28 +149,23 @@ export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => 
 export type AuctionLifecycleInput = {
 	readonly started: boolean
 	readonly finalized: boolean
-	/** `RepairAuctionStarted.opensAt` and `closesAt`, in Unix seconds. */
-	readonly opensAt?: string | undefined
+	/** `RepairAuctionStarted.closesAt`, in Unix seconds. Bidding opens when the auction starts. */
 	readonly closesAt?: string | undefined
 	readonly indexedTimestamp: string
-	readonly bidCount: number
-	readonly settlementCount: number
 }
 
-/** The bidding window from a stored `RepairAuctionStarted(opensAt, closesAt, …)` event, in the field names auctionLifecycle reads. */
+/** The bidding deadline from a stored `RepairAuctionStarted(closesAt, …)` event, in the field name auctionLifecycle reads. */
 export const auctionStartedWindow = (eventData: Readonly<Record<string, unknown>>) => ({
-	opensAt: typeof eventData['opensAt'] === 'string' ? eventData['opensAt'] : undefined,
 	closesAt: typeof eventData['closesAt'] === 'string' ? eventData['closesAt'] : undefined,
 })
 
+/** Each bidder takes back its own unused collateral after finalization, so a finalized auction has no further lifecycle step. */
 export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
-	if (input.finalized) return input.settlementCount < input.bidCount ? 'Bid settlements outstanding' : 'Fully settled'
+	if (input.finalized) return 'Finalized'
 	if (!input.started) return 'Awaiting indexed evidence'
 	const current = nonNegative(input.indexedTimestamp)
-	const start = nonNegative(input.opensAt)
 	const end = nonNegative(input.closesAt)
-	if (current === undefined || start === undefined || end === undefined) return 'Awaiting indexed evidence'
-	if (current < start) return 'Scheduled'
+	if (current === undefined || end === undefined) return 'Awaiting indexed evidence'
 	if (current < end) return 'Open'
 	return 'Awaiting finalization'
 }

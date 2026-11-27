@@ -1,36 +1,5 @@
-import { encodeAbiParameters, keccak256 } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
 import type { EcosystemSnapshot } from '../operations/types.ts'
-
-function verifiedRefundGeneration(auction: EcosystemSnapshot['auctions'][number], index: ChaosProtocolIndex) {
-	const pendingAttoEth = BigInt(auction.pendingEthRefund)
-	const indexed = index.auctionRefunds[auction.engine.toLowerCase()]
-	if (pendingAttoEth === 0n) {
-		if (indexed !== undefined) throw new Error(`Auction ${auction.address} has an authenticated active refund episode but zero anchored pending storage`)
-		return undefined
-	}
-	if (indexed === undefined) {
-		throw new Error(`Auction ${auction.address} has positive pending ETH refund storage without a tracked refund identity`)
-	}
-	if (BigInt(indexed.pendingAttoEth) !== pendingAttoEth) throw new Error(`Auction ${auction.address} pending ETH refund storage does not match its indexed refund balance`)
-	return indexed.generation
-}
-
-/** Seed missing refund identities from quorum-verified current storage, not invented historical events. */
-export function indexWithCurrentRefunds(snapshot: EcosystemSnapshot, index: ChaosProtocolIndex): ChaosProtocolIndex {
-	if (index.cursor.blockNumber !== snapshot.anchor.blockNumber || index.cursor.blockHash.toLowerCase() !== snapshot.anchor.blockHash.toLowerCase()) throw new Error('Refund reconciliation requires the protocol index at the snapshot anchor')
-	if (index.chainId !== snapshot.chainId || index.wallet.toLowerCase() !== snapshot.wallet.address.toLowerCase()) throw new Error('Refund reconciliation requires the indexed chain and wallet')
-	const auctionRefunds = { ...index.auctionRefunds }
-	for (const auction of snapshot.auctions) {
-		const key = auction.engine.toLowerCase()
-		if (auctionRefunds[key] !== undefined || BigInt(auction.pendingEthRefund) === 0n) continue
-		const generation = keccak256(encodeAbiParameters([{ type: 'string' }, { type: 'uint256' }, { type: 'address' }, { type: 'address' }, { type: 'bytes32' }], ['chaos:observed-refund:v1', BigInt(snapshot.chainId), snapshot.wallet.address, auction.engine, snapshot.anchor.blockHash]))
-		auctionRefunds[key] = { generation, pendingAttoEth: auction.pendingEthRefund }
-	}
-	const reconciled = { ...index, auctionRefunds }
-	for (const auction of snapshot.auctions) verifiedRefundGeneration(auction, reconciled)
-	return reconciled
-}
 
 export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: ChaosProtocolIndex): EcosystemSnapshot {
 	const migrationRepSplitsByUniverse = new Map<string, Record<string, string>>()
@@ -41,15 +10,7 @@ export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: Ch
 	}
 	return {
 		...snapshot,
-		auctions: snapshot.auctions.map(auction => {
-			const refundGeneration = verifiedRefundGeneration(auction, index)
-			const { pendingEthRefundGeneration: _partialGeneration, ...topologyAuction } = auction
-			return {
-				...topologyAuction,
-				bids: [...(index.auctionBids[auction.engine.toLowerCase()] ?? [])],
-				...(refundGeneration === undefined ? {} : { pendingEthRefundGeneration: refundGeneration }),
-			}
-		}),
+		auctions: snapshot.auctions.map(auction => ({ ...auction, bids: [...(index.auctionBids[auction.engine.toLowerCase()] ?? [])] })),
 		escalationDeposits: index.escalationDeposits.map(deposit => ({ ...deposit })),
 		reports: index.reports.map(report => ({
 			...report,

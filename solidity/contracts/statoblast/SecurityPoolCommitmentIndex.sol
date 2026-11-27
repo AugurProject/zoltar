@@ -491,11 +491,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		return (active.rep + current.rep + next.rep, active.commitment + current.commitment + next.commitment);
 	}
 
-	function batchTotals(uint96 batch) external view returns (uint256 rep, uint256 commitment) {
-		Node storage root = nodes[roots[batch]];
-		return (root.rep, root.commitment);
-	}
-
 	/// @notice Assign exact, already funded budgets to currently healthy K.
 	/// @return assigned False when there are no healthy commitments; the controller
 	/// retains the undistributed funds and applies its explicit no-recipient policy.

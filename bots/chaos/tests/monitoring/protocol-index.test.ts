@@ -1,6 +1,4 @@
-import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import { canonicalPoolReportRoutes } from '../../src/monitoring/discovery-price-feed.ts'
-import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
 import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
 import { describe, expect, test } from 'bun:test'
@@ -244,34 +242,6 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 }
 
 describe('durable protocol index', () => {
-	test('tracks storage-observed refunds across restart, later credits, withdrawal, and a same-amount new claim', async () => {
-		const logs = [refundLog({ amount: 3n, pending: 11n, blockNumber: 51n, logIndex: 0 }), refundLog({ amount: 11n, withdrawn: true, blockNumber: 52n, logIndex: 0 }), refundLog({ amount: 8n, blockNumber: 53n, logIndex: 0 })]
-		const client = eventIndexClient(logs, [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
-		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) }
-		const initial = await updateProtocolIndex(context)
-		const snapshot = snapshotFixture()
-		snapshot.chainId = context.chainId
-		snapshot.wallet.address = context.wallet
-		snapshot.anchor.blockNumber = '50'
-		snapshot.anchor.blockHash = hash(50)
-		snapshot.auctions = [{ ...auctionFixture(), address: address(19), engine: address(20), pendingEthRefund: '8' }]
-		const observed = snapshotProtocolIndex(indexWithCurrentRefunds(snapshot, initial.index), context.chainId)
-		const generation = observed.auctionRefunds[address(20).toLowerCase()]?.generation
-		if (generation === undefined) throw new Error('Expected a storage-observed refund identity')
-		expect(snapshotWithProtocolIndex(snapshot, observed).auctions[0]?.pendingEthRefundGeneration).toBe(generation)
-		const credited = await updateProtocolIndex({ ...context, anchorBlockNumber: 51n, previous: observed })
-		expect(credited.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation, pendingAttoEth: 11n.toString() })
-		const withdrawn = await updateProtocolIndex({ ...context, anchorBlockNumber: 52n, previous: credited.index })
-		expect(withdrawn.index.auctionRefunds).toEqual({})
-		const renewed = await updateProtocolIndex({ ...context, anchorBlockNumber: 53n, previous: withdrawn.index })
-		expect(renewed.index.auctionRefunds).toEqual({})
-		snapshot.anchor.blockNumber = '53'
-		snapshot.anchor.blockHash = hash(53)
-		const reseeded = indexWithCurrentRefunds(snapshot, renewed.index)
-		expect(reseeded.auctionRefunds[address(20).toLowerCase()]?.pendingAttoEth).toBe('8')
-		expect(reseeded.auctionRefunds[address(20).toLowerCase()]?.generation).not.toBe(generation)
-	})
-
 	test('selects the oldest history supported by the configured quorum across retention windows', async () => {
 		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], maxBlockSpan: 101n, startBlock: 0n, wallet: address(1) }
 		const readers = [42n, 60n, 80n].map((floor, position) => ({ endpoint: `reader-${position}`, client: eventIndexClient([], [], undefined, undefined, from => (from < floor ? new Error('pruned history unavailable') : undefined)) }))

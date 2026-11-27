@@ -17,9 +17,7 @@ const abi = parseAbi([
 	'function open()',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256)',
 	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[])',
-	'function settleRefund(uint256 bidId)',
-	'function withdrawRefunds(address recipient)',
-	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256)',
+	'function refundBid(uint256 bidId,address recipient) returns (uint256)',
 ])
 async function setup(configure: (fixture: Awaited<ReturnType<typeof auctionFixture>>) => void = () => undefined) {
 	const fixture = await auctionFixture()
@@ -95,14 +93,14 @@ test('a visited bid page stays readable after remount when the auction RPC fails
 	lifecycle.trackRendered(restored)
 	await waitFor(() => expect(restored.state().error).toContain('RPC unavailable'))
 	expect(restored.state().snapshot?.auction?.bids[0]).toEqual(bid)
-	expect(restored.state().claimReason(bid)).toContain('RPC unavailable')
-	await expect(restored.state().claim(bid)).rejects.toThrow('RPC unavailable')
+	expect(restored.state().refundReason(bid)).toContain('RPC unavailable')
+	await expect(restored.state().refund(bid)).rejects.toThrow('RPC unavailable')
 	expect(state.requests).toHaveLength(0)
 	const child = state.fork.branch
 	if (child === undefined) throw new Error('Missing branch')
 	await restored.setProps({ fork: undefined, savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId } })
 	expect(restored.state().snapshot?.auction?.bids[0]).toEqual(bid)
-	expect(restored.state().claimReason(bid)).toContain('Select a fork branch')
+	expect(restored.state().refundReason(bid)).toContain('Select a fork branch')
 	await restored.setProps({ savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId + 1n } })
 	expect(restored.state().snapshot).toBeUndefined()
 })
@@ -214,7 +212,8 @@ test('winners expose live principal and fees until their bid is claimed', async 
 	})
 	const bid = firstBid(state, 'auction bid')
 	expect(bid).toMatchObject({ claimable: true, claimed: false })
-	expect(bid.position).toMatchObject({ principalAttoRep: 100n * unit, commitmentAttoEth: unit, earnedAttoEth: 7n * unit, earnedAttoRep: 9n * unit, materialized: false })
+	expect(bid.position).toMatchObject({ principalAttoRep: 100n * unit, commitmentAttoEth: unit, earnedAttoEth: 7n * unit, earnedAttoRep: 9n * unit })
+	expect(bid.materialized).toBe(false)
 	expect(state.hook.state().bidClaimReason(bid)).toBeUndefined()
 	await act(() => state.hook.state().claimBid(bid))
 	expect(state.requests).toHaveLength(1)
@@ -284,82 +283,43 @@ test('reviewed auction actions reject a context change during their fresh read',
 	await expect(validation).rejects.toThrow('wallet or network changed')
 })
 
-test('early refund actions revalidate eligibility and leave withdrawal under bidder control', async () => {
+test('an early refund pays only the bid’s own collateral to its bidder and revalidates eligibility', async () => {
 	const state = await setup(fixture => {
 		fixture.values['earlyRefundAttoEth'] = 2n * unit
 	})
 	const bid = firstBid(state, 'auction bid')
 	expect(state.hook.state().refundReason(bid)).toBeUndefined()
-	await act(() => state.hook.state().credit(bid))
+	await act(() => state.hook.state().refund(bid))
 	expect(state.requests).toHaveLength(1)
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
+	expect(state.labels).toEqual(['Withdraw this bid’s refund'])
+	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 0n })
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'refundBid', args: [1n, owner] })
+	expect(last(state.requests).reviewDescription).toBe('Withdraw this bid’s 2 WETH of unused collateral to your wallet.')
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['earlyRefundAttoEth'] = 0n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('may still win')
-	state.values['bids'] = [owner, true, false, 2n, 60n * unit]
-	state.values['refundCreditAttoEth'] = 2n * unit
-	await act(() => state.hook.state().refresh())
-	await waitFor(() => expect(state.hook.state().snapshot?.auction?.refundAttoEth).toBe(2n * unit))
-	expect(state.hook.state().withdrawalReason).toBeUndefined()
-	expect(state.requests).toHaveLength(1)
-	await act(() => state.hook.state().withdraw())
-	expect(state.requests).toHaveLength(2)
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'withdrawRefunds', args: [owner] })
-	await last(state.requests).validateBeforeSubmit?.()
-	state.values['refundCreditAttoEth'] = 0n
-	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('no credited')
 })
 
-test('a combined refund claim withdraws the whole credit, tolerates a keeper credit and rejects a changed total', async () => {
-	const state = await setup(fixture => {
-		fixture.values['earlyRefundAttoEth'] = 2n * unit
-		fixture.values['refundCreditAttoEth'] = unit
-	})
-	const bid = firstBid(state, 'auction bid')
-	expect(state.hook.state().claimReason(bid)).toBeUndefined()
-	await act(() => state.hook.state().claim(bid))
-	expect(state.requests).toHaveLength(1)
-	expect(state.labels).toEqual(['Credit and withdraw refunds'])
-	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 0n })
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'settleAndWithdrawRefund', args: [1n, owner] })
-	expect(last(state.requests).reviewDescription).toContain('Credit this bid’s 2 WETH refund and withdraw your entire 3 WETH auction refund credit')
-	expect(last(state.requests).reviewDescription).toContain('including 1 WETH already credited, possibly from your other bids')
-	await last(state.requests).validateBeforeSubmit?.()
-	// Someone credited the bid first: the chain skips settlement and the total is unchanged.
-	state.values['bids'] = [owner, true, false, 2n, 60n * unit]
-	state.values['refundCreditAttoEth'] = 3n * unit
-	await last(state.requests).validateBeforeSubmit?.()
-	state.values['refundCreditAttoEth'] = 4n * unit
-	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('refund credit changed')
-	await act(() => state.hook.state().refresh())
-	await waitFor(() => expect(state.hook.state().snapshot?.auction?.refundAttoEth).toBe(4n * unit))
-	const credited = firstBid(state, 'credited bid')
-	expect(state.hook.state().claimReason(credited)).toBeUndefined()
-	await act(() => state.hook.state().claim(credited))
-	expect(last(state.labels)).toBe('Withdraw credited refunds')
-	expect(last(state.requests).reviewDescription).toBe('This bid’s refund is already credited. Withdraw your entire 4 WETH auction refund credit, possibly including your other bids, to your wallet.')
-})
-
-test('a combined refund claim stays unavailable while the bid may still win', async () => {
+test('a refund stays unavailable while the bid may still win', async () => {
 	const state = await setup()
 	const bid = firstBid(state, 'auction bid')
-	expect(state.hook.state().claimReason(bid)).toBe('This bid may still win. Its collateral remains committed until closing.')
-	await expect(state.hook.state().claim(bid)).rejects.toThrow('may still win')
+	expect(state.hook.state().refundReason(bid)).toBe('This bid may still win. Its collateral remains committed until closing.')
+	await expect(state.hook.state().refund(bid)).rejects.toThrow('may still win')
 	expect(state.requests).toHaveLength(0)
 })
 
-test('a combined refund claim with no earlier credit reviews only the bid’s own refund', async () => {
+test('a refunded bid cannot be refunded again', async () => {
 	const state = await setup(fixture => {
 		fixture.values['earlyRefundAttoEth'] = 2n * unit
 	})
 	const bid = firstBid(state, 'auction bid')
-	await act(() => state.hook.state().claim(bid))
-	expect(last(state.requests).reviewDescription).toBe('Credit this bid’s 2 WETH refund and withdraw it to your wallet.')
+	await act(() => state.hook.state().refund(bid))
 	state.values['bids'] = [owner, true, false, 2n, 60n * unit]
+	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('already refunded')
 	await act(() => state.hook.state().refresh())
 	await waitFor(() => expect(state.hook.state().snapshot?.auction?.bids[0]?.refundSettled).toBe(true))
 	const settled = firstBid(state, 'settled bid')
-	expect(state.hook.state().claimReason(settled)).toBe('No refund credit remains to withdraw.')
+	expect(state.hook.state().refundReason(settled)).toBe('This bid’s unused collateral was already refunded.')
 })
 
 test('an auction disappearing before approval submission invalidates the request', async () => {

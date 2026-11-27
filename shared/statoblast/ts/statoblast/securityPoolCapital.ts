@@ -52,7 +52,7 @@ const abi = parseAbi([
 	'function liquidationStarted(uint96 id) view returns (uint48)',
 	'function liquidationPenaltyPaid(uint96 id) view returns (uint256)',
 	'function liquidationElapsed(uint96 id) view returns (uint256)',
-	'function depositFor(address owner,uint256 amount)',
+	'function deposit(uint256 amount)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setHealthTarget(uint256 targetHealthFactorBps)',
@@ -213,7 +213,7 @@ function request(parameters: CapitalRequest, functionName: string, args: readonl
 }
 
 export function buildSecurityPoolCapitalDepositRequest(parameters: CapitalRequest & { amountAttoRep: bigint }) {
-	return request(parameters, 'depositFor', [decodeAddress(parameters.owner, 'Owner'), positive(parameters.amountAttoRep, 'REP deposit')])
+	return request(parameters, 'deposit', [positive(parameters.amountAttoRep, 'REP deposit')])
 }
 export function buildSecurityPoolCapitalWithdrawPrincipalRequest(parameters: CapitalRequest & { amountAttoRep: bigint; recipient?: Address }) {
 	return request(parameters, 'withdrawPrincipal', [positive(parameters.amountAttoRep, 'REP withdrawal'), decodeAddress(parameters.recipient ?? parameters.owner, 'Recipient')])

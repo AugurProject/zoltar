@@ -44,16 +44,15 @@ const abi = parseAbi([
 	'function lastSettlementTimestamp() view returns (uint256)',
 	'function acceptedExposureLimitAttoEth() view returns (uint256)',
 	'function acceptedRepExposureLimitAttoRep() view returns (uint256)',
-	'function refundCreditAttoEth(address bidder) view returns (uint256)',
 	'function earlyRefundAttoEth(uint256 bidId) view returns (uint256)',
 	'function bidderBidCount(address bidder) view returns (uint256)',
 	'function bidderBidId(address bidder,uint256 index) view returns (uint256)',
 	'function bids(uint256 id) view returns (address bidder,bool settled,bool feesRemoved,uint256 lots,uint256 minimumAttoRepPerLot)',
 	'function previewBid(uint256 id) view returns ((address bidder,uint256 filledLots,uint256 usedAttoEth,uint256 principalAttoRep,uint256 refundAttoEth) fill)',
-	'function repairAuctionPositions(uint256[] bidIds) view returns ((address bidder,uint96 positionId,uint256 principal,uint256 commitment,uint48 liquidationStarted,bool claimed,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep)[] results)',
+	'function repairAuctionPositions(uint256[] bidIds) view returns ((address bidder,uint256 principal,uint256 commitment,uint48 liquidationStarted,bool claimed,uint256 earnedAttoEth,uint256 earnedAttoRep)[] results)',
 	'function unclaimedRepairAuctionBids(address owner) view returns (uint256)',
 	'function importing() view returns (bool)',
-	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
+	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,bool raiseLimitReached)',
 ])
 type AuctionReadClient = SecurityPoolReadClient & { getBalance(parameters: { address: Address; blockNumber: bigint }): Promise<bigint> }
 export type SecurityPoolAuctionBid = {
@@ -69,8 +68,8 @@ export type SecurityPoolAuctionBid = {
 	claimed: boolean
 	/** The bid's winning lots joined the bidder's own capital account, whose earnings then include theirs. */
 	materialized: boolean
-	/** A winning bid's lots; earnings accrue here only until the bid is claimed. */
-	position: { positionId: bigint; principalAttoRep: bigint; commitmentAttoEth: bigint; liquidationStarted: bigint; materialized: boolean; earnedAttoEth: bigint; earnedAttoRep: bigint } | undefined
+	/** A winning bid's lots; its liquidation clock and earnings are reported here only until the bid is claimed. */
+	position: { principalAttoRep: bigint; commitmentAttoEth: bigint; liquidationStarted: bigint; earnedAttoEth: bigint; earnedAttoRep: bigint } | undefined
 	fill: { filledLots: bigint; usedAttoEth: bigint; refundAttoEth: bigint; principalAttoRep: bigint } | undefined
 }
 
@@ -177,7 +176,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		const engine = decodeAddress(engineValue, 'Auction bidding contract')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
-		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, bidCredit, unclaimed, capitalImporting] = await Promise.all([
+		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, unclaimed, capitalImporting] = await Promise.all([
 			read(engine, 'controller'),
 			read(engine, 'initialized'),
 			read(engine, 'finalized'),
@@ -185,7 +184,6 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(engine, 'maximumAdmissibleBidAttoRepPerLot'),
 			read(engine, 'depositedAttoEth'),
 			read(engine, 'bidderBidCount', [bidder]),
-			read(engine, 'refundCreditAttoEth', [bidder]),
 			read(capitalLedger, 'unclaimedRepairAuctionBids', [bidder]),
 			read(capitalLedger, 'importing'),
 		])
@@ -210,7 +208,6 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			maximumBidAttoRepPerLot: decodeUint(maximum, 'Maximum bid REP per lot'),
 			maximumAdmissibleBidAttoRepPerLot: decodeUint(admissible, 'Highest admissible bid REP per lot'),
 			depositedAttoEth: decodeUint(deposited, 'Bid collateral'),
-			refundAttoEth: decodeUint(bidCredit, 'Bid refund'),
 			/** All of the bidder's bids in this universe still to be claimed, on any page. */
 			unclaimedBidCount: decodeUint(unclaimed, 'Unclaimed bids'),
 			capitalImporting: decodeBool(capitalImporting, 'Invalid capital state.'),
@@ -239,20 +236,22 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			const index = claimableIds.indexOf(bid.id)
 			const current = index === -1 ? undefined : ledgerPositions[index]
 			if (current === undefined) return { ...bid, claimed: false, position: undefined }
-			if (current.bidder !== bidder || current.materialized !== bid.materialized || (current.materialized && !current.claimed)) throw new Error('Auction capital position identity mismatch.')
-			if ((bid.fill?.filledLots ?? 0n) === 0n) return { ...bid, claimed: current.claimed, position: undefined }
+			// The engine removes a winning bid's fee ownership exactly when the bid is claimed into its bidder's account.
+			const winning = (bid.fill?.filledLots ?? 0n) !== 0n
+			if (current.bidder !== bidder || (winning && bid.materialized !== current.claimed)) throw new Error('Auction capital position identity mismatch.')
+			if (!winning) return { ...bid, claimed: current.claimed, position: undefined }
 			const { bidder: _, claimed, ...position } = current
 			return { ...bid, claimed, position }
 		})
 		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; raiseLimitReached: boolean } | undefined
 		if (opened && finalized) {
-			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'], 'Invalid auction response.')
+			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'raiseLimitReached'], 'Invalid auction response.')
 			clearing = {
 				attoRepPerLot: decodeUint(result[0], 'Clearing REP per lot'),
 				filledLots: decodeUint(result[1], 'Filled lots'),
 				raisedAttoEth: decodeUint(result[2], 'Raised ETH'),
 				soldAttoRep: decodeUint(result[3], 'Sold REP'),
-				raiseLimitReached: decodeBool(result[8], 'Invalid auction state.'),
+				raiseLimitReached: decodeBool(result[4], 'Invalid auction state.'),
 			}
 		}
 		return { ...terms, price, clearing, totalBidCount, bidStart: start, bids }
@@ -289,17 +288,15 @@ export type SecurityPoolAuctionSnapshot = Awaited<ReturnType<typeof loadSecurity
 function decodeRepairAuctionPositions(value: unknown, length: number) {
 	if (!Array.isArray(value) || value.length !== length) throw new Error('Invalid auction response.')
 	return value.map(item => {
-		const current = decodeFields(item, ['bidder', 'positionId', 'principal', 'commitment', 'liquidationStarted', 'claimed', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
+		const current = decodeFields(item, ['bidder', 'principal', 'commitment', 'liquidationStarted', 'claimed', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
 		return {
 			bidder: decodeAddress(current[0], 'Capital auction bidder'),
-			positionId: decodeUint(current[1], 'Bid position ID', 96),
-			principalAttoRep: decodeUint(current[2], 'Current pledged REP'),
-			commitmentAttoEth: decodeUint(current[3], 'Current commitment ETH'),
-			liquidationStarted: decodeUint(current[4], 'Liquidation start', 48),
-			claimed: decodeBool(current[5], 'Invalid auction state.'),
-			materialized: decodeBool(current[6], 'Invalid auction state.'),
-			earnedAttoEth: decodeUint(current[7], 'Earned ETH'),
-			earnedAttoRep: decodeUint(current[8], 'Earned REP'),
+			principalAttoRep: decodeUint(current[1], 'Current pledged REP'),
+			commitmentAttoEth: decodeUint(current[2], 'Current commitment ETH'),
+			liquidationStarted: decodeUint(current[3], 'Liquidation start', 48),
+			claimed: decodeBool(current[4], 'Invalid auction state.'),
+			earnedAttoEth: decodeUint(current[5], 'Earned ETH'),
+			earnedAttoRep: decodeUint(current[6], 'Earned REP'),
 		}
 	})
 }

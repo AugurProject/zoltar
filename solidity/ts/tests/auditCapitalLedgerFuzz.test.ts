@@ -625,7 +625,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 				// The harness has no wrapper; the impersonated security pool calls the ledger directly.
 				return [{ from: harness, to: ledger, data: encodeFunctionData({ abi: capitalAbi, functionName: 'synchronizeDemand', args: [op.value] }) }]
 			case 'deposit':
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'depositFor', args: [ownerAddress(op.o), op.amount] }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'deposit', args: [op.amount] }))]
 			case 'depositTarget':
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'depositAndSetHealthTarget', args: [op.amount, op.target] }))]
 			case 'withdraw':

@@ -11,7 +11,6 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			finalized: auction.finalized,
 			securityPool: auction.securityPool,
 			universeId: auction.universeId,
-			startTime: auction.startTime,
 		})),
 		// Discovery completeness does not depend on a signer; execution paths check the signer separately.
 		complete: scan.historyComplete,

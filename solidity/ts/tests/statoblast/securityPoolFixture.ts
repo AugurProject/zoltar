@@ -89,7 +89,7 @@ export function useSecurityPoolFixture(economicsOverrides: Partial<SecurityPoolE
 	const deposit = async (amount = 1_000n * unit, sender = owner(), namespace = securityPool) => {
 		const capital = await capitalFor(namespace)
 		await approveToken(sender, getRepTokenAddress(base.genesisUniverse), capital)
-		return writeContractAndWait(sender, () => sender.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [sender.account.address, amount] }))
+		return writeContractAndWait(sender, () => sender.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'deposit', args: [amount] }))
 	}
 	const authorize = async (commitment = 100n * unit, sender = owner(), namespace = securityPool) => {
 		const capital = await capitalFor(namespace)

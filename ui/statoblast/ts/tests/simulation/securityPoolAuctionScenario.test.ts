@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { quoteSecurityPoolAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { quoteSecurityPoolAuctionRefund } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
 import { loadSecurityPoolForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
@@ -46,8 +46,8 @@ void describe('security pool branch auction simulation scenario', () => {
 		const excluded = auction.bids.find(bid => bid.earlyRefundAttoEth > 0n)
 		const winning = auction.bids.find(bid => bid.earlyRefundAttoEth === 0n)
 		if (excluded === undefined || winning === undefined) throw new Error('Expected one excluded and one still-binding owner bid')
-		expect(quoteSecurityPoolAuctionRefundClaim(snapshot, excluded.id)).toMatchObject({ settles: true, bidRefundAttoEth: excluded.lots * auction.lotAttoEth, creditedAttoEth: 0n })
-		expect(() => quoteSecurityPoolAuctionRefundClaim(snapshot, winning.id)).toThrow('may still win')
+		expect(quoteSecurityPoolAuctionRefund(snapshot, excluded.id)).toBe(excluded.lots * auction.lotAttoEth)
+		expect(() => quoteSecurityPoolAuctionRefund(snapshot, winning.id)).toThrow('may still win')
 		// Every bid counts as unclaimed in the ledger; none can be claimed while bidding is open and unsettled.
 		expect(auction.unclaimedBidCount).toBe(2n)
 		expect(snapshot.claimableBidIds).toEqual([])

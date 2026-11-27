@@ -1,7 +1,7 @@
 import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import { availableHistoryExecutionReady, canonicalScanReadiness } from '../../src/runtime/scan-readiness.ts'
-import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
+import { snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,7 +10,6 @@ import { getAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { MUTATING_CONTRACT_SURFACE } from '../../src/contracts/surface.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../support/canonical-contracts.ts'
-import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { discoveryCoverageIsComplete } from '../../src/monitoring/discovery-coverage.ts'
 import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, createChaosReadPool, planningOptions, unavailableOperationCatalog } from '../../src/runtime/canonical-scan.ts'
 import { completeOperationCoverage } from '../../src/runtime/surface-coverage.ts'
@@ -21,7 +20,7 @@ import { deriveChildUniverseId } from '../support/universe.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-schema.ts'
 import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
-import { hash, snapshotFixture } from '../operations/fixture.ts'
+import { snapshotFixture } from '../operations/fixture.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
 
 test('execution waits for the retained range and discovery, without requiring the unavailable prefix', () => {
@@ -235,55 +234,6 @@ describe('canonical scan policy', () => {
 			rep: [{ balance: '9', symbol: 'REP', token: rep, universeId: '0' }],
 			weth: '7',
 		})
-	})
-
-	test('requires current refund storage continuity without requiring complete history', () => {
-		const partial = snapshot()
-		const partialAuction = partial.auctions[0]
-		if (partialAuction === undefined) throw new Error('Auction fixture missing')
-		partialAuction.pendingEthRefund = '8'
-		const options = planningOptions(settings(), 1)
-		expect(canonicalLifecyclePresence(partial, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeFalse()
-
-		const generation = hash(600)
-		const completeIndex: ChaosProtocolIndex = {
-			auctionBids: {},
-			auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 8n.toString() } },
-			chainId: partial.chainId,
-			cursor: { blockHash: partial.anchor.blockHash, blockNumber: partial.anchor.blockNumber },
-			escalationDeposits: [],
-			migrationRepSplits: [],
-			openOracle: partial.deployments.openOracle,
-			reports: [],
-			schemaVersion: 5,
-			questionForker: partial.deployments.questionForker,
-			startBlock: '0',
-			wallet: partial.wallet.address,
-			zoltar: partial.deployments.zoltar,
-		}
-		const missing = { ...completeIndex, availableStartBlock: '5', auctionRefunds: {} }
-		const observed = indexWithCurrentRefunds(partial, missing)
-		const observedGeneration = observed.auctionRefunds[auction.toLowerCase()]?.generation
-		expect(observedGeneration).toBeString()
-		expect(missing.auctionRefunds).toEqual({})
-		expect(indexWithCurrentRefunds(partial, observed).auctionRefunds).toEqual(observed.auctionRefunds)
-		expect(snapshotWithProtocolIndex(partial, observed).auctions[0]?.pendingEthRefundGeneration).toBe(observedGeneration)
-		expect(() => indexWithCurrentRefunds(partial, { ...missing, cursor: { ...missing.cursor, blockNumber: '9' } })).toThrow('snapshot anchor')
-		expect(() => indexWithCurrentRefunds(partial, { ...missing, wallet: weth })).toThrow('indexed chain and wallet')
-
-		const retained = snapshotWithProtocolIndex(partial, { ...completeIndex, availableStartBlock: '5' })
-		expect(retained.auctions[0]?.pendingEthRefundGeneration).toBe(generation)
-		expect(canonicalLifecyclePresence(retained, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeTrue()
-
-		const complete = snapshotWithProtocolIndex(partial, completeIndex)
-		expect(complete.auctions[0]?.pendingEthRefundGeneration).toBe(generation)
-		expect(canonicalLifecyclePresence(complete, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeTrue()
-
-		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: {} })).toThrow('without a tracked refund identity')
-		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 7n.toString() } } })).toThrow('does not match its indexed refund balance')
-
-		const withdrawn = snapshot()
-		expect(() => snapshotWithProtocolIndex(withdrawn, completeIndex)).toThrow('authenticated active refund episode but zero anchored pending storage')
 	})
 
 	test('projects deterministic wallet and pool-held REP migration progress into the anchored snapshot', () => {

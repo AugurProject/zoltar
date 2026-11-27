@@ -65,7 +65,6 @@ function classifyShares(snapshot: EcosystemSnapshot) {
 
 function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot, retirement: DurableRetirementState) {
 	let count = snapshot.wallet.tokens.filter(token => BigInt(token.openOracleCredit) > 1n).length + snapshot.wallet.lpTokens.filter(token => BigInt(token.balance) > 0n).length
-	count += snapshot.auctions.filter(auction => BigInt(auction.pendingEthRefund) > 0n).length
 	count += (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).length
 	if (BigInt(snapshot.wallet.openOracleEthCredit) > 1n) count += 1
 	if (retirement.policies.migrateExistingClaims) count += snapshot.universes.filter(universe => BigInt(universe.migrationBalance) > 0n).length

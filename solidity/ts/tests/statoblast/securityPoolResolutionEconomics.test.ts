@@ -101,7 +101,7 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		}
 		const base = await fixture.owner().readContract({ ...securityPool(), functionName: 'purchaseFee', args: [amount] })
 		const streams = await fixture.owner().readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'feeStreams' })
-		const outstanding = async () => (await fixture.owner().readContract({ abi: streamsArtifact.abi, address: streams, functionName: 'fundedOutstanding' }))[0]
+		const outstanding = async () => await fixture.owner().readContract({ abi: streamsArtifact.abi, address: streams, functionName: 'outstandingEth' })
 		const paidFor = async (expected: bigint, drift = 0n) => {
 			const buyer = fixture.other()
 			const before = await collateralBalance(buyer, fixture.securityPool, buyer.account.address)

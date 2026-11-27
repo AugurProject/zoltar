@@ -11,7 +11,7 @@ import { capitalClient } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
 	'function approve(address spender,uint256 amount)',
-	'function depositFor(address owner,uint256 amount)',
+	'function deposit(uint256 amount)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setCommitment(uint256 commitment)',
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
@@ -68,7 +68,7 @@ test('approval and deposit remain separate transactions with exact capital-ledge
 	const deposit = requests[1]
 	if (deposit === undefined) throw new Error('Missing deposit')
 	expect(deposit.to).toBe(capital)
-	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 5n * unit] })
+	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'deposit', args: [5n * unit] })
 	expect(requests).toHaveLength(2)
 })
 
@@ -86,7 +86,7 @@ test('an auction winner with unclaimed bids approves and deposits REP directly i
 	const deposit = requests[1]
 	if (deposit === undefined) throw new Error('Missing deposit')
 	expect(deposit).toMatchObject({ account: owner, to: capital })
-	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 5n * unit] })
+	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'deposit', args: [5n * unit] })
 })
 test('stale prices block live-principal withdrawal and authorization while preserving earned fees', async () => {
 	const { hook, requests } = await setup(capitalSnapshot({ priceValid: false, withdrawableAttoRep: 0n }))

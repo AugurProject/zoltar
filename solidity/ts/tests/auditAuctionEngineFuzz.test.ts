@@ -48,10 +48,6 @@ type ModelClearing = {
 	filledLots: bigint
 	raisedAttoEth: bigint
 	soldAttoRep: bigint
-	marginalMinimumAttoRepPerLot: bigint
-	marginalFillLots: bigint
-	marginalDemandLots: bigint
-	fullBeforeLots: bigint
 	raiseLimitReached: boolean
 	fills: Map<bigint, bigint>
 }
@@ -79,12 +75,9 @@ function modelClearing(config: Config, bids: readonly ModelBid[], maximum: bigin
 	}
 	const fills = new Map<bigint, bigint>()
 	for (const bid of bids) fills.set(bid.id, 0n)
-	if (filled === 0n) return { attoRepPerLot: 0n, filledLots: 0n, raisedAttoEth: 0n, soldAttoRep: 0n, marginalMinimumAttoRepPerLot: 0n, marginalFillLots: 0n, marginalDemandLots: 0n, fullBeforeLots: 0n, raiseLimitReached: false, fills }
+	if (filled === 0n) return { attoRepPerLot: 0n, filledLots: 0n, raisedAttoEth: 0n, soldAttoRep: 0n, raiseLimitReached: false, fills }
 	const marginal = lotPrice[Number(filled) - 1]
 	if (marginal === undefined) throw new Error('Model marginal missing')
-	const fullBefore = BigInt(lotPrice.filter(price => price < marginal).length)
-	const demand = BigInt(lotPrice.filter(price => price === marginal).length)
-	const marginalFill = filled - fullBefore
 	const reached = filled === maximum
 	const unrounded = maxOf(marginal, floor)
 	const attoRepPerLot = unrounded - (unrounded % config.grid)
@@ -95,7 +88,7 @@ function modelClearing(config: Config, bids: readonly ModelBid[], maximum: bigin
 		fills.set(bid.id, minOf(bid.lots, maxOf(filled - cumulative, 0n)))
 		cumulative += bid.lots
 	}
-	return { attoRepPerLot, filledLots: filled, raisedAttoEth: filled * config.lot, soldAttoRep: sold, marginalMinimumAttoRepPerLot: marginal, marginalFillLots: marginalFill, marginalDemandLots: demand, fullBeforeLots: fullBefore, raiseLimitReached: reached, fills }
+	return { attoRepPerLot, filledLots: filled, raisedAttoEth: filled * config.lot, soldAttoRep: sold, raiseLimitReached: reached, fills }
 }
 
 // The specification's properties, checked on whatever result is supplied (model or chain).
@@ -103,6 +96,16 @@ function specViolations(config: Config, bids: readonly ModelBid[], maximum: bigi
 	const problems: string[] = []
 	const order = priceOrder(bids)
 	const total = order.reduce((sum, bid) => sum + bid.lots, 0n)
+	// The limit of the last winning lot; bids below it fill fully and bids above it not at all.
+	let marginal = 0n
+	let covered = 0n
+	for (const bid of order) {
+		covered += bid.lots
+		if (covered >= result.filledLots) {
+			marginal = bid.min
+			break
+		}
+	}
 	if (result.filledLots > maximum) problems.push('fills more than the raise limit')
 	if (result.filledLots > total) problems.push('fills more than demand')
 	if (result.attoRepPerLot % config.grid !== 0n) problems.push('clearing REP per lot is off the grid')
@@ -137,8 +140,8 @@ function specViolations(config: Config, bids: readonly ModelBid[], maximum: bigi
 		sum += fill
 		if (fill > bid.lots) problems.push(`bid ${bid.id} fills more than it bid`)
 		if (fill > 0n && bid.min > result.attoRepPerLot) problems.push(`winner ${bid.id} receives less than its minimum`)
-		if (bid.min < result.marginalMinimumAttoRepPerLot && fill !== bid.lots && result.filledLots !== 0n) problems.push(`better bid ${bid.id} is not fully filled`)
-		if (bid.min > result.marginalMinimumAttoRepPerLot && fill !== 0n) problems.push(`worse bid ${bid.id} fills`)
+		if (bid.min < marginal && fill !== bid.lots && result.filledLots !== 0n) problems.push(`better bid ${bid.id} is not fully filled`)
+		if (bid.min > marginal && fill !== 0n) problems.push(`worse bid ${bid.id} fills`)
 		// Time priority: a tied bid fills exactly the part of its lots inside the winning prefix.
 		if (fill !== minOf(bid.lots, maxOf(result.filledLots - positionBefore, 0n))) problems.push(`tied bid ${bid.id} breaks price-time priority`)
 		positionBefore += bid.lots
@@ -230,16 +233,16 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		fees: (id: bigint, eth: bigint, rep: bigint) => withWords(selector.fees, id, eth, rep),
 	}
 
-	type Engine = { address: Address; config: Config; bids: ModelBid[]; everRefundable: Set<bigint>; settledEarly: Set<bigint>; withdrawn: Map<Address, bigint>; floors: bigint[] }
+	type Engine = { address: Address; config: Config; bids: ModelBid[]; everRefundable: Set<bigint>; settledEarly: Set<bigint>; refunded: Map<Address, bigint>; floors: bigint[] }
 	const describeEngine = (engine: Engine) => `grid=${engine.config.grid} lot=${engine.config.lot} target=${engine.config.target} inventory=${engine.config.inventory} bids=[${engine.bids.map(bid => `#${bid.id}:${bid.lots}@${bid.min}`).join(' ')}] earlySettled=[${[...engine.settledEarly].join(',')}]`
 
 	const createEngine = async (config: Config): Promise<Engine> => {
 		const address = await deploy(encodeDeployData({ abi: engineArtifact.abi, bytecode: `0x${engineArtifact.evm.bytecode.object}`, args: [controller, token] }))
-		await send(address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [0n, CLOSE, config.lot, config.target, config.inventory, config.grid, controller] }))
+		await send(address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [CLOSE, config.lot, config.target, config.inventory, config.grid] }))
 		const floors: bigint[] = []
 		const steps = config.inventory / config.grid + 2n
 		if (steps <= 44n) for (let step = 0n; step <= steps; step++) floors.push(step * config.grid)
-		return { address, config, bids: [], everRefundable: new Set(), settledEarly: new Set(), withdrawn: new Map(), floors }
+		return { address, config, bids: [], everRefundable: new Set(), settledEarly: new Set(), refunded: new Map(), floors }
 	}
 	const floorsFor = (engine: Engine) => {
 		if (engine.floors.length !== 0) return engine.floors
@@ -268,17 +271,13 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		combos.forEach((combo, index) => {
 			const outcome = results[index]
 			if (outcome === undefined || !outcome.success) throw new Error(`previewFinalization(${combo.maximum}, ${combo.floor}) reverted: ${describeEngine(engine)}`)
-			const words = wordsOf(outcome.returnData, 9)
+			const words = wordsOf(outcome.returnData, 5)
 			const actual = {
 				attoRepPerLot: wordAt(words, 0),
 				filledLots: wordAt(words, 1),
 				raisedAttoEth: wordAt(words, 2),
 				soldAttoRep: wordAt(words, 3),
-				marginalMinimumAttoRepPerLot: wordAt(words, 4),
-				marginalFillLots: wordAt(words, 5),
-				marginalDemandLots: wordAt(words, 6),
-				fullBeforeLots: wordAt(words, 7),
-				raiseLimitReached: wordAt(words, 8) === 1n,
+				raiseLimitReached: wordAt(words, 4) === 1n,
 			}
 			const expected = modelClearing(config, bids, combo.maximum, combo.floor)
 			const context = () => `previewFinalization(max=${combo.maximum}, floor=${combo.floor}) ${describeEngine(engine)}`
@@ -290,10 +289,6 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 				actual.filledLots !== expectedFields.filledLots ||
 				actual.raisedAttoEth !== expectedFields.raisedAttoEth ||
 				actual.soldAttoRep !== expectedFields.soldAttoRep ||
-				actual.marginalMinimumAttoRepPerLot !== expectedFields.marginalMinimumAttoRepPerLot ||
-				actual.marginalFillLots !== expectedFields.marginalFillLots ||
-				actual.marginalDemandLots !== expectedFields.marginalDemandLots ||
-				actual.fullBeforeLots !== expectedFields.fullBeforeLots ||
 				actual.raiseLimitReached !== expectedFields.raiseLimitReached
 			)
 				expect({ context: context(), ...actual }).toEqual({ context: context(), ...expectedFields })
@@ -337,18 +332,27 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 
 	const balanceOf = (owner: Address) => client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [owner] })
 
-	const settleEarly = async (engine: Engine, bid: ModelBid, withdraw: boolean) => {
-		await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [bid.id] }))
-		engine.settledEarly.add(bid.id)
-		if (withdraw) await withdrawFor(engine, bid.bidder)
-	}
-	const withdrawFor = async (engine: Engine, bidder: Address) => {
-		const credit = await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'refundCreditAttoEth', args: [bidder] })
+	// Pays exactly `amount` to a random recipient and settles the bid for good.
+	const refund = async (engine: Engine, bid: ModelBid, amount: bigint, context: string) => {
 		const recipient = addressString(0xc000n + BigInt(below(4)))
 		const before = await balanceOf(recipient)
-		await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRefundFor', args: [bidder, recipient] }))
-		if ((await balanceOf(recipient)) - before !== credit) throw new Error('refund withdrawal paid a different amount than the credit')
-		engine.withdrawn.set(bidder, (engine.withdrawn.get(bidder) ?? 0n) + credit)
+		await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'refundBid', args: [bid.id, bid.bidder, recipient] }))
+		if ((await balanceOf(recipient)) - before !== amount) throw new Error(`refundBid(${bid.id}) paid a different amount than ${amount}: ${context}`)
+		engine.refunded.set(bid.bidder, (engine.refunded.get(bid.bidder) ?? 0n) + amount)
+		const again = await engineReason(engine, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'refundBid', args: [bid.id, bid.bidder, recipient] }))
+		if (!again.includes('Auction bid has already been settled')) throw new Error(`refundBid(${bid.id}) paid twice or failed differently: "${again.slice(0, 120)}": ${context}`)
+	}
+	const engineReason = async (engine: Engine, data: Hex) => {
+		try {
+			await client.call({ account: controller, to: engine.address, data })
+		} catch (error) {
+			return error instanceof Error ? error.message : String(error)
+		}
+		return 'no revert'
+	}
+	const settleEarly = async (engine: Engine, bid: ModelBid) => {
+		await refund(engine, bid, bid.lots * engine.config.lot, describeEngine(engine))
+		engine.settledEarly.add(bid.id)
 	}
 
 	// Finalize with one (raise limit, floor) pair and compare everything observable.
@@ -358,10 +362,13 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		const expected = modelClearing(config, bids, maximum, floor)
 		const { fills, ...expectedFields } = expected
 		clock = maxOf(clock, CLOSE)
+		const controllerBefore = await balanceOf(controller)
 		await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'finalize', args: [maximum, floor] }))
+		// Finalization pays the raised collateral straight to the controller.
+		if ((await balanceOf(controller)) - controllerBefore !== expected.raisedAttoEth) throw new Error(`finalize paid the controller a different amount than ${expected.raisedAttoEth}: ${context}`)
 		const stored = await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'clearing' })
-		const [attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, marginalMinimumAttoRepPerLot, marginalFillLots, marginalDemandLots, fullBeforeLots, raiseLimitReached] = stored
-		expect({ context, attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, marginalMinimumAttoRepPerLot, marginalFillLots, marginalDemandLots, fullBeforeLots, raiseLimitReached }).toEqual({ context, ...expectedFields })
+		const [attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, raiseLimitReached] = stored
+		expect({ context, attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, raiseLimitReached }).toEqual({ context, ...expectedFields })
 		expect(await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'remainingFeeLots' })).toBe(expected.filledLots)
 
 		const order = priceOrder(bids)
@@ -406,7 +413,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		await checkCursors()
 		if (!deep) return
 
-		// Random interleaving of settlement, proceeds withdrawal and fee detachment.
+		// Random interleaving of refunds and fee detachment.
 		const winners = order.filter(bid => (fills.get(bid.id) ?? 0n) > 0n)
 		const entitlementEth = new Map<bigint, Fraction>()
 		const entitlementRep = new Map<bigint, Fraction>()
@@ -420,8 +427,8 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		let paidRep = 0n
 		const depth = Math.ceil(Math.log2(bids.length + 1)) + 2
 		const amount = () => pick([0n, 0n, 1n, BigInt(below(50)), BigInt(below(1_000_000)), BigInt(Math.floor(random() * 2 ** 50)) * 10n ** BigInt(below(18))])
-		type Step = { kind: 'settle'; bid: ModelBid } | { kind: 'raised' } | { kind: 'fees'; bid: ModelBid }
-		const steps: Step[] = [...bids.filter(bid => !engine.settledEarly.has(bid.id)).map((bid): Step => ({ kind: 'settle', bid })), { kind: 'raised' }, ...winners.map((bid): Step => ({ kind: 'fees', bid }))]
+		type Step = { kind: 'settle'; bid: ModelBid } | { kind: 'fees'; bid: ModelBid }
+		const steps: Step[] = [...bids.filter(bid => !engine.settledEarly.has(bid.id)).map((bid): Step => ({ kind: 'settle', bid })), ...winners.map((bid): Step => ({ kind: 'fees', bid }))]
 		for (let index = steps.length - 1; index > 0; index--) {
 			const other = below(index + 1)
 			const first = steps[index]
@@ -454,31 +461,13 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		if (initial.eth !== 0n || initial.rep !== 0n) throw new Error(`initial fee ownership ${initial.rep} != zero: ${context}`)
 		for (const step of steps) {
 			if (step.kind === 'settle') {
-				const refund = (step.bid.lots - (fills.get(step.bid.id) ?? 0n)) * config.lot
-				const credit = await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'refundCreditAttoEth', args: [step.bid.bidder] })
-				const combined = encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleAndWithdrawRefund', args: [step.bid.id, step.bid.bidder, addressString(0xc004n)] })
-				if (below(3) !== 0) await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [step.bid.id] }))
-				else if (credit + refund === 0n) {
-					// Nothing to pay: the combined call reverts and leaves the bid unsettled.
-					let reason = ''
-					try {
-						await client.call({ account: controller, to: engine.address, data: combined })
-					} catch (error) {
-						reason = error instanceof Error ? error.message : String(error)
-					}
-					if (!reason.includes('Auction has no refund credit for this bidder')) throw new Error(`settleAndWithdrawRefund with nothing owed: "${reason.slice(0, 120)}": ${context}`)
-					await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [step.bid.id] }))
-				} else {
-					const before = await balanceOf(addressString(0xc004n))
-					await send(engine.address, combined)
-					if ((await balanceOf(addressString(0xc004n))) - before !== credit + refund) throw new Error(`settleAndWithdrawRefund paid a different amount than credit ${credit} + refund ${refund}: ${context}`)
-					engine.withdrawn.set(step.bid.bidder, (engine.withdrawn.get(step.bid.bidder) ?? 0n) + credit + refund)
+				const owed = (step.bid.lots - (fills.get(step.bid.id) ?? 0n)) * config.lot
+				if (owed !== 0n) await refund(engine, step.bid, owed, context)
+				else {
+					// A fully winning bid has nothing to refund and stays unsettled.
+					const reason = await engineReason(engine, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'refundBid', args: [step.bid.id, step.bid.bidder, addressString(0xc004n)] }))
+					if (!reason.includes('Auction bid has no refund')) throw new Error(`refundBid with nothing owed: "${reason.slice(0, 120)}": ${context}`)
 				}
-			} else if (step.kind === 'raised') {
-				const recipient = addressString(0xd000n)
-				const before = await balanceOf(recipient)
-				await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRaised', args: [recipient] }))
-				if ((await balanceOf(recipient)) - before !== expected.raisedAttoEth) throw new Error(`withdrawRaised paid a different amount: ${context}`)
 			} else {
 				const eth = amount()
 				const rep = amount()
@@ -513,26 +502,11 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		}
 		if (paidEth !== addedEthTotal || paidRep !== addedRepTotal) throw new Error(`fees left behind after the last removal: ${context}`)
 		expect(await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'remainingFeeLots' })).toBe(0n)
-		// Refund credits equal each bidder's unfilled lots; everything leaves the engine.
+		// Refunds equal each bidder's unfilled lots; everything leaves the engine.
 		const bidders = [...new Set(bids.map(bid => bid.bidder))]
 		for (const bidder of bidders) {
 			const owed = bids.filter(bid => bid.bidder === bidder).reduce((sum, bid) => sum + (bid.lots - (fills.get(bid.id) ?? 0n)) * config.lot, 0n)
-			const credit = await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'refundCreditAttoEth', args: [bidder] })
-			if (credit + (engine.withdrawn.get(bidder) ?? 0n) !== owed) throw new Error(`refund credit of ${bidder} is ${credit} (+${engine.withdrawn.get(bidder) ?? 0n} withdrawn), owed ${owed}: ${context}`)
-			if (credit === 0n) {
-				let reason = ''
-				try {
-					await client.call({ account: bidder, to: engine.address, data: encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRefund', args: [bidder] }) })
-				} catch (error) {
-					reason = error instanceof Error ? error.message : String(error)
-				}
-				if (!reason.includes('Auction has no refund credit for this bidder')) throw new Error(`withdrawRefund without credit: "${reason.slice(0, 120)}": ${context}`)
-			} else if (below(2) === 0) await withdrawFor(engine, bidder)
-			else {
-				const before = await balanceOf(addressString(0xc005n))
-				await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRefund', args: [addressString(0xc005n)] }), bidder)
-				if ((await balanceOf(addressString(0xc005n))) - before !== credit) throw new Error(`withdrawRefund paid a different amount than the credit: ${context}`)
-			}
+			if ((engine.refunded.get(bidder) ?? 0n) !== owed) throw new Error(`refunds of ${bidder} are ${engine.refunded.get(bidder) ?? 0n}, owed ${owed}: ${context}`)
 		}
 		const deposited = await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'depositedAttoEth' })
 		if (deposited !== bids.reduce((sum, bid) => sum + bid.lots * config.lot, 0n)) throw new Error(`depositedAttoEth differs from accepted bids: ${context}`)
@@ -594,13 +568,17 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'finalize', args: [3n, 0n] }), stranger)).toContain('Only the auction controller')
 		expect(await reasonOf(engineCall.previewBid(1n))).toContain('has not been finalized')
 		expect(await reasonOf(engineCall.next(0n))).toContain('has not been finalized')
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [1n] }))).toContain('Auction bid does not exist')
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRaised', args: [controller] }))).toContain('not withdrawable')
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'allocateAndRemoveFees', args: [1n, 0n, 0n] }), stranger)).toContain('Only the auction fee allocator')
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [0n, CLOSE, 1n, 1n, 1n, 1n, controller] }))).toContain('already started')
+		const bidder = bidderPool[0] ?? controller
+		const refundOf = (id: bigint, owner: Address, recipient: Address = bidder) => encodeFunctionData({ abi: engineArtifact.abi, functionName: 'refundBid', args: [id, owner, recipient] })
+		expect(await reasonOf(refundOf(1n, bidder))).toContain('Auction bid belongs to another bidder')
+		expect(await reasonOf(refundOf(1n, bidder), stranger)).toContain('Only the auction controller')
+		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'allocateAndRemoveFees', args: [1n, 0n, 0n] }), stranger)).toContain('Only the auction controller')
+		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [CLOSE, 1n, 1n, 1n, 1n] }))).toContain('already started')
 		await send(engine.address, bid(1n, 14n))
-		engine.bids.push({ id: 1n, lots: 1n, min: 14n, bidder: bidderPool[0] ?? controller })
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [1n] }))).toContain('Bid may still win')
+		engine.bids.push({ id: 1n, lots: 1n, min: 14n, bidder })
+		expect(await reasonOf(refundOf(1n, bidder))).toContain('Bid may still win')
+		expect(await reasonOf(refundOf(1n, stranger))).toContain('Auction bid belongs to another bidder')
+		expect(await reasonOf(refundOf(1n, bidder, addressString(0n)))).toContain('Auction refund recipient is required')
 		await finalizeAndCheck(engine, 3n, 0n, false)
 		expect(await reasonOf(bid(1n, 14n))).toContain('not accepting bids')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'finalize', args: [3n, 0n] }))).toContain('cannot be finalized')
@@ -611,7 +589,6 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		const empty = await createEngine({ grid: 21n, lot: 10n ** 18n, target: 8n, inventory: 21n * 1000n })
 		await checkOpenState(empty)
 		await finalizeAndCheck(empty, 8n, 42n, true)
-		expect(await client.readContract({ abi: engineArtifact.abi, address: empty.address, functionName: 'raisedWithdrawn' })).toBe(true)
 	})
 
 	test('exhaustive small configurations', async () => {
@@ -676,16 +653,16 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 				for (const bid of engine.bids) {
 					if (engine.settledEarly.has(bid.id) || !cannotWin(config, engine.bids, bid)) continue
 					engine.everRefundable.add(bid.id)
-					if (below(2) === 0) await settleEarly(engine, bid, below(2) === 0)
+					if (below(2) === 0) await settleEarly(engine, bid)
 				}
 			}
 			if (engine.bids.length === 0) continue
 			for (const variant of variants(engine, large ? 2 : 3)) {
 				const saved = await snapshot()
-				const withdrawn = new Map(engine.withdrawn)
+				const refunded = new Map(engine.refunded)
 				await finalizeAndCheck(engine, variant.maximum, variant.floor, true)
 				await revert(saved)
-				engine.withdrawn = withdrawn
+				engine.refunded = refunded
 			}
 		}
 	})

@@ -101,7 +101,7 @@ describe('event-only replay', () => {
 		const auction = '0x1111111111111111111111111111111111111111'
 		const bidder = '0x2222222222222222222222222222222222222222'
 		const logs = [
-			createReplayLog({ emitter: auction, logIndex: 0, eventName: 'RepairAuctionStarted', args: { opensAt: 10n, closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n } }),
+			createReplayLog({ emitter: auction, logIndex: 0, eventName: 'RepairAuctionStarted', args: { closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n } }),
 			createReplayLog({ emitter: auction, logIndex: 1, eventName: 'BidSubmitted', args: { bidId: 1n, bidder, lots: 4n, minimumAttoRepPerLot: 20n } }),
 			createReplayLog({ emitter: auction, logIndex: 2, eventName: 'RepairAuctionFinalized', args: { attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n } }),
 			createReplayLog({ emitter: auction, logIndex: 3, eventName: 'BidSettled', args: { bidId: 1n, bidder, filledLots: 3n, refundAttoEth: 5n } }),
@@ -112,7 +112,7 @@ describe('event-only replay', () => {
 			expect(Object.keys(log.args).sort()).toEqual(event.inputs.map(input => input.name).sort())
 		}
 		const replayed = replayZoltarEvents(logs.toReversed())
-		expect(replayed.auctions.get(auction)).toEqual({ opensAt: 10n, closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n, attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n })
+		expect(replayed.auctions.get(auction)).toEqual({ closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n, attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n })
 		expect(replayed.auctionBids.get(auction)?.get('1')).toEqual({ bidder, bidId: 1n, lots: 4n, minimumAttoRepPerLot: 20n, filledLots: 3n, refundAttoEth: 5n })
 		expect(() => replayZoltarEvents(logs.slice(3))).toThrow('BidSettled references unknown bid')
 	})
@@ -929,7 +929,7 @@ describe('event-only replay', () => {
 				emitter: auction,
 				eventName: 'RepairAuctionStarted',
 				logIndex: 10,
-				args: { opensAt: 20n, closesAt: 30n, lotAttoEth: 5n, targetLots: 1n, inventoryAttoRep: 8n, maximumAttoRepPerLot: 8n },
+				args: { closesAt: 30n, lotAttoEth: 5n, targetLots: 1n, inventoryAttoRep: 8n, maximumAttoRepPerLot: 8n },
 			}),
 			createReplayLog({
 				emitter: auction,

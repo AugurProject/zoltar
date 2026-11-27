@@ -1249,7 +1249,7 @@
 						<summary><code>AUCTION-REFUNDS</code><span class="invariant-title">Bid and refund ownership</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Early refund eligibility must be proven by the auction’s irreversible losing condition. Refund credits belong to the bidder and are withdrawn independently of winner activation. The auction cannot require an unbounded scan of losing bids before honest winners can act.</div>
+							<div class="invariant-property">Early refund eligibility must be proven by the auction’s irreversible losing condition. Only the bidder can take back a bid’s unused collateral, independently of winner activation. The auction cannot require an unbounded scan of losing bids before honest winners can act.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

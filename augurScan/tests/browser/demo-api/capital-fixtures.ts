@@ -183,7 +183,7 @@ export const demoCapitalDetail = (ledger: string, owner: string, blockNumber: st
 			items: [
 				...demoLiquidations(blockNumber).filter(item => item.source_owner === position.owner_address || item.receiver_owner === position.owner_address || item.event_data['sponsor'] === position.owner_address),
 				event('CommitmentAuthorized', 1, { owner: position.owner_address, positionId: position.read_result['positionId'], rep: rep(12_650n), commitment: usdcUnits(100n), targetHealthFactorBps: '12000' }),
-				event('PrincipalDeposited', 0, { payer: position.owner_address, owner: position.owner_address, amountAttoRep: rep(12_650n) }),
+				event('PrincipalDeposited', 0, { owner: position.owner_address, amountAttoRep: rep(12_650n) }),
 			],
 			limit: 100,
 			hasMore: false,

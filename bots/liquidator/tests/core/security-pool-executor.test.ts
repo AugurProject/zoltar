@@ -14,7 +14,7 @@ import type { submitCall } from '../../src/execution/submit-call.ts'
 import { securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
 
 const abi = [
-	parseAbiItem('function depositFor(address owner,uint256 amount)'),
+	parseAbiItem('function deposit(uint256 amount)'),
 	parseAbiItem('function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)'),
 ] as const
 const confirmed: Hex = `0x${'1'.repeat(64)}`
@@ -110,7 +110,7 @@ test('security pool lifecycle needs only REP approval, deposit and bounded acqui
 	await fixtureValue.run()
 	const second = fixtureValue.calls[1]
 	if (second === undefined) throw new Error('Missing deposit')
-	expect(decodeFunctionData({ abi, data: second.data })).toMatchObject({ functionName: 'depositFor', args: [fixtureValue.observation.snapshot.owner, 58_500_000_000_000_000_000n] })
+	expect(decodeFunctionData({ abi, data: second.data })).toMatchObject({ functionName: 'deposit', args: [58_500_000_000_000_000_000n] })
 	fixtureValue.observation.snapshot.ownerPrincipalAttoRep = 58_500_000_000_000_000_000n
 	fixtureValue.observation.snapshot.ownerAccount.freeAttoRep = 58_500_000_000_000_000_000n
 	await fixtureValue.run()

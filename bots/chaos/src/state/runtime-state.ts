@@ -10,7 +10,7 @@ export type WalletBalanceState = {
 
 export type RuntimeTopologySummary = {
 	anchor: { blockNumber: bigint; timestamp: bigint }
-	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; securityPool: string; universeId: string; startTime: string }[]
+	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; securityPool: string; universeId: string }[]
 	complete: boolean
 	pairs: { address: string; feeBps: number; pool: string; status: number; universeId: string }[]
 	pools: {

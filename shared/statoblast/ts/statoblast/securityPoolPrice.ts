@@ -240,7 +240,7 @@ export function buildSecurityPoolPriceOperationsRequest(snapshot: SecurityPoolPr
 	if (batch.deadline <= snapshot.timestamp || batch.minimumPrice > batch.maximumPrice || batch.maximumPrice === 0n || batch.operations.length === 0) throw new Error('Invalid report operation batch.')
 	const supportedSelectors = new Set<string>(
 		parseAbi([
-			'function depositFor(address owner,uint256 amount)',
+			'function deposit(uint256 amount)',
 			'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
 			'function withdrawPrincipal(uint256 amount,address recipient)',
 			'function setHealthTarget(uint256 targetHealthFactorBps)',

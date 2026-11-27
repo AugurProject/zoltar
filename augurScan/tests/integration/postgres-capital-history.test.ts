@@ -43,7 +43,7 @@ postgresTest('capital views respect the historical boundary, surface failed ledg
 		await connection`INSERT INTO networks (chain_id, id, name, explorer_base_url, start_block, indexed_block, indexed_hash, indexed_timestamp) VALUES (${chainId}, 'test', 'Test', '', 0, 6, ${blockHash(6)}, ${new Date(Date.UTC(2026, 0, 6))})`
 		// The ledger was discovered at block 3.
 		await connection`INSERT INTO contracts (chain_id, address, label, kind, provenance, discovery_block, canonical) VALUES (${chainId}, ${lower(ledger)}, 'ledger', 'securityPoolCapitalLedger', 'test', 3, true)`
-		for (const item of [event(4, 0, 'PrincipalDeposited', { payer: alice, owner: alice, amountAttoRep: '500' }), event(5, 0, 'CommitmentAuthorized', { owner: alice, positionId: '1', rep: '500', commitment: '100', targetHealthFactorBps: '12000' })]) await storeLogProjections(connection, chainId, item)
+		for (const item of [event(4, 0, 'PrincipalDeposited', { owner: alice, amountAttoRep: '500' }), event(5, 0, 'CommitmentAuthorized', { owner: alice, positionId: '1', rep: '500', commitment: '100', targetHealthFactorBps: '12000' })]) await storeLogProjections(connection, chainId, item)
 		const snapshot = async (entityType: string, identity: string, blockNumber: number, readResult: Record<string, unknown> | undefined) =>
 			await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp, source_method, read_status, read_result, read_failure_reason, canonical)
 				VALUES (${chainId}, ${entityType}, ${identity}, ${blockNumber}, ${blockHash(blockNumber)}, ${new Date(Date.UTC(2026, 0, blockNumber))}, ${`augurscan.${entityType}-state.v1`},

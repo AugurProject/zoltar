@@ -217,8 +217,6 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 				finalized: row['final_data'] !== null,
 				...auctionStartedWindow(jsonRecord(row['start_data'])),
 				indexedTimestamp: String(asOf['blockTimestamp'] ?? ''),
-				bidCount: Number(row['bid_count'] ?? 0),
-				settlementCount: Number(row['settlement_count'] ?? 0),
 			}),
 		}
 	})

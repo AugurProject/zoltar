@@ -104,7 +104,7 @@ export const capitalEventPresentation = (item: Readonly<Record<string, unknown>>
 	const collateral = collateralUnit(item)
 	const commitment = (value: unknown) => amount(value, collateral.decimals, collateral.symbol)
 	const summaries: Readonly<Record<string, () => string>> = {
-		PrincipalDeposited: () => `${amount(data['amountAttoRep'], 18, 'REP')} from ${account(data['payer']) ?? 'unknown payer'}`,
+		PrincipalDeposited: () => amount(data['amountAttoRep'], 18, 'REP'),
 		PrincipalWithdrawn: () => `${amount(data['amountAttoRep'], 18, 'REP')} to ${account(data['recipient']) ?? 'unknown recipient'}`,
 		CommitmentAuthorized: () => `position ${integer(data['positionId']) ?? '—'} · ${amount(data['rep'], 18, 'REP')} backing ${commitment(data['commitment'])} · target health ${capitalHealthText(data['targetHealthFactorBps'])}`,
 		EarningsClaimed: () => `${commitment(data['ethAmount'])} · ${amount(data['repAmount'], 18, 'REP')}`,

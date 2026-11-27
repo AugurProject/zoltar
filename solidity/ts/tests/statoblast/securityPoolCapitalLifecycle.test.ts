@@ -21,7 +21,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			'function setHealthTarget(uint256 targetHealthFactorBps)',
 			'function recordSettlementRepair(uint256 demand)',
 			'function beginForkImport()',
-			'function authorize(uint256 commitment,uint256 reportId,bool useReport,uint256 minimumCommitment)',
+			'function authorize(uint256 commitment,uint256 reportId,bool useReport)',
 			'function importChoice(address owner,(uint256 rep,uint256 commitment,uint96 batch,uint256 remainingCommitment,uint64 retirementOrder) position,uint256 target)',
 		])
 		const ownerUpdates = [encodeFunctionData({ abi: delegateAbi, functionName: 'setHealthTarget', args: [10_000n] }), encodeFunctionData({ abi: delegateAbi, functionName: 'recordSettlementRepair', args: [0n] })]
@@ -29,7 +29,7 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 			...ownerUpdates,
 			encodeFunctionData({ abi: delegateAbi, functionName: 'acceptPrice', args: [fixture.harness.address, E, 1_000_000] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'beginForkImport' }),
-			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false, E / 1_000n] }),
+			encodeFunctionData({ abi: delegateAbi, functionName: 'authorize', args: [E, 0n, false] }),
 			encodeFunctionData({ abi: delegateAbi, functionName: 'importChoice', args: [sender.account.address, { rep: 2n * E, commitment: E, batch: 0n, remainingCommitment: 0n, retirementOrder: 0n }, 10_000n] }),
 		])
 			await expect(sender.call({ to: delegate, data })).rejects.toThrow('Only capital delegatecall')
@@ -42,11 +42,11 @@ describe('Statoblast: composed capital economics and fork intent', () => {
 		const forwardingRuntime = concatHex(['0x363d3d373d3d3d363d73', delegate, '0x5af43d82803e903d91602b57fd5bf3'])
 		await fixture.getAnvilWindowEthereum().addStateOverrides({ [foreign]: { code: hexToBytes(forwardingRuntime) } })
 		const owner = sender.account.address
-		const before = await sender.readContract({ ...fixture.capital, functionName: 'storedOwnerAccount', args: [owner] })
+		const before = await sender.readContract({ ...fixture.capital, functionName: 'ownerAccount', args: [owner] })
 		const setTarget = ownerUpdates[0]
 		if (setTarget === undefined) throw new Error('Missing health target call')
 		await writeContractAndWait(sender, () => sender.sendTransaction({ to: foreign, data: setTarget }))
-		expect(await sender.readContract({ ...fixture.capital, functionName: 'storedOwnerAccount', args: [owner] })).toEqual(before)
+		expect(await sender.readContract({ ...fixture.capital, functionName: 'ownerAccount', args: [owner] })).toEqual(before)
 	})
 	test('fork backing release leaves free principal and already retired cash separately withdrawable', async () => {
 		const sender = fixture.client()

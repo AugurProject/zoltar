@@ -79,7 +79,7 @@ describe('Statoblast: fixed-horizon dual-token capital fee streams', () => {
 		await getAnvilWindowEthereum().setTime(200n)
 		await release(200n)
 		expect(await released()).toEqual([1315n, 2615n])
-		expect([...(await client.readContract({ abi: artifact.abi, address, functionName: 'fundedOutstanding' }))]).toEqual([0n, 0n])
+		expect([await client.readContract({ abi: artifact.abi, address, functionName: 'outstandingEth' }), await client.readContract({ abi: artifact.abi, address, functionName: 'outstandingRep' })]).toEqual([0n, 0n])
 		expect([...(await preview(300n))]).toEqual([0n, 0n])
 	})
 

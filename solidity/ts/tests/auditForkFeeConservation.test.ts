@@ -75,8 +75,7 @@ describe('audit: fee conservation at the fork instant', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings', args: [owner.account.address] }))
 		expect(await cash(engine)).toBe(totals[0])
 		expect(await cash(fixture.securityPool)).toBe(0n)
-		const outstandingLater = await owner.readContract({ ...streams, functionName: 'fundedOutstanding' })
 		// Vesting purchase fees are fully released (credited or burned) once their duration has passed.
-		expect(outstandingLater[0]).toBe(0n)
+		expect(await owner.readContract({ ...streams, functionName: 'outstandingEth' })).toBe(0n)
 	})
 })

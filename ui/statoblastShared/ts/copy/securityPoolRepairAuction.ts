@@ -41,23 +41,11 @@ export const earnedRep = 'Unclaimed REP fees'
 export const funded = 'Winning lots'
 export const noFill = 'No winning lots'
 export const closedWithShortfall = 'No lots sold. Bid collateral is refundable. The branch activates with its collateral shortfall.'
-export const credit = 'Credit this bid’s refunds'
-export const crediting = 'Crediting bid refunds…'
-export const credited = 'This bid’s refunds are already credited.'
-export const bidMayStillWin = 'This bid may still win. Its collateral remains committed until closing.'
-export const earlyRefundSettled = 'This bid’s refund was settled. Check your wallet’s total refund credit below.'
-export const claim = 'Credit and withdraw refunds'
-export const claiming = 'Withdrawing bid refunds…'
-export const refundChanged = 'Your refund credit changed. Refresh and review the new amount.'
-export const claimReview = (quote: { settles: boolean; bidRefundAttoEth: bigint; creditedAttoEth: bigint; totalAttoEth: bigint }, decimals = 18, symbol = 'collateral') => {
-	if (quote.creditedAttoEth === 0n) return `Credit this bid’s ${formatUnits(quote.bidRefundAttoEth, decimals)} ${symbol} refund and withdraw it to your wallet.`
-	if (!quote.settles) return `This bid’s refund is already credited. Withdraw your entire ${formatUnits(quote.totalAttoEth, decimals)} ${symbol} auction refund credit, possibly including your other bids, to your wallet.`
-	return `Credit this bid’s ${formatUnits(quote.bidRefundAttoEth, decimals)} ${symbol} refund and withdraw your entire ${formatUnits(quote.totalAttoEth, decimals)} ${symbol} auction refund credit to your wallet, including ${formatUnits(quote.creditedAttoEth, decimals)} ${symbol} already credited, possibly from your other bids.`
-}
-export const refundEth = 'Credited collateral refund'
-export const withdraw = 'Withdraw credited refunds'
-export const withdrawing = 'Withdrawing auction refunds…'
-export const noRefund = 'No credited auction refunds are available.'
+export const refunded = 'This bid’s unused collateral was refunded.'
+export const refund = 'Withdraw this bid’s refund'
+export const refunding = 'Withdrawing bid refund…'
+export const refundChanged = 'This bid’s refund changed. Refresh and review the new amount.'
+export const refundReview = (amountAttoEth: bigint, decimals = 18, symbol = 'collateral') => `Withdraw this bid’s ${formatUnits(amountAttoEth, decimals)} ${symbol} of unused collateral to your wallet.`
 export const unclaimedBids = 'Bids to claim'
 export const claimBid = 'Claim bid'
 export const claimingBid = 'Claiming bid…'
