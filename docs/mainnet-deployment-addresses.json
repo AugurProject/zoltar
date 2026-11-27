@@ -44,7 +44,7 @@
 		},
 		{
 			"id": "questionLedgerDelegate",
-			"label": "Question ledger delegate contract",
+			"label": "Question actions contract",
 			"address": "0xD1664Cc91802e36888b9d863049d5a4F740272e1",
 			"constructorArguments": ""
 		},

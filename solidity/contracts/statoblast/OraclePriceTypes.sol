@@ -38,8 +38,7 @@ interface IStoredOpenOracleGame {
 /// the base settlement allowance with a buffer, and collecting the reward.
 function settlementGasUnits(uint256 callbackGas) pure returns (uint256) {
 	return
-		Math.ceilDiv((callbackGas + callbackGas / 63 + BASE_SETTLEMENT_GAS_ALLOWANCE) * SETTLEMENT_GAS_BUFFER_BPS, 10_000) +
-		REWARD_COLLECTION_GAS_ALLOWANCE;
+		Math.ceilDiv((callbackGas + callbackGas / 63 + BASE_SETTLEMENT_GAS_ALLOWANCE) * SETTLEMENT_GAS_BUFFER_BPS, 10_000) + REWARD_COLLECTION_GAS_ALLOWANCE;
 }
 
 /// @dev Sponsor-funded incentive for independent settlement at `feeAllowance` atto-ETH per gas.

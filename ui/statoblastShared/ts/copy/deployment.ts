@@ -1,7 +1,7 @@
 export const genesisRepToken = 'Test REP token contract'
 export const deploymentStatusContract = 'Deployment status contract'
 export const batchReadContract = 'Batch read contract'
-export const questionLedgerDelegateContract = 'Question ledger delegate contract'
+export const questionLedgerDelegateContract = 'Question actions contract'
 export const questionContract = 'Question contract'
 export const shareToken = 'Share token contract'
 export const shareTokenDeploymentContract = 'Share token deployment contract'

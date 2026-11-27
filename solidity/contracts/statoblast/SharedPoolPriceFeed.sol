@@ -217,7 +217,8 @@ contract SharedPoolPriceFeed {
 	}
 
 	function _maxSettlementBaseFee() private view returns (uint256) {
-		return Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
+		return
+			Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 	}
 
 	/// @notice Fund a shared observation without first deploying a child question.

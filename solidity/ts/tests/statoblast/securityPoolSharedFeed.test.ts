@@ -570,7 +570,9 @@ describe('Statoblast: central capital shared price feed', () => {
 			)
 			const questionId = 1n << BigInt(i * 2)
 			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'registerQuestion', args: [pool, universe, questionId] }))
-			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'mint', args: [pool, unit, 0n, now], value: 0n }))
+			// Services funds custody before minting; the authority mirrors that order here.
+			await writeContractAndWait(root, () => root.writeContract({ abi: tokenArtifact.abi, address: collateral, functionName: 'transfer', args: [settlement, unit] }))
+			await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'mintWithRecoveryRep', args: [pool, fixture.securityPool, unit, 0n, now] }))
 			if (i % 3 === 0) {
 				await writeContractAndWait(root, () => root.writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'scheduleFinality', args: [pool, now + 500n + (1n << BigInt(i % 47)), now] }))
 			} else {

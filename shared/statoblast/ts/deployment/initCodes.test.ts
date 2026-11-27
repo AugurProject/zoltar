@@ -75,7 +75,7 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolRepairAuctionDeployer,
 		] as const
 		expect(constructorArgs(factoryCode)).toBe(
-			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,address,bytes32,address[9]'), [
+			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,bytes32,address[9]'), [
 				addresses.questionForker,
 				addresses.zoltarQuestionData,
 				addresses.escalationGameFactory,
