@@ -137,13 +137,11 @@ type BootstrapDescendantAddresses = {
 	securityPoolCapitalRepairAuctionDelegate: Address
 	securityPoolCapitalFeeStreamsImplementation: Address
 	questionLedgerDeployer: Address
-	questionLedgerDeploymentWorker: Address
 }
 
 export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()): BootstrapDescendantAddresses {
 	const infrastructure = getInfraContractAddresses(profile)
 	const questionLedgerDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
-	const questionLedgerDeploymentWorker = getCreateAddress({ from: questionLedgerDeployer, nonce: 1n })
 	return {
 		sharedPoolPriceFeedCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 1n }),
 		sharedPoolPriceFeedCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 2n }),
@@ -151,9 +149,8 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
 		questionLedgerDeployer,
-		questionLedgerDeploymentWorker,
-		questionLedgerCreationCodeFirstChunk: getCreateAddress({ from: questionLedgerDeploymentWorker, nonce: 1n }),
-		questionLedgerCreationCodeSecondChunk: getCreateAddress({ from: questionLedgerDeploymentWorker, nonce: 2n }),
+		questionLedgerCreationCodeFirstChunk: getCreateAddress({ from: questionLedgerDeployer, nonce: 1n }),
+		questionLedgerCreationCodeSecondChunk: getCreateAddress({ from: questionLedgerDeployer, nonce: 2n }),
 		securityPoolCapitalCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }),
 		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
 		securityPoolCommitmentIndexImplementation: getCreateAddress({ from: infrastructure.securityPoolCommitmentIndexDeployer, nonce: 1n }),

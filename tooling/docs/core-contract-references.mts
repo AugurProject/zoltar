@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const coreContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '580109cfcebb3ce505def01895f7b6567e75bbd8e8ccac857bdd00d54f15c37f',
+		compiledAbiFingerprint: 'fb65e8a3f4c5f13c8996e95081f58b6c5d865d7a90d97c67fcc59db43ef7fddd',
 		name: 'ZoltarQuestionData',
 		purpose: 'Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.',
-		readAbiFingerprint: '99f2b8a4050d1976f27248afe6870e944c9dc4377e193ee5e3f87a7112ffc3ac',
+		readAbiFingerprint: '016fcfe414b70b5b5cd21d12287325b4e75ccd861e003316a8c6a26a6dab666e',
 		readSurface:
-			'Use `getQuestionId` before submission; `questionCreatedTimestamp` and `questions` for direct lookup; `getQuestionCount` and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors. An unregistered question has no valid scalar answer: both answer getters treat everything except canonical Invalid as malformed. When a scalar range spans fewer 18-decimal units than it has ticks, a tick whose value is rounded down is named with its index, for example `0 (tick 1 of 2)`, so distinct answers never share a name.',
+			'Use `getQuestionId` before submission; `questionCreatedTimestamp` and `questions` for direct lookup; `getQuestionCount` and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors. An unregistered question has no valid scalar answer: both answer getters treat everything except canonical Invalid as malformed. When a scalar range spans fewer 18-decimal units than it has ticks, a tick whose value is rounded down is named with its index, for example `0 (tick 1 of 2)`, so distinct answers never share a name.',
 		readDeclarations: [
 			{
 				name: 'getQuestionId',
@@ -22,12 +22,6 @@ export const coreContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'getOutcomeLabels',
-			},
-			{
-				name: 'splitUint256IntoTwoWithInvalid',
-			},
-			{
-				name: 'hasNonZeroScalarReservedBits',
 			},
 			{
 				name: 'isMalformedAnswerOption',
@@ -62,12 +56,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '7a728c799e95d6d3eff2780e2074b1888a27cdea22cd49f4ec9bae56cfc2a653',
+		compiledAbiFingerprint: '33995cbb0c63dae7172180f00d67eaad0acef24af79cc01fcd1cb1833d2ab4a4',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the [fork haircut](./glossary.html#fork-haircut), and mints branch-specific [child REP](./glossary.html#child-rep).',
-		readAbiFingerprint: 'af953dbf8c9829c81943e2873905308a3a57839625fa5f1ee8e7812f3438883d',
+		readAbiFingerprint: 'f11467451d506235e5d3a7d2b9b90989d3f22eaa2a061cbb20c24d99ae97667a',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `getForkChoiceDeadline`, `getForkRecapitalizationDeadline`, `getEarliestForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The choice and recap deadlines are the native fork time plus eight and nine weeks. A child may next fork at its parent fork time plus ten weeks; origin universes have no parent cooldown, and `getEarliestForkTime` reverts with `Unknown universe` for an ID with no REP token. Late preparation never moves these timestamps. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. Before the first genesis fork, theoretical supply follows the external REP token minus Zoltar burns. The external token’s gross theoretical supply must remain at least the cumulative Zoltar genesis burns and at most 11,000,000 REP (18 decimals). Outside that range, the supply getter and dependent genesis fork and burn calls revert, even if the net supply would fit. At the first genesis fork the net value is frozen; that fork freezes the child admission caps. Later external supply changes do not enlarge them. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. `UniverseInitialized` contains the genesis supply snapshot. Read the current supply from `getUniverseTheoreticalSupplyAttoRep` and discover children through `DeployChild` and `ChildReputationTokenInitialized`. The [constructor](solidity/contracts/Zoltar.sol) enforces the genesis REP supply and divisor bounds. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet genesis tokens, Augur V2’s REP Yes and REP No fork child tokens, do not implement ERC-2612 or ERC-3009. [Mainnet genesis tokens](../explanation/zoltar.html#mainnet-genesis-tokens) explains their supply growth and the low REP No fork threshold.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `getForkChoiceDeadline`, `getForkRecapitalizationDeadline`, `getEarliestForkTime`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The choice and recap deadlines are the native fork time plus eight and nine weeks. A child may next fork at its parent fork time plus ten weeks; origin universes have no parent cooldown, and `getEarliestForkTime` reverts with `Unknown universe` for an ID with no REP token. Late preparation never moves these timestamps. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. Before the first genesis fork, theoretical supply follows the external REP token minus Zoltar burns. The external token’s gross theoretical supply must remain at least the cumulative Zoltar genesis burns and at most 11,000,000 REP (18 decimals). Outside that range, the supply getter and dependent genesis fork and burn calls revert, even if the net supply would fit. At the first genesis fork the net value is frozen; that fork freezes the child admission caps. Later external supply changes do not enlarge them. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. `UniverseInitialized` contains the genesis supply snapshot. Read the current supply from `getUniverseTheoreticalSupplyAttoRep` and discover children and their REP tokens through `DeployChild`. The [constructor](solidity/contracts/Zoltar.sol) enforces the genesis REP supply and divisor bounds. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet genesis tokens, Augur V2’s REP Yes and REP No fork child tokens, do not implement ERC-2612 or ERC-3009. [Mainnet genesis tokens](../explanation/zoltar.html#mainnet-genesis-tokens) explains their supply growth and the low REP No fork threshold.',
 		securityBoundary: 'These calls depend on [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{
@@ -81,9 +75,6 @@ export const coreContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'getEarliestForkTime',
-			},
-			{
-				name: 'forkQuestionMatches',
 			},
 			{
 				name: 'getRepToken',
@@ -166,7 +157,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'Parent forked; outcome is well formed; child is not already deployed.',
-				signals: '`TheoreticalSupplySet`, `ReputationTokenInitialized`, `DeployChild`, and `ChildReputationTokenInitialized`',
+				signals: '`ReputationTokenInitialized` and `DeployChild`',
 			},
 			{
 				call: '`addRepToMigrationBalance(universeId, amountAttoRep)`',
@@ -191,7 +182,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'Forked universe; positive split amount; nonempty valid outcomes; sufficient parent REP for the exact `preparationAttoRep` supplied and sufficient migration credit for every split. Outcome order is unrestricted. Genesis REP requires allowance for preparation; child REP needs no allowance.',
-				signals: 'The `addRepToMigrationBalance` signals when `preparationAttoRep` is positive; `TheoreticalSupplySet`, `ReputationTokenInitialized`, `DeployChild`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
+				signals: 'The `addRepToMigrationBalance` signals when `preparationAttoRep` is positive; `ReputationTokenInitialized` and `DeployChild` when children are deployed; child REP `Transfer` and `MigrationRepSplit` for each destination',
 			},
 			{
 				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',
@@ -203,12 +194,12 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: "Universe forked; positive split amount; nonempty list of well-formed outcomes; the cumulative amount per child must not exceed the caller's migration balance.",
-				signals: '`TheoreticalSupplySet`, `ReputationTokenInitialized`, `DeployChild`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer` and `Mint`, then `MigrationRepSplit`, per selected branch',
+				signals: '`ReputationTokenInitialized` and `DeployChild` when children are deployed; child REP `Transfer`, then `MigrationRepSplit`, per selected branch',
 			},
 		],
 	},
 	{
-		compiledAbiFingerprint: 'c870ce39465c90820caef827233163f7898f339aba3563d29b7014e60da28687',
+		compiledAbiFingerprint: '8760cd87bfea4683e3a9c720e71de5fb33bb14e1f4ae5cf56b5b4f8b94478406',
 		name: 'ReputationToken',
 		purpose: 'Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar.',
 		readAbiFingerprint: '1cedbd5efbd60e56cb8f88586096eba913a58cbf7fc5d9908649ea4cc8a0658b',
@@ -278,7 +269,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'Called once by Zoltar as part of child-universe creation; universe, REP number, and theoretical supply are nonzero; supply does not exceed 11 million REP.',
-				signals: '`TheoreticalSupplySet` and `ReputationTokenInitialized`',
+				signals: '`ReputationTokenInitialized`',
 			},
 			{
 				call: '`mint(account, valueAttoRep)`',
@@ -290,7 +281,7 @@ export const coreContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: '`account` is nonzero; resulting ERC-20 supply does not exceed theoretical supply.',
-				signals: '`Mint` and ERC-20 `Transfer`',
+				signals: 'ERC-20 `Transfer` from the zero address',
 			},
 			{
 				call: '`burn(account, valueAttoRep)`',

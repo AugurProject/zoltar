@@ -130,7 +130,7 @@
 							<tr>
 								<td>Security pool module deployers</td>
 								<td>
-									<code>SecurityPoolModuleDeployers</code> deploys the capital implementation during security pool setup. Its commitment-index and fee-stream deployers each create a shared implementation at construction. The capital-ledger deployer shares one stateless lifecycle delegate; the fee-stream deployer shares one stateless auction delegate. Each security pool retains separate capital implementations and storage. The capital, settlement-book, service-accounting and fork-coordinator deployers use <code>SecurityPoolCreationCodeDeployer</code> to store creation bytecode in two immutable, STOP-prefixed <code>CreationCodeChunk</code> contracts through the common <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/CreationCodeStorage.sol"><code>CreationCodeStorage</code></a> primitive. The factory pins all nine deployer addresses and supplies them to every security pool it creates.
+									<code>SecurityPoolModuleDeployers</code> deploys the capital implementation during security pool setup. Its commitment-index and fee-stream deployers each create a shared implementation at construction. The capital-ledger deployer shares one stateless lifecycle delegate; the fee-stream deployer shares one stateless auction delegate. Each security pool retains separate capital implementations and storage. The capital, settlement-book, service-accounting, fork-coordinator and repair-auction deployers use <code>CreationCodeDeployer</code> to store creation bytecode in two immutable, STOP-prefixed <code>CreationCodeChunk</code> contracts through the common <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/CreationCodeStorage.sol"><code>CreationCodeStorage</code></a> primitive. The factory pins all nine deployer addresses and supplies them to every security pool it creates.
 								</td>
 								<td>Deployment permission does not grant authority over another security pool’s modules. Canonical bindings and initialization must be verified before use. These deployment boundaries keep creation code and individual initialization transactions within EVM limits.</td>
 							</tr>
@@ -141,7 +141,7 @@
 							</tr>
 							<tr>
 								<td><code>ShareTokenFactory</code></td>
-								<td>Anyone can call <code>deployShareToken</code> to deploy or retrieve a token keyed by <code>keccak256(abi.encode(msg.sender, salt, questionId))</code>. The <code>CREATE2</code> salt is the raw <code>salt</code>; the caller and question id enter through constructor arguments, and that caller is the token's initial authorized address.</td>
+								<td>Anyone can call <code>deployShareToken</code> to deploy a token. The <code>CREATE2</code> salt is the raw <code>salt</code>; the caller and question id enter through constructor arguments, and that caller is the token's initial authorized address. Repeating a salt, caller and question id reverts.</td>
 								<td>Origin lineage tokens are the instances created by <code>SecurityPoolFactory</code> and named in <code>DeployQuestionLedger</code>; children reuse the parent's token.</td>
 							</tr>
 
@@ -151,15 +151,15 @@
 								<td>The canonical feed is recorded in <code>SecurityPoolFactory.sharedPriceFeeds(securityPool, universeId)</code> and referenced by each ledger in <code>DeployQuestionLedger</code>. Child feeds inherit the security pool’s immutable report configuration.</td>
 							</tr>
 							<tr>
-								<td><code>SharedPoolPriceFeedDeploymentWorker</code> and <code>QuestionLedgerDeploymentWorker</code></td>
-								<td>Deployment workers split large creation code into deployable modules and bind the calling factory.</td>
+								<td><code>SharedPoolPriceFeedDeploymentWorker</code></td>
+								<td>The deployment worker keeps the feed creation code in deployable chunks and binds each deployment to the calling factory.</td>
 								<td>Use canonical factory registration and module bindings; code presence alone is insufficient.</td>
 							</tr>
 
 							<tr>
-								<td><code>QuestionLedgerDeployer</code> and <code>QuestionLedgerDeploymentWorker</code></td>
-								<td>Only the configured <code>SecurityPoolFactory</code> may call the deployer; only that deployer may call its worker.</td>
-								<td>They are code-size deployment plumbing. The proxy deployer deploys one deterministic <code>QuestionLedgerOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The proxy deployer is the deterministic <code>CREATE2</code> deployment proxy that every canonical deployment goes through; it is not a Solidity source in this repository and appears in the deployment manifests as step <code>proxyDeployer</code>. The factory passes that address through its deployer and worker to every question ledger. Its deterministic address is published as <code>questionLedgerOperationsDelegate</code>. Question ledgers become canonical only when the factory emits <code>QuestionLedgerRegistered</code> and <code>DeployQuestionLedger</code>.</td>
+								<td><code>QuestionLedgerDeployer</code></td>
+								<td>Only the configured <code>SecurityPoolFactory</code> may call the deployer.</td>
+								<td>It is code-size deployment plumbing. The proxy deployer deploys one deterministic <code>QuestionLedgerOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The proxy deployer is the deterministic <code>CREATE2</code> deployment proxy that every canonical deployment goes through; it is not a Solidity source in this repository and appears in the deployment manifests as step <code>proxyDeployer</code>. The factory passes that address through its deployer to every question ledger. Its deterministic address is published as <code>questionLedgerOperationsDelegate</code>. Question ledgers become canonical only when the factory emits <code>QuestionLedgerRegistered</code> and <code>DeployQuestionLedger</code>.</td>
 							</tr>
 							<tr>
 								<td><code>QuestionForker</code></td>
@@ -211,7 +211,6 @@
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/CheckedCast.sol"><code>CheckedCast.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Constants.sol"><code>Constants.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Context.sol"><code>Context.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Create2Address.sol"><code>Create2Address.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/DecimalStrings.sol"><code>DecimalStrings.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a
@@ -269,7 +268,6 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalState.sol"><code>SecurityPoolCapitalState.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentIndex.sol"><code>SecurityPoolCommitmentIndex.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentTree.sol"><code>SecurityPoolCommitmentTree.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCreationCode.sol"><code>SecurityPoolCreationCode.sol</code></a
 									>,
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerAccountingModule.sol"
 										><code>QuestionLedger<wbr />AccountingModule.sol</code></a
@@ -312,8 +310,7 @@
 							<tr>
 								<td>Factories and deployment</td>
 								<td>
-									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/Create2Deployment.sol"><code>Create2Deployment.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>EscalationGameFactory.sol</code></a
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>EscalationGameFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SharedPoolPriceFeedFactory.sol"><code>SharedPoolPriceFeedFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/QuestionLedgerDeployer.sol"><code>QuestionLedgerDeployer.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a
@@ -325,7 +322,6 @@
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ICapitalAccounting.sol"><code>ICapitalAccounting.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC1155.sol"><code>IERC1155.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC1155Supply.sol"><code>IERC1155Supply.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC1155Receiver.sol"><code>IERC1155Receiver.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IERC165.sol"><code>IERC165.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IEscalationGame.sol"><code>IEscalationGame.sol</code></a
@@ -343,7 +339,6 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolReporterLedger.sol"><code>ISecurityPoolReporterLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IShareToken.sol"><code>IShareToken.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IWeth9.sol"><code>IWeth9.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IZoltarForkState.sol"><code>IZoltarForkState.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/interfaces/ITradingShareToken.sol"><code>ITradingShareToken.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/interfaces/ITwoWayConstantProductFactory.sol"><code>ITwoWayConstantProductFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/trading/interfaces/ITwoWayConstantProductPair.sol"><code>ITwoWayConstantProductPair.sol</code></a>

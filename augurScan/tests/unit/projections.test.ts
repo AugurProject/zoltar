@@ -476,7 +476,6 @@ describe('previously raw-only lifecycle evidence', () => {
 	for (const [name, data, kind, entityType, identity] of [
 		['OrdinarySettlementInitialized', { outcome: '1', winningPrincipalAttoRep: 100n.toString(), reservedAttoRep: 130n.toString() }, 'escalationGame', 'escalation', pool],
 		['ReputationTokenInitialized', { universeId: '7', repNumber: '2' }, 'reputationToken', 'reputation-token', pool],
-		['ChildReputationTokenInitialized', { universeId: '7', reputationToken: vault, repNumber: '2' }, 'zoltar', 'fork', '7'],
 		['PositionExitedByTransfer', { owner: vault, pair: vault, completeSetShares: '12' }, 'ammRouter', 'amm', vault],
 		['CompleteSetRedeemedByTransfer', { questionLedger: vault, completeSetShares: '12' }, 'ammRouter', 'pool', vault],
 	] as const) {

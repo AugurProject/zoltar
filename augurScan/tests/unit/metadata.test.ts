@@ -93,7 +93,7 @@ describe('ABI metadata', () => {
 		const abi = abiForKind('shareToken')
 		if (abi === undefined) throw new Error('ShareToken ABI missing')
 		const contract = { address: account as Address, label: 'Shares', kind: 'shareToken', provenance: 'test' }
-		const singleInput = encodeFunctionData({ abi, functionName: 'safeTransferFrom', args: [account, childToken, 7n, 2_500_000_000_000_000_000n] })
+		const singleInput = encodeFunctionData({ abi, functionName: 'safeTransferFrom', args: [account, childToken, 7n, 2_500_000_000_000_000_000n, '0x'] })
 		const single = decodeAction(contract, singleInput, new Map())
 		expect(single.arguments?.['value']).toBe('2500000000000000000')
 		expect(single.displayArguments?.['value']).toBe('2500000000000000000 share units')
@@ -101,7 +101,7 @@ describe('ABI metadata', () => {
 		const batchInput = encodeFunctionData({
 			abi,
 			functionName: 'safeBatchTransferFrom',
-			args: [account, childToken, [7n, 8n], [1_000_000_000_000_000_000n, 2_000_000_000_000_000_000n]],
+			args: [account, childToken, [7n, 8n], [1_000_000_000_000_000_000n, 2_000_000_000_000_000_000n], '0x'],
 		})
 		const batch = decodeAction(contract, batchInput, new Map())
 		expect(batch.arguments?.['values']).toEqual(['1000000000000000000', '2000000000000000000'])

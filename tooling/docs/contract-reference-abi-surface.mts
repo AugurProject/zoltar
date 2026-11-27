@@ -5,7 +5,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		createQuestion: ['external(QuestionData,string[])'],
 	},
 	'solidity/contracts/Zoltar.sol': {
-		forkUniverse: ['public(uint248,uint256,uint256)'],
+		forkUniverse: ['external(uint248,uint256,uint256)'],
 		burnRep: ['external(uint248,uint256)'],
 		deployChild: ['public(uint248,uint256)'],
 		addRepToMigrationBalance: ['public(uint248,uint256)'],
@@ -96,8 +96,8 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': {
 		setApprovalForAll: ['external(address,bool)'],
-		safeTransferFrom: ['external(address,address,uint256,uint256)', 'external(address,address,uint256,uint256,bytes)'],
-		safeBatchTransferFrom: ['external(address,address,uint256[],uint256[])', 'external(address,address,uint256[],uint256[],bytes)'],
+		safeTransferFrom: ['external(address,address,uint256,uint256,bytes)'],
+		safeBatchTransferFrom: ['external(address,address,uint256[],uint256[],bytes)'],
 	},
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': {
 		transferSecurityPoolRecoveryRights: ['external(uint248,address,uint256[3])'],
@@ -124,10 +124,9 @@ export const interfaceEntrypointExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/QuestionLedger.sol': ['completePurchaseFunding'],
 }
 export const stateChangingAbiFingerprintBySource: Record<string, string> = {
-	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
-	'solidity/contracts/Zoltar.sol': 'addc5c6c0466f7a483c7bb451777af79e698d4f3c5f97149cd7d98bcf7600af5',
+	'solidity/contracts/Zoltar.sol': '3e8a91c87033153f919faaafdf5c6d4cbcc0eaf9564ed0108f9cbdb939ed026f',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
 	'solidity/contracts/statoblast/EscalationGame.sol': 'ace27e1a535bc7d088e2634d1d30c96644c610ad9a9fb014e3fc31e036d4d63a',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -139,7 +138,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/QuestionLedger.sol': 'd5ee68293a6702fd7c319a15eb2eae627d384ae7bf178eb3fb9bf472021b4dd4',
 	'solidity/contracts/statoblast/QuestionForker.sol': '04e488e9cd2e23d2a7b9a0a052180fdd7ec2dfa1cded5445bf142ae78e8af15b',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '24a5c8cc53cbe4c2c3a9ad75e52d462010f1f91f40172fd416a2d3573849aa18',
-	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
+	'solidity/contracts/statoblast/tokens/ERC1155.sol': 'b844f1985ddaa7d364d1fa2a4a145a8f8ea1c2506dc625a4c68a485d5148da21',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': 'e1eb94e04ee65aa3f3f1147cdf1be9a855e30e7ba5900e6f8e048107d92cc400',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }

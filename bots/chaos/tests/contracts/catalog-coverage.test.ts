@@ -95,7 +95,6 @@ const expectedCanonicalManifest = [
 	'ReputationToken:contracts/ReputationToken.sol:dynamic-endpoint',
 	'SecurityPoolFactory:contracts/statoblast/factories/SecurityPoolFactory.sol:static-endpoint',
 	'QuestionLedgerDeployer:contracts/statoblast/factories/QuestionLedgerDeployer.sol:deployment-helper',
-	'QuestionLedgerDeploymentWorker:contracts/statoblast/factories/QuestionLedgerDeployer.sol:deployment-helper',
 	'QuestionLedger:contracts/statoblast/QuestionLedger.sol:dynamic-endpoint',
 	'QuestionLedgerOperationsDelegate:contracts/statoblast/QuestionLedgerOperationsDelegate.sol:delegate-module',
 	'QuestionLedgerAccountingModule:contracts/statoblast/QuestionLedgerAccountingModule.sol:delegate-module',
@@ -287,7 +286,6 @@ describe('contract operation classification', () => {
 		expect(zoltarAbi.find(item => item.type === 'event' && item.name === 'MigrationRepSplit')).toMatchObject({
 			inputs: [
 				{ indexed: true, name: 'migrator', type: 'address' },
-				{ indexed: false, name: 'recipient', type: 'address' },
 				{ indexed: true, name: 'universeId', type: 'uint248' },
 				{ indexed: false, name: 'outcomeIndex', type: 'uint256' },
 				{ indexed: true, name: 'childUniverseId', type: 'uint248' },

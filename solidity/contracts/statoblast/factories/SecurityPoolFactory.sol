@@ -16,6 +16,7 @@ import { QuestionLedgerDeployer, QuestionLedgerConfiguration } from './QuestionL
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
 import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
+import { CreationCodeStorage } from '../CreationCodeStorage.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -192,15 +193,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(address(this), capitalLedgerDeployer, commitmentIndexDeployer, capitalFeeStreamsDeployer, settlementBookDeployer, securityPoolSettlementDeployer, reporterLedgerDeployer, forkCoordinatorDeployer, securityPoolServicesDeployer, securityPoolRepairAuctionDeployer), configuration);
 		// The address depends on the creator, so no other deployment can take it.
 		bytes32 salt = keccak256(abi.encode(msg.sender, securityPoolCreationCount[msg.sender]++));
-		assembly ('memory-safe') {
-			securityPool := create2(0, add(initCode, 0x20), mload(initCode), salt)
-			if iszero(securityPool) {
-				let size := returndatasize()
-				let data := mload(0x40)
-				returndatacopy(data, 0, size)
-				revert(data, size)
-			}
-		}
+		securityPool = CreationCodeStorage.deploy2(initCode, salt);
 		isSecurityPool[securityPool] = true;
 		emit SecurityPoolDeployed(securityPool, msg.sender);
 	}

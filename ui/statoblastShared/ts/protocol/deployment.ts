@@ -41,22 +41,22 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
-	escalationGameFactory: '0x387f41646d6a424dc8a500b45315ab422969aa19e2a9acf0661906ef21bd8acd',
+	escalationGameFactory: '0x1c13a21f4acc73aa9da1acf73c490eb71e6c1b03c72a920d284baa61fc9afe78',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0x482ef00b6e4fa78c8e0c9f9532175f52df6dc9bc968b0ee3119e28287b3fcdcf',
+	sharedPoolPriceFeedFactory: '0x16ee07675aa76a9aa9a06852ce00dda8f9b9890b6b00be02aab6d06356148c88',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0xea175ece1418a602bdef2a2cc2f2ff16504da944b655f5194c76a416d1239fa2',
-	questionForker: '0xb943c51de2f1dfb06aef9404c0d9966fbb9aa76664f2d82fa63a5e6f4255ec39',
+	securityPoolFactory: '0x0a671e6529146a8b238f7814cf84d54d438b6afe515238c80d16ef95062a23dc',
+	questionForker: '0x6610a5b8c1120a2ecca1113088a66016462c8b0409b6f1f812b53848a4da9b49',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0x5d36307371a5737f98c283875104baa32da56c9a035e6d8bea8f90565d345eb0',
-	sharedPoolPriceFeedDeploymentWorker: '0x7b5b5c31cc90537bf016a79e5df3ab8ed4e626e1f5df5d2dae7a325133d32f53',
+	shareTokenFactory: '0xd44087884c5643571f83cfbabb765c1a3565811503d843814033600de4f3153e',
+	sharedPoolPriceFeedDeploymentWorker: '0x109cf23efc102bf1d30696b5691e541d98947ece38bb0ca24d01dfa8d61d48e4',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xcd1226445d12adf11d5bfee28428b3dab9d6cf8ad929a2544214b82481d94304',
-	questionForker: '0x264856bf82d587a858c772b8b7157495f3115d9e9453a02d19654f6770c4f1a9',
-	shareTokenFactory: '0x455b37ed5b6e81f95dc8f7d0820f7d53d13738634e28fe21cf1d2973d5f7c10f',
+	securityPoolFactory: '0xd58d611b8ec12a24c7e6f1c3fe28fe51976ba9f2d8a5bec7a800e0fa8ccd6e25',
+	questionForker: '0x691ce6557abb8faee5809a535c9c3a6a6ae03bf9cc4570646eb97fa930ddec50',
+	shareTokenFactory: '0xd416a451237e0c82a4a1c9c3bea86f81a2fe6cd203d37e5434422f09541275de',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -89,7 +89,7 @@ function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number
 		)
 	}
 	// The auction deployer stores only its two creation-code chunks. Immutable groups follow AST ids, which depend on source
-	// file order, so the chunks are placed by the ids of the shared SecurityPoolCreationCodeDeployer immutables instead of by position.
+	// file order, so the chunks are placed by the ids of the shared CreationCodeDeployer immutables instead of by position.
 	if (module.id === 'securityPoolRepairAuctionDeployer') {
 		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
 		if (chunkDeployer === undefined) throw new Error(deploymentErrors.libraryLayoutMissing)
@@ -124,22 +124,22 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
-	escalationGameFactory: '0x387f41646d6a424dc8a500b45315ab422969aa19e2a9acf0661906ef21bd8acd',
+	escalationGameFactory: '0x1c13a21f4acc73aa9da1acf73c490eb71e6c1b03c72a920d284baa61fc9afe78',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0x51fd006466aeb6cf844ca450da77801924a529de0444806f37735e9eb0beec6d',
+	sharedPoolPriceFeedFactory: '0xd27571dc83c792cc0f5b9e883c5d0040df49583f36dd80f6ad9ee209fb26f793',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x9264f63f9e160d24c375a9c0b6ee3c2368b0f19b9523621922c8ce0b1f2701e1',
-	questionForker: '0x7efa736bc98b0f7b5d9509444128d978d790c3bd8a956762be8d617803f4b686',
+	securityPoolFactory: '0xd2a6e565cdbb9b393119734a105bc7929b80da9a974f05b3a4f71e917001291c',
+	questionForker: '0xf218609efbbee335015f68e52242558cfe2694f24691fb6a51572ccba695cf4c',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0x1655d4e1bf272dd2e2bc32d38ba9a8d59a48ad0b59af85903158fda48fbe1532',
-	sharedPoolPriceFeedDeploymentWorker: '0x7b5b5c31cc90537bf016a79e5df3ab8ed4e626e1f5df5d2dae7a325133d32f53',
+	shareTokenFactory: '0x4ca719641cc8fd77aa0f41adcaa4e03a48561bcef8c76841d02979eb8e86f8c9',
+	sharedPoolPriceFeedDeploymentWorker: '0x109cf23efc102bf1d30696b5691e541d98947ece38bb0ca24d01dfa8d61d48e4',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xae5757fe119dc7a788c9e19a7a06d3a15be9824beb8717f809e1ab032bc334f2',
-	questionForker: '0x59d35895876398c2c1a5c365a685119bcdcbfb027d4842d98bdf8054e2a24ce9',
-	shareTokenFactory: '0x1f5876886ea35c0073eca2754f24d6d375c6e73706337a9868c2eebeb67a0e0f',
+	securityPoolFactory: '0x0608d023257063e679885c823a8cf42eba722bdba1d82e04e41ebec8de0f5090',
+	questionForker: '0x349de1c29e5c7c965096d8cc7146ba80f75cc87df6c0a65db9f85f4a85653ae4',
+	shareTokenFactory: '0x20a8c7380eacec48e3fad622cc45367b37d50f8336e4177325d1aea92d11b39e',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },

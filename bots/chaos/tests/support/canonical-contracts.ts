@@ -20,7 +20,6 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/ReputationToken.sol', contract: 'ReputationToken', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory', exposure: 'static-endpoint' },
 	{ artifactSource: 'contracts/statoblast/factories/QuestionLedgerDeployer.sol', contract: 'QuestionLedgerDeployer', exposure: 'deployment-helper' },
-	{ artifactSource: 'contracts/statoblast/factories/QuestionLedgerDeployer.sol', contract: 'QuestionLedgerDeploymentWorker', exposure: 'deployment-helper' },
 	{ artifactSource: 'contracts/statoblast/QuestionLedger.sol', contract: 'QuestionLedger', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/QuestionLedgerOperationsDelegate.sol', contract: 'QuestionLedgerOperationsDelegate', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/QuestionLedgerAccountingModule.sol', contract: 'QuestionLedgerAccountingModule', exposure: 'delegate-module' },

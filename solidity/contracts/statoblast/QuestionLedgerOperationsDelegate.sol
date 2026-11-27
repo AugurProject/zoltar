@@ -10,7 +10,8 @@ import { IQuestionForker } from './interfaces/IQuestionForker.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
-import { IQuestionEndTime, IZoltarForkState } from './interfaces/IZoltarForkState.sol';
+import { Zoltar } from '../Zoltar.sol';
+import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 
 interface IQuestionLedgerRepDepositContext {
 	function escalationGameFactory() external view returns (EscalationGameFactory);
@@ -41,12 +42,12 @@ contract QuestionLedgerOperationsDelegate is QuestionLedgerSettlementDelegate {
 
 	function _depositWalletRep(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, bool requireLead) private {
 		IQuestionLedgerRepDepositContext pool = IQuestionLedgerRepDepositContext(address(this));
-		IZoltarForkState zoltar = IZoltarForkState(pool.zoltar());
+		Zoltar zoltar = Zoltar(pool.zoltar());
 		uint248 universeId = pool.universeId();
 		_requireUnforkedOperational(zoltar.getForkTime(universeId));
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0)) {
-			require(block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()), 'Question active');
+			require(block.timestamp >= ZoltarQuestionData(pool.questionData()).getQuestionEndDate(pool.questionId()), 'Question active');
 			escalationGame = pool.escalationGameFactory().deployEscalationGame(pool.initialEscalationGameDepositAttoRep(), zoltar.getNonDecisionThresholdAttoRep(universeId));
 			emit EscalationGameSet(escalationGame);
 		}

@@ -137,7 +137,7 @@ describe('Statoblast: shared security pool multi-branch migration', () => {
 				address: questionLedgerAddresses.shareToken,
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'safeTransferFrom',
-				args: [holderAddress, addressString(TEST_ADDRESSES[3]), parentYesTokenId, parentYesBalance],
+				args: [holderAddress, addressString(TEST_ADDRESSES[3]), parentYesTokenId, parentYesBalance, '0x'],
 			}),
 			/ShareToken migrated source balance is locked/,
 		)

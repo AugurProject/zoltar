@@ -507,7 +507,7 @@ describe('Question Data', () => {
 			message: /Question already exists and cannot be created twice/,
 		})
 		await assert.rejects(createQuestion(client, { ...categoricalQuestion, title: 'empty label guard' }, ['']), {
-			message: /Outcome option label must not be an empty string/,
+			message: /Outcome label must use 1-64 printable ASCII characters with single interior spaces/,
 		})
 
 		const scalarQuestion = {

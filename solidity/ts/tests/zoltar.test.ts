@@ -79,21 +79,6 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await read(getChildUniverseId(0n, 1n)), deadline + 604800n)
 	})
 
-	test('#1554 only a universe that actually forked matches its fork question', async () => {
-		const matches = (universe: bigint, question: bigint) => client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'forkQuestionMatches', args: [universe, question] })
-		const question = makeQuestion('Fork question identity')
-		await createQuestion(client, question, ['Yes', 'No'])
-		const id = getQuestionId(question, ['Yes', 'No'])
-		assert.strictEqual(await matches(0n, 0n), false)
-		assert.strictEqual(await matches(123456n, 0n), false)
-		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(client, 0n, id)
-		assert.strictEqual(await matches(0n, id), true)
-		assert.strictEqual(await matches(0n, id + 1n), false)
-		await deployChild(client, 0n, 1n)
-		assert.strictEqual(await matches(getChildUniverseId(0n, 1n), id), false)
-	})
-
 	test('canDeployContract', async () => {
 		const isDeployed = await isZoltarDeployed(client)
 		assert.ok(isDeployed, 'Not Deployed!')
@@ -349,7 +334,7 @@ describe('Contract Test Suite', () => {
 		}
 		assert.strictEqual(totalBurned, universeTheoreticalSupplyAttoRep, 'funded test accounts should hold the complete tracked REP supply')
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, GENESIS_UNIVERSE), 0n, 'full-supply burn should reach the public zero-supply state')
-		await assert.rejects(forkUniverse(client, GENESIS_UNIVERSE, questionId), /Universe theoretical REP supply must be non-zero/)
+		await assert.rejects(forkUniverse(client, GENESIS_UNIVERSE, questionId), /Fork threshold must be non-zero/)
 	})
 
 	test('pre-fork migration and REP burn guards expose their specific reasons', async () => {
@@ -752,13 +737,13 @@ describe('Contract Test Suite', () => {
 		const zoltarInitialization = firstDeploymentReceipt.logs
 			.filter(log => log.address.toLowerCase() === zoltar.toLowerCase())
 			.map(log => decodeEventLog({ abi: Zoltar_Zoltar.abi, data: log.data, topics: log.topics }))
-			.find(log => log.eventName === 'ChildReputationTokenInitialized')
+			.find(log => log.eventName === 'DeployChild')
 		const tokenInitialization = firstDeploymentReceipt.logs
 			.filter(log => log.address.toLowerCase() === secondPredictedAddress.toLowerCase())
 			.map(log => decodeEventLog({ abi: ReputationToken_ReputationToken.abi, data: log.data, topics: log.topics }))
 			.find(log => log.eventName === 'ReputationTokenInitialized')
 		if (zoltarInitialization === undefined || tokenInitialization === undefined) throw new Error('Child REP initialization events missing')
-		assert.deepStrictEqual([zoltarInitialization.args.universeId, zoltarInitialization.args.reputationToken, zoltarInitialization.args.repNumber], [secondUniverseId, secondPredictedAddress, 1n])
+		assert.deepStrictEqual([zoltarInitialization.args.childUniverseId, zoltarInitialization.args.childReputationToken], [secondUniverseId, secondPredictedAddress])
 		assert.deepStrictEqual([tokenInitialization.args.universeId, tokenInitialization.args.repNumber, tokenInitialization.args.name, tokenInitialization.args.symbol], [secondUniverseId, 1n, 'Augur Reputation 1', 'REP1'])
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'name' }), 'Reputation')
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'symbol' }), 'REP')
@@ -912,9 +897,9 @@ describe('Contract Test Suite', () => {
 						topics: log.topics,
 					}),
 				)
-				.find(log => log.eventName === 'TheoreticalSupplySet')
+				.find(log => log.eventName === 'ReputationTokenInitialized')
 			if (deployChildLog === undefined) throw new Error('missing DeployChild log')
-			if (theoreticalSupplyLog === undefined) throw new Error('missing TheoreticalSupplySet log')
+			if (theoreticalSupplyLog === undefined) throw new Error('missing ReputationTokenInitialized log')
 
 			strictEqualTypeSafe(childUniverseData.parentUniverseId, GENESIS_UNIVERSE, 'child universe should point back to the parent universe')
 			strictEqualTypeSafe(childUniverseData.forkingOutcomeIndex, outcomeIndex, 'child universe should store the exact scalar answer index')
@@ -925,7 +910,7 @@ describe('Contract Test Suite', () => {
 			assert.strictEqual(deployChildLog.args.childUniverseId, childUniverseId, 'DeployChild should identify the child universe')
 			assert.strictEqual(deployChildLog.args.childReputationToken, childRepToken, 'DeployChild should identify the child REP token')
 			assert.strictEqual(deployChildLog.args.childUniverseTheoreticalSupplyAttoRep, childSupply, 'DeployChild should expose the child theoretical supply')
-			assert.strictEqual(theoreticalSupplyLog.args.totalTheoreticalSupplyAttoRep, childSupply, 'TheoreticalSupplySet should expose the stored child token supply')
+			assert.strictEqual(theoreticalSupplyLog.args.totalTheoreticalSupplyAttoRep, childSupply, 'ReputationTokenInitialized should expose the stored child token supply')
 			if (firstChildSupply === undefined) {
 				firstChildSupply = childSupply
 			} else {

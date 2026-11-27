@@ -11,9 +11,7 @@ contract ReputationToken is ERC20Authorization {
 	address public immutable zoltar;
 	uint248 public universeId;
 	uint256 public repNumber;
-	event Mint(address indexed account, uint256 valueAttoRep);
 	event Burn(address indexed account, uint256 valueAttoRep, uint256 totalTheoreticalSupplyAttoRep);
-	event TheoreticalSupplySet(uint256 totalTheoreticalSupplyAttoRep);
 	event ReputationTokenInitialized(uint248 indexed universeId, uint256 indexed repNumber, string name, string symbol, uint256 totalTheoreticalSupplyAttoRep);
 
 	modifier isZoltar() {
@@ -38,7 +36,6 @@ contract ReputationToken is ERC20Authorization {
 		_name = string.concat('Augur Reputation ', number);
 		_symbol = string.concat('REP', number);
 		totalTheoreticalSupplyAttoRep = totalTheoreticalSupplyAttoRep_;
-		emit TheoreticalSupplySet(totalTheoreticalSupplyAttoRep);
 		emit ReputationTokenInitialized(universeId_, repNumber_, _name, _symbol, totalTheoreticalSupplyAttoRep_);
 	}
 
@@ -47,7 +44,6 @@ contract ReputationToken is ERC20Authorization {
 		// migration accounting changes accidentally route an oversized mint here.
 		require(totalSupply() + valueAttoRep <= totalTheoreticalSupplyAttoRep, 'Mint exceeds theoretical supply');
 		_mint(account, valueAttoRep);
-		emit Mint(account, valueAttoRep);
 	}
 
 	function burn(address account, uint256 valueAttoRep) external isZoltar {

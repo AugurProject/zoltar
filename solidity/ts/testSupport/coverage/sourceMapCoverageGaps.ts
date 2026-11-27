@@ -18,10 +18,7 @@ interface KnownSourceMapCoverageGapFileRule {
 export const knownSourceMapCoverageGaps = [
 	{
 		sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
-		lineRules: [
-			{ currentSourceMatches: 1, linePattern: /^return\s+[A-Za-z_][A-Za-z0-9_]*;$/ },
-			{ currentSourceMatches: 1, linePattern: /^_transferFrom\s*\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*''\s*\);$/ },
-		],
+		lineRules: [{ currentSourceMatches: 1, linePattern: /^return\s+[A-Za-z_][A-Za-z0-9_]*;$/ }],
 	},
 	{
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol',

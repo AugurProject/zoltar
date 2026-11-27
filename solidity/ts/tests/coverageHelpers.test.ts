@@ -28,7 +28,6 @@ import {
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer,
-	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
 	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
@@ -185,16 +184,7 @@ test('coverage classifier keeps known untraceable source-map lines from manifest
 	const cases = [
 		{
 			sourcePath: '/tmp/solidity/contracts/statoblast/tokens/ERC1155.sol',
-			source: [
-				'contract ERC1155 {',
-				'    function balanceOfBatch() external returns (uint256[] memory) {',
-				'        return balances;',
-				'    }',
-				'    function legacyTransfer(address sender, address recipient, uint256 tokenId, uint256 amount) internal {',
-				"        _transferFrom(sender, recipient, tokenId, amount, '');",
-				'    }',
-				'}',
-			],
+			source: ['contract ERC1155 {', '    function balanceOfBatch() external returns (uint256[] memory) {', '        return balances;', '    }', '}'],
 		},
 		{
 			sourcePath: '/tmp/solidity/contracts/statoblast/EscalationGameSettlement.sol',
@@ -1121,7 +1111,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'safeTransferFrom',
-				args: [client.account.address, participantClient.account.address, 1n, 2n],
+				args: [client.account.address, participantClient.account.address, 1n, 2n, '0x'],
 			}),
 		)
 		await transact(
@@ -1129,7 +1119,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'safeBatchTransferFrom',
-				args: [client.account.address, participantClient.account.address, [2n, 3n], [2n, 3n]],
+				args: [client.account.address, participantClient.account.address, [2n, 3n], [2n, 3n], '0x'],
 			}),
 		)
 		await transact(
@@ -1137,7 +1127,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				functionName: 'safeBatchTransferFrom',
-				args: [client.account.address, participantClient.account.address, [], []],
+				args: [client.account.address, participantClient.account.address, [], [], '0x'],
 			}),
 		)
 		await transact(
@@ -1351,22 +1341,8 @@ describe('Solidity bytecode coverage helpers', () => {
 				args: [7n, 1],
 			}),
 		)
-		await transact(
-			helperAddress,
-			encodeFunctionData({
-				abi: helperAbi,
-				functionName: 'getTokenIds',
-				args: [7n, [0, 1, 2]],
-			}),
-		)
-		await transact(
-			helperAddress,
-			encodeFunctionData({
-				abi: helperAbi,
-				functionName: 'unpackTokenId',
-				args: [(7n << 8n) | 1n],
-			}),
-		)
+		assert.strictEqual(await client.readContract({ abi: helperAbi, address: helperAddress, functionName: 'getTokenUniverseId', args: [(7n << 8n) | 1n] }), 7n, 'token ids should unpack their universe')
+		assert.strictEqual(await client.readContract({ abi: helperAbi, address: helperAddress, functionName: 'getChildTokenId', args: [(7n << 8n) | 2n, 9n] }), (9n << 8n) | 2n, 'child token ids should keep the outcome byte')
 		await transact(
 			helperAddress,
 			encodeFunctionData({
@@ -1651,37 +1627,6 @@ describe('Solidity bytecode coverage helpers', () => {
 				bytecode: `0x${test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
-		const deploymentWorkerAddress = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
-				bytecode: `0x${statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.evm.bytecode.object}`,
-				args: [zeroAddress, zeroAddress, zeroAddress],
-			}),
-		)
-		await assert.rejects(
-			participantClient.writeContract({
-				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
-				address: deploymentWorkerAddress,
-				functionName: 'deploy',
-				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
-			}),
-			/Only QuestionLedgerDeployer can use the deployment worker/,
-		)
-		await assert.rejects(
-			writeContractAndWait(client, () =>
-				client.sendTransaction({
-					to: deploymentWorkerAddress,
-					data: encodeFunctionData({
-						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
-						functionName: 'deploy',
-						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
-					}),
-					gas: 10_000_000n,
-				}),
-			),
-			/Question ledger deployment failed/,
-		)
 		const questionLedgerDeployerAddress = await deployContract(
 			client,
 			encodeDeployData({
@@ -1711,7 +1656,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/Question ledger deployment failed/,
+			/Contract deployment failed/,
 		)
 	})
 })

@@ -841,7 +841,6 @@ describe('event-only replay', () => {
 				logIndex: 2,
 				args: {
 					migrator,
-					recipient: migrator,
 					universeId: 1n,
 					outcomeIndex: 2n,
 					childUniverseId: 9n,

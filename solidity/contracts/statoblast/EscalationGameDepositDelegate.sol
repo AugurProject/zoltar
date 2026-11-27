@@ -15,7 +15,6 @@ import {
 	IEscalationGameDepositContext,
 	IEscalationGameQuestionLedgerContext
 } from './interfaces/IEscalationGameDelegateContexts.sol';
-import { IZoltarForkState } from './interfaces/IZoltarForkState.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
@@ -214,7 +213,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		IEscalationGameQuestionLedgerContext pool = IEscalationGameQuestionLedgerContext(poolAddress);
 		require(pool.escalationGame() == address(this), 'Game inactive');
 		require(pool.systemState() == SystemState.Operational, 'Pool inactive');
-		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
+		require(Zoltar(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
 	}
 
 	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {

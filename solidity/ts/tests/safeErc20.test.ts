@@ -9,7 +9,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	ReputationToken_ReputationToken,
-	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
+	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness,
 	test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar,
@@ -109,7 +109,7 @@ describe('Safe ERC20 Operations', () => {
 		)
 	})
 
-	test('question ledger deployment worker reports constructor failures without revert data', async () => {
+	test('question ledger deployer reports constructor failures without revert data', async () => {
 		const fakeZoltar = await deployContract(
 			client,
 			encodeDeployData({
@@ -117,25 +117,26 @@ describe('Safe ERC20 Operations', () => {
 				bytecode: `0x${test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
-		const deploymentWorker = await deployContract(
+		// The deploying account becomes the deployer's factory.
+		const questionLedgerDeployer = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
-				bytecode: `0x${statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.evm.bytecode.object}`,
-				args: [zeroAddress, zeroAddress, zeroAddress],
+				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
+				bytecode: `0x${statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.evm.bytecode.object}`,
+				args: [zeroAddress, zeroAddress],
 			}),
 		)
 
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
-					address: deploymentWorker,
+					abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
+					address: questionLedgerDeployer,
 					functionName: 'deploy',
 					args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 				}),
 			),
-			/Question ledger deployment failed/,
+			/Contract deployment failed/,
 		)
 	})
 })

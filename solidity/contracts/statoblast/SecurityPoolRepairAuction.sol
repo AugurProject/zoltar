@@ -9,7 +9,7 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolUniformPriceRepairAuction } from './SecurityPoolUniformPriceRepairAuction.sol';
-import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
+import { CreationCodeDeployer } from './CreationCodeStorage.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
@@ -241,8 +241,8 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	}
 }
 
-contract SecurityPoolRepairAuctionDeployer is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolRepairAuction).creationCode) {}
+contract SecurityPoolRepairAuctionDeployer is CreationCodeDeployer {
+	constructor() CreationCodeDeployer(type(SecurityPoolRepairAuction).creationCode) {}
 	function create(address authority, address securityPool, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address) {
 		return _deploy(abi.encode(authority, securityPool, child, close, inventory, shortfall));
 	}

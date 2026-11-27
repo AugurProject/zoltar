@@ -53,7 +53,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolFactory', 'prepareSecurityPoolChildPriceFeed', 'excluded-dangerous', undefined, 'Shared branch and question preparation perform authenticated feed creation; direct randomized preparation is unnecessary.'),
 	entry('SecurityPoolFactory', 'deployChildQuestionLedger', 'role-restricted', undefined, 'Only QuestionForker deploys canonical children.'),
 	entry('QuestionLedgerDeployer', 'deploy', 'role-restricted', undefined, 'Only the canonical SecurityPoolFactory may use its constructor-deployed pool deployer.'),
-	entry('QuestionLedgerDeploymentWorker', 'deploy', 'role-restricted', undefined, 'Only the canonical QuestionLedgerDeployer may use its creation-code worker.'),
 	entry('QuestionLedger', 'updateSettlementCollateral', 'selectable', 'statoblast.pool.checkpoint-collateral'),
 	entry('QuestionLedger', 'refreshSecurityPoolFees', 'selectable', 'statoblast.pool.checkpoint-fees'),
 	entry('QuestionLedger', 'createCompleteSet', 'role-restricted', undefined, 'Only the bound security pool may mint question shares after charging fees and reserving backing.'),
@@ -177,8 +176,8 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('ShareToken', 'mintCompleteSets', 'role-restricted', undefined, 'Only an authorized QuestionLedger mints complete sets.'),
 	entry('ShareToken', 'burnCompleteSets', 'role-restricted', undefined, 'Only an authorized QuestionLedger burns complete sets.'),
 	entry('ShareToken', 'burnTokenIdAndGetRemainingSupply', 'role-restricted', undefined, 'Only an authorized QuestionLedger burns winning shares.'),
-	entry('ShareToken', 'safeTransferFrom', 'excluded-dangerous', undefined, 'Raw share transfers may strand positions.', ['safeTransferFrom(address,address,uint256,uint256)', 'safeTransferFrom(address,address,uint256,uint256,bytes)']),
-	entry('ShareToken', 'safeBatchTransferFrom', 'excluded-dangerous', undefined, 'Raw share transfers may strand positions.', ['safeBatchTransferFrom(address,address,uint256[],uint256[])', 'safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)']),
+	entry('ShareToken', 'safeTransferFrom', 'excluded-dangerous', undefined, 'Raw share transfers may strand positions.'),
+	entry('ShareToken', 'safeBatchTransferFrom', 'excluded-dangerous', undefined, 'Raw share transfers may strand positions.'),
 
 	entry('TwoWayConstantProductFactory', 'createPair', 'selectable', 'trading.pair.create'),
 	entry('TwoWayConstantProductPair', 'approve', 'excluded-dangerous', undefined, 'Direct liquidity removal burns wallet LP without an allowance; raw LP approvals grant unused spending authority.'),

@@ -107,12 +107,12 @@ contract CoverageHelpersHarness {
 		return TokenId.getTokenId(universeId, outcome);
 	}
 
-	function getTokenIds(uint248 universeId, BinaryOutcomes.BinaryOutcome[] calldata outcomes) external pure returns (uint256[] memory) {
-		return TokenId.getTokenIds(universeId, outcomes);
+	function getTokenUniverseId(uint256 tokenId) external pure returns (uint248) {
+		return TokenId.getUniverseId(tokenId);
 	}
 
-	function unpackTokenId(uint256 tokenId) external pure returns (uint248 universe, BinaryOutcomes.BinaryOutcome outcome) {
-		return TokenId.unpackTokenId(tokenId);
+	function getChildTokenId(uint256 tokenId, uint248 childUniverseId) external pure returns (uint256) {
+		return TokenId.getChildId(tokenId, childUniverseId);
 	}
 
 	function hashLeaf(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId) external pure returns (bytes32) {

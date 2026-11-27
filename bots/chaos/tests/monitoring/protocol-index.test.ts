@@ -90,7 +90,7 @@ function packedReport(
 	return bytesToHex(bytes)
 }
 
-const migrationRepSplitTopic = keccak256(toHex('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'))
+const migrationRepSplitTopic = keccak256(toHex('MigrationRepSplit(address,uint248,uint256,uint248,uint256,uint256)'))
 const reportSubmittedTopic = keccak256(toHex('ReportSubmitted(uint256,bytes)'))
 const reportSettledTopic = keccak256(toHex('ReportSettled(uint256)'))
 const ethRefundDeferredTopic = keccak256(toHex('BidSettled(uint256,address,uint256,uint256)'))
@@ -121,7 +121,7 @@ function migrationRepSplitLog(parameters: { amount: bigint; blockNumber: bigint;
 	return canonicalLog({
 		address: indexDeployments.zoltar,
 		blockNumber: parameters.blockNumber,
-		data: encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [migrator, outcomeIndex, parameters.amount, parameters.cumulative]),
+		data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [outcomeIndex, parameters.amount, parameters.cumulative]),
 		logIndex: parameters.logIndex,
 		topics: [migrationRepSplitTopic, indexedAddress(migrator), toHex(0n, { size: 32 }), toHex(childUniverseId, { size: 32 })],
 	})

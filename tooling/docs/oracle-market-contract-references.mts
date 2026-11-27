@@ -123,12 +123,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '913e1936a15d157fde1f5629cc95450bc0aded99ec851df3ae3f4956da551de2',
+		compiledAbiFingerprint: '86a6bb12743771825b87d9434972986a3d8e447ec45914304efb9f60ea1a3d82',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: 'f7f1edb395b7c497cfef048cc63fd7cad93b456e7e7e99fa7e079a665b9a881f',
+		readAbiFingerprint: '63bee446e706bd2649894030c62fb557ff7f1dee8c047636aec23271bcab51bb',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isSourceBalanceLocked`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible. `isSourceBalanceLocked(id, holder)` reads the actual transfer lock, including locks from migration or spending source-backed recovery rights; spending only received credits does not set it. See the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights) for eligibility and complete-set recovery. Received rights are included independently of the holder\u2019s source-token balances.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, and `recoveredCompleteSetShares`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `isSourceBalanceLocked`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible. `isSourceBalanceLocked(id, holder)` reads the actual transfer lock, including locks from migration or spending source-backed recovery rights; spending only received credits does not set it. See the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights) for eligibility and complete-set recovery. Received rights are included independently of the holder\u2019s source-token balances.',
 		readDeclarations: [
 			{
 				name: 'supportsInterface',
@@ -178,12 +178,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				name: 'getTokenId',
 			},
-			{
-				name: 'getTokenIds',
-			},
-			{
-				name: 'unpackTokenId',
-			},
 		],
 		readStorageDeclarations: [
 			{
@@ -200,18 +194,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'recoveredCompleteSetShares',
-			},
-			{
-				name: '_balances',
-				sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
-			},
-			{
-				name: '_supplies',
-				sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
-			},
-			{
-				name: '_operatorApprovals',
-				sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
 			},
 		],
 		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',

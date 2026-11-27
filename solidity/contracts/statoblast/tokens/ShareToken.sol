@@ -79,39 +79,27 @@ contract ShareToken is ERC1155, IShareToken {
 		return authorized[account];
 	}
 
-	function getUniverseId(uint256 id) internal pure returns (uint248 universeId) {
-		return uint248(id >> 8);
-	}
-
-	function getChildId(uint256 originalId, uint248 newUniverse) internal pure returns (uint256 newId) {
-		return (uint256(newUniverse) << 8) | uint8(originalId);
-	}
-
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 amountAttoShares) external {
 		require(authorized[msg.sender], 'ShareToken caller is not authorized to mint complete sets');
 		require(amountAttoShares > 0, 'Exchange rate undefined');
-		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
-		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
-
-		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
-			_tokenIds[i] = TokenId.getTokenId(_universeId, BinaryOutcomes.BinaryOutcome(i));
-			_values[i] = amountAttoShares;
-		}
-
+		(uint256[] memory _tokenIds, uint256[] memory _values) = _completeSet(_universeId, amountAttoShares);
 		_mintBatch(_account, _tokenIds, _values);
 	}
 
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 amountAttoShares) external {
 		require(authorized[msg.sender], 'ShareToken caller is not authorized to burn complete sets');
-		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
-		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
+		(uint256[] memory _tokenIds, uint256[] memory _values) = _completeSet(_universeId, amountAttoShares);
+		_burnBatch(_owner, _tokenIds, _values);
+	}
 
+	/// @dev Every outcome's token id in `_universeId`, each paired with `amountAttoShares`.
+	function _completeSet(uint248 _universeId, uint256 amountAttoShares) private pure returns (uint256[] memory _tokenIds, uint256[] memory _values) {
+		_tokenIds = new uint256[](Constants.NUM_OUTCOMES);
+		_values = new uint256[](Constants.NUM_OUTCOMES);
 		for (uint8 i = 0; i < Constants.NUM_OUTCOMES; i++) {
 			_tokenIds[i] = TokenId.getTokenId(_universeId, BinaryOutcomes.BinaryOutcome(i));
 			_values[i] = amountAttoShares;
 		}
-
-		_burnBatch(_owner, _tokenIds, _values);
 	}
 
 	function burnTokenIdAndGetRemainingSupply(uint256 _tokenId, address _owner) external returns (uint256 balanceAttoShares, uint256 remainingSupplyAttoShares) {
@@ -158,16 +146,8 @@ contract ShareToken is ERC1155, IShareToken {
 		return TokenId.getTokenId(_universeId, _outcome);
 	}
 
-	function getTokenIds(uint248 _universeId, BinaryOutcomes.BinaryOutcome[] calldata _outcomes) external pure returns (uint256[] memory _tokenIds) {
-		return TokenId.getTokenIds(_universeId, _outcomes);
-	}
-
-	function unpackTokenId(uint256 _tokenId) public pure returns (uint248 _universe, BinaryOutcomes.BinaryOutcome _outcome) {
-		return TokenId.unpackTokenId(_tokenId);
-	}
-
 	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external {
-		uint248 universeId = getUniverseId(fromId);
+		uint248 universeId = TokenId.getUniverseId(fromId);
 		require(zoltar.getForkTime(universeId) > 0, 'ShareToken universe has not forked, so shares cannot migrate');
 		require(targetOutcomeIndexes.length > 0, 'ShareToken migration requires at least one target outcome');
 
@@ -228,7 +208,7 @@ contract ShareToken is ERC1155, IShareToken {
 			migratedShareAmountAttoShares[fromId][targetUniverseId][msg.sender] = fromIdBalanceAttoShares;
 			sourceAccounts[fromId][msg.sender].balanceLocked = true;
 			migratedAnyShares = true;
-			uint256 toId = getChildId(fromId, targetUniverseId);
+			uint256 toId = TokenId.getChildId(fromId, targetUniverseId);
 			_mint(msg.sender, toId, amountAttoShares);
 			emit Migrate(msg.sender, fromId, toId, amountAttoShares);
 		}

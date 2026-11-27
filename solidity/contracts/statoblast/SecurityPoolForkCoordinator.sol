@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { CheckedCast } from '../CheckedCast.sol';
 
-import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
+import { CreationCodeDeployer } from './CreationCodeStorage.sol';
 
 import { Zoltar } from '../Zoltar.sol';
 import { Collateral } from '../Collateral.sol';
@@ -498,8 +498,8 @@ contract SecurityPoolForkCoordinator {
 	}
 }
 
-contract SecurityPoolForkCoordinatorDeployer is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolForkCoordinator).creationCode) {}
+contract SecurityPoolForkCoordinatorDeployer is CreationCodeDeployer {
+	constructor() CreationCodeDeployer(type(SecurityPoolForkCoordinator).creationCode) {}
 	function create(address authority, Zoltar zoltar) external returns (address) {
 		return _deploy(abi.encode(authority, zoltar));
 	}

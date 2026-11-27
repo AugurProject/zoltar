@@ -119,8 +119,8 @@ function forkOutcomes(snapshot: EcosystemSnapshot, universe: UniverseSnapshot) {
 	return outcomes.length === 0 ? undefined : outcomes
 }
 
-const MIGRATION_REP_SPLIT_SIGNATURE = 'MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'
-const MIGRATION_REP_SPLIT_ABI = 'event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)'
+const MIGRATION_REP_SPLIT_SIGNATURE = 'MigrationRepSplit(address,uint248,uint256,uint248,uint256,uint256)'
+const MIGRATION_REP_SPLIT_ABI = 'event MigrationRepSplit(address indexed migrator, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)'
 
 function childUniverseId(universeId: string, outcomeIndex: string) {
 	return (BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [BigInt(universeId), BigInt(outcomeIndex)]))) & ((1n << 248n) - 1n)).toString()
@@ -142,7 +142,7 @@ function decodedMigrationSplitEvidence(snapshot: EcosystemSnapshot, route: { amo
 		signature: MIGRATION_REP_SPLIT_SIGNATURE,
 		topic0: eventTopic(MIGRATION_REP_SPLIT_SIGNATURE),
 	})
-	return [evidence('recipient', snapshot.wallet.address), evidence('outcomeIndex', route.outcomeIndex), evidence('amountAttoRep', route.amountAttoRep.toString()), evidence('childMigrationRepAmountAttoRep', route.resultingCumulativeAttoRep.toString())]
+	return [evidence('outcomeIndex', route.outcomeIndex), evidence('amountAttoRep', route.amountAttoRep.toString()), evidence('childMigrationRepAmountAttoRep', route.resultingCumulativeAttoRep.toString())]
 }
 
 function migrationSplitCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
