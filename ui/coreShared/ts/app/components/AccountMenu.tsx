@@ -53,3 +53,18 @@ export function AccountMenuNetworkFact({ children, label }: { children: Componen
 		</div>
 	)
 }
+
+/**
+ * The account popover's content as a standalone section, for an application that shows it inside another menu
+ * instead of the account control: the copyable address, network facts, balances, and wallet actions.
+ */
+export function AccountDetails({ actions, address, metrics, network, tone = 'ok' }: Omit<AccountMenuProps, 'longAbbreviation'>) {
+	return (
+		<section className='app-settings-account' aria-label={appCopy.accountDetails}>
+			<WalletChip address={address} tone={tone} />
+			{network === undefined ? undefined : <dl className='account-menu-network'>{network}</dl>}
+			{metrics === undefined ? undefined : <div className='account-menu-metrics'>{metrics}</div>}
+			{actions === undefined ? undefined : <div className='account-menu-actions'>{actions}</div>}
+		</section>
+	)
+}

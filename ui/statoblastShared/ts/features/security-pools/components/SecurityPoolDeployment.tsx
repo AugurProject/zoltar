@@ -337,7 +337,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 				)}
 				{isSetupStep && (
 					<SectionBlock title={actions.deploymentLocked ? pageCopy.deployLockedEconomics : pageCopy.deployEconomicsSection} className='statoblast-deploy-summary' density='compact'>
-						<DeploymentSummary actions={actions} economicsOnly />
+						<DeploymentSummary actions={actions} economicsOnly={!actions.deploymentLocked} />
 					</SectionBlock>
 				)}
 			</div>

@@ -280,6 +280,26 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getAllByRole('button', { name: `Copy address ${address}` })).toHaveLength(1)
 	})
 
+	test('hands the wallet details to the settings menu when the application asks for them', async () => {
+		const address = '0x1234567890123456789012345678901234567890'
+		const documentQueries = await renderOverviewPanels({ accountState: connectedAccount, renderSettingsMenu: accountContent => <div className='test-settings-menu'>{accountContent}</div> })
+
+		const section = document.body.querySelector('.test-settings-menu > .app-settings-account')
+		if (!(section instanceof HTMLElement)) throw new Error('Expected wallet details inside the settings menu')
+		expect(within(section).getByRole('button', { name: `Copy address ${address}` })).not.toBeNull()
+		expect(section.textContent).toContain('Network')
+		expect(documentQueries.getAllByRole('button', { name: `Copy address ${address}` })).toHaveLength(2)
+		expect(getAccountMenuTrigger()).not.toBeNull()
+	})
+
+	test('keeps the plain settings menu when the wallet is not connected', async () => {
+		const renderSettingsMenu = mock((accountContent: unknown) => <div className='test-settings-menu'>{String(accountContent)}</div>)
+		await renderOverviewPanels({ renderSettingsMenu, settingsMenu: <div className='plain-settings-menu' /> })
+
+		expect(renderSettingsMenu).not.toHaveBeenCalled()
+		expect(document.body.querySelector('.plain-settings-menu')).not.toBeNull()
+	})
+
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
 		let documentQueries = await renderOverviewPanels({
 			accountState: { ...connectedAccount, chainId: '0x2105' },
