@@ -80,7 +80,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 	IERC20 public immutable collateralToken;
 	constructor(address controller_, IERC20 token) {
 		collateralToken = token;
-		require(controller_ != address(0), 'Auction controller is required');
 		controller = controller_;
 	}
 
@@ -91,7 +90,8 @@ contract SecurityPoolUniformPriceRepairAuction {
 
 	/// @notice Bidding opens at once and runs until `closesAt_`.
 	function startRepairAuction(uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_) external onlyController {
-		require(!initialized && !finalized, 'Auction has already started');
+		// The controller never starts an auction it has finalized.
+		require(!initialized, 'Auction has already started');
 		require(closesAt_ > block.timestamp, 'Auction closing time must follow opening time');
 		require(lotAttoEth_ > 0 && targetLots_ > 0 && targetLots_ <= type(uint128).max / lotAttoEth_, 'Auction ETH target is outside the supported range');
 		require(inventoryAttoRep_ > 0 && inventoryAttoRep_ <= Constants.MAX_ATTO_REP, 'Auction REP inventory is outside the supported range');

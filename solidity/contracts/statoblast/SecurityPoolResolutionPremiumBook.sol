@@ -134,11 +134,7 @@ contract SecurityPoolResolutionPremiumBook {
 		_removeSchedule(book, state);
 		state.securityPoolStartTime = book.securityPoolTimestamp;
 		state.securityPoolEndTime = newEnd;
-		_changeRate(book, state.securityPoolEndTime, state.rate, true);
-		uint256 tail = state.units - uint256(state.rate) * (state.securityPoolEndTime - state.securityPoolStartTime);
-		if (state.securityPoolEndTime == state.securityPoolFundedEndTime)
-			_changeTail(book, state.securityPoolEndTime, tail, true);
-		else _changeRefund(book, state.securityPoolEndTime, tail, true);
+		_applySchedule(book, state, true);
 		_write(book, id, state);
 	}
 	function cancel(uint248 universe, uint256 id) external onlyServices returns (uint256 unusedCash) {
@@ -190,7 +186,8 @@ contract SecurityPoolResolutionPremiumBook {
 		Book storage parent = books[source];
 		require(parent.isSealed && !books[child].exists, 'Invalid premium child');
 		uint256 cash = branchCash[child];
-		if (cash == 0 || parent.units / cash > MAXIMUM_INHERITED_UNITS_PER_CASH * UNIT_SCALE) {
+		bool inherits = cash != 0 && parent.units / cash <= MAXIMUM_INHERITED_UNITS_PER_CASH * UNIT_SCALE;
+		if (!inherits) {
 			// Inherited units without cash are worth nothing, and a book holding only
 			// such units could never price new funding. Units carrying only dust would
 			// price new funding in so many units that, after a few thinly chosen forks,
@@ -201,10 +198,9 @@ contract SecurityPoolResolutionPremiumBook {
 			parent.cash -= cash;
 			totalCash -= cash;
 			branchCash[child] = 0;
-			books[child] = Book({cash: 0, units: 0, assignedCash: 0, recoveredUnits: 0, refundedPrefix: 0, questionRoot: 0, rateRoot: 0, tailRoot: 0, securityPoolTimestamp: parent.securityPoolTimestamp, minimumFinalAfter: parent.securityPoolTimestamp, refundedBefore: parent.refundedBefore, exists: true, isSealed: false});
-			return cash;
+			dustCash = cash;
 		}
-		books[child] = Book({cash: cash, units: parent.units, assignedCash: 0, recoveredUnits: 0, refundedPrefix: parent.refundedPrefix, questionRoot: parent.questionRoot, rateRoot: parent.rateRoot, tailRoot: parent.tailRoot, securityPoolTimestamp: parent.securityPoolTimestamp, minimumFinalAfter: parent.securityPoolTimestamp, refundedBefore: parent.refundedBefore, exists: true, isSealed: false});
+		books[child] = Book({cash: cash - dustCash, units: inherits ? parent.units : 0, assignedCash: 0, recoveredUnits: 0, refundedPrefix: inherits ? parent.refundedPrefix : 0, questionRoot: inherits ? parent.questionRoot : 0, rateRoot: inherits ? parent.rateRoot : 0, tailRoot: inherits ? parent.tailRoot : 0, securityPoolTimestamp: parent.securityPoolTimestamp, minimumFinalAfter: parent.securityPoolTimestamp, refundedBefore: parent.refundedBefore, exists: true, isSealed: false});
 	}
 	function recover(uint248 source, uint256 id, uint256 shares, uint256 supply) external onlyServices returns (uint256 cash) {
 		Book storage book = books[source];
@@ -271,16 +267,15 @@ contract SecurityPoolResolutionPremiumBook {
 		totalCash -= cash;
 	}
 	function _removeSchedule(Book storage book, Question memory state) private {
-		if (state.securityPoolEndTime == 0) return;
-		_changeRate(book, state.securityPoolEndTime, state.rate, false);
-		uint256 duration =
-			state.securityPoolEndTime > state.securityPoolStartTime
-				? state.securityPoolEndTime - state.securityPoolStartTime
-				: 0;
-		uint256 tail = state.units - uint256(state.rate) * duration;
-		if (state.securityPoolEndTime == state.securityPoolFundedEndTime)
-			_changeTail(book, state.securityPoolEndTime, tail, false);
-		else _changeRefund(book, state.securityPoolEndTime, tail, false);
+		if (state.securityPoolEndTime != 0) _applySchedule(book, state, false);
+	}
+	/// @dev Adds or removes a scheduled question's rate and its remainder at its end:
+	/// an earned tail at the funded deadline, otherwise a refund.
+	function _applySchedule(Book storage book, Question memory state, bool increase) private {
+		uint48 end = state.securityPoolEndTime;
+		_changeRate(book, end, state.rate, increase);
+		uint256 duration = end > state.securityPoolStartTime ? end - state.securityPoolStartTime : 0;
+		_changeTail(book, end, state.units - uint256(state.rate) * duration, increase, end == state.securityPoolFundedEndTime);
 	}
 	function _integral(Book storage book, uint48 securityPoolTimestamp) private view returns (uint256) {
 		(uint256 endedRate, uint256 weightedEnds) = tree.prefix(book.rateRoot, securityPoolTimestamp);
@@ -300,25 +295,17 @@ contract SecurityPoolResolutionPremiumBook {
 		require(tree.total(book.rateRoot) <= type(uint208).max, 'Premium rate domain exceeded');
 	}
 
-	function _changeTail(Book storage book, uint48 end, uint256 units, bool increase) private {
+	/// @dev The tail tree's first value holds earned tails and its second holds refunds.
+	function _changeTail(Book storage book, uint48 end, uint256 units, bool increase, bool earned) private {
 		if (units == 0) return;
 		if (!increase) {
-			(uint256 prior, ) = tree.get(book.tailRoot, end);
-			require(prior >= units, 'Premium deadline tail too low');
+			(uint256 priorTail, uint256 priorRefund) = tree.get(book.tailRoot, end);
+			if (earned) require(priorTail >= units, 'Premium deadline tail too low');
+			else require(priorRefund >= units, 'Premium deadline refund too low');
 		}
 		unchecked {
-			book.tailRoot = tree.add(book.tailRoot, end, increase ? units : 0 - units, 0);
-		}
-	}
-
-	function _changeRefund(Book storage book, uint48 end, uint256 units, bool increase) private {
-		if (units == 0) return;
-		if (!increase) {
-			(, uint256 prior) = tree.get(book.tailRoot, end);
-			require(prior >= units, 'Premium deadline refund too low');
-		}
-		unchecked {
-			book.tailRoot = tree.add(book.tailRoot, end, 0, increase ? units : 0 - units);
+			uint256 delta = increase ? units : 0 - units;
+			book.tailRoot = tree.add(book.tailRoot, end, earned ? delta : 0, earned ? 0 : delta);
 		}
 	}
 	function _write(Book storage book, uint256 id, Question memory state) private {

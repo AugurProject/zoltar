@@ -168,14 +168,11 @@ contract QuestionLedger is QuestionLedgerStorage {
 	function additionalMintCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0) || block.timestamp >= questionData.getQuestionEndDate(questionId))
 			return 0;
-		if (securityPoolCustody != address(0)) {
-			address authority = securityPoolFactory.securityPoolOf(IQuestionLedger(payable(address(this))));
-			IQuestionAdmissionHost host = IQuestionAdmissionHost(authority);
-			if (!host.questionAdmissionPolicy().isQuestionAllowed(authority, host.originUniverseId(), questionId))
-				return 0;
-			return ISecurityPoolSettlement(address(securityPoolAccounting)).availableMintCapacity(universeId);
-		}
-		revert('Security pool settlement missing');
+		require(securityPoolCustody != address(0), 'Security pool settlement missing');
+		address authority = securityPoolFactory.securityPoolOf(IQuestionLedger(payable(address(this))));
+		IQuestionAdmissionHost host = IQuestionAdmissionHost(authority);
+		if (!host.questionAdmissionPolicy().isQuestionAllowed(authority, host.originUniverseId(), questionId)) return 0;
+		return ISecurityPoolSettlement(address(securityPoolAccounting)).availableMintCapacity(universeId);
 	}
 
 	/// @notice Converts shares to settlement collateral at the current rate, rounding down.
@@ -310,7 +307,6 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	/// @notice Forker-only: installs the next bounded outcome of the inherited carry snapshot.
 	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep) external onlyForker {
-		require(address(escalationGame) != address(0x0), 'Game missing');
 		escalationGame.initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep);
 	}
 
@@ -319,10 +315,10 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegate(abi.encodeCall(QuestionLedgerDelegate.resumeForkedEscalationGame, ()));
 	}
 
-	/// @notice Forker-only: sets whether the pool awaits escalation fork continuation.
-	function setAwaitingForkContinuation(bool shouldAwait) external onlyForker {
-		awaitingForkContinuation = shouldAwait;
-		emit AwaitingForkContinuationSet(awaitingForkContinuation);
+	/// @notice Forker-only: marks the pool as awaiting escalation fork continuation.
+	function markAwaitingForkContinuation() external onlyForker {
+		awaitingForkContinuation = true;
+		emit AwaitingForkContinuationSet(true);
 		refreshSecurityPoolFees();
 	}
 

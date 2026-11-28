@@ -4,13 +4,15 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		compiledAbiFingerprint: '0e9308e62719763d4350416f44c7cafa22bcd1a40b4aae6884679a7a61df057e',
 		name: 'SharedPoolPriceFeed',
 		purpose: 'Canonical REP/collateral reporting and price source for every question in one security pool and universe.',
-		readAbiFingerprint: '5255b68aad8590d7f46ebfcab0eb064056af40fcf2251eea1cb45320d2d1a271',
+		readAbiFingerprint: '3819ae727baff0e646f2a799b2dd12c3a017761782e0ae1a9e26cc3991926571',
 		readSurface:
 			'Accepted price and freshness: `lastPrice`, `lastSettlementTimestamp`, `priceValidUntil` and `isPriceValid`. Pending reports do not extend freshness. Reports retain isolated sponsor-owned escrows. Configuration, exposure and candidate getters: `reportCandidates`, `reportOutcome`, `universeId`, `reputationToken`, `aggregateExposureAttoEth`, `validateExposure`, `conservativePrice`, `liquidationPrice`, `minimumToken1ReportAttoEth`, `minimumToken2ReportAttoRep`, `minimumToken1ReportAttoEthForPrice`, `getSettlementCallbackGasLimit`, `getRequestPriceCostAttoEth`, `reportAuthorization`, `priceValidityWindowSeconds`, `timeType`, `trackDisputes`, `OPEN_INTEREST_DIVIDER`, `REPORT_OPERATION_GAS_OVERHEAD`, `MAXIMUM_REPORT_OPERATION_DATA_BYTES`, `FEED_SETTLEMENT_GAS_OVERHEAD`, `securityPoolFactory`, `securityPool`, `openOracle`, `collateralToken`, `minimumReportCollateral`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `pendingReportId`, `pendingReportSponsor`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `acceptedExposureLimitAttoEth`, `acceptedRepExposureLimitAttoRep`, `acceptedEpoch`, `sponsorOperationReport`.',
 		sourcePath: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 		securityBoundary:
 			'Report liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06).',
 		readDeclarations: [
+			{ name: 'pendingReportSponsor' },
+			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' },
 			{ name: 'reportCandidates' },
 			{ name: 'reportOutcome' },
 			{ name: 'universeId' },
@@ -53,8 +55,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'escalationHaltMultiplierBps' },
 			{ name: 'maxSettlementBaseFeeMultiplierBps' },
 			{ name: 'pendingReportId' },
-			{ name: 'pendingReportSponsor' },
-			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' },
 			{ name: 'acceptedExposureLimitAttoEth' },
 			{ name: 'acceptedRepExposureLimitAttoRep' },
 			{ name: 'acceptedEpoch' },
@@ -246,7 +246,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`consumeSecurityPoolRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)`',
-				caller: 'The canonical source question ledger\u2019s security pool or its configured fork coordinator',
+				caller: 'The configured fork coordinator of the canonical source question ledger\u2019s security pool (`Only security pool recovery authority`)',
 				effect:
 					'Consumes equal amounts of Invalid, Yes and No recovery rights, using independently received credits before source-backed rights. Spending a source-backed right locks that source token against transfer; spending received credits alone does not. Source balances and every branch\u2019s migration rights remain intact. Returns cumulative consumed shares.',
 				declarations: [

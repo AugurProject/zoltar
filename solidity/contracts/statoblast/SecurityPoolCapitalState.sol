@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
-import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
+import { SecurityPoolCommitmentIndex, maximumHealthyPriceOf } from './SecurityPoolCommitmentIndex.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 
 /// @dev The fork coordinator's registry of each universe's repair auction.
@@ -17,11 +17,6 @@ interface ICapitalRepairAuctions {
 /// holds assets or authorizes calls. Keep all mutable ledger state here.
 abstract contract SecurityPoolCapitalState {
 	uint256 internal constant BPS = 10_000;
-	struct TakeoverPlan {
-		uint256 remainingCommitmentAttoEth;
-		uint256 remainingPrincipalAttoRep;
-		uint256 receivedPrincipalAttoRep;
-	}
 	struct TakeoverBounds {
 		uint256 maximumOwnerPrincipal;
 		uint256 maximumOwnerCommitment;
@@ -89,12 +84,6 @@ abstract contract SecurityPoolCapitalState {
 	}
 	mapping(address => OwnerState) internal owners;
 
-	function fundingPriceFloor(address owner) public view returns (uint256) {
-		return owners[owner].fundingPrice.floor;
-	}
-	function fundingPriceEpoch(address owner) public view returns (uint256) {
-		return owners[owner].fundingPrice.epoch;
-	}
 	function exported(address owner) public view returns (bool) {
 		return owners[owner].exported;
 	}
@@ -139,6 +128,9 @@ abstract contract SecurityPoolCapitalState {
 	/// Reentrant external calls keep their actual caller identity.
 	function _capitalOwner() internal view returns (address) {
 		return msg.sender == address(this) && reportOwner != address(0) ? reportOwner : msg.sender;
+	}
+	function _maximumHealthyPrice(uint256 rep, uint256 commitment, uint256 multiplier) internal pure returns (uint256) {
+		return maximumHealthyPriceOf(rep, commitment, multiplier);
 	}
 	function _target(Owner storage owner) internal view returns (uint256) {
 		return owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;

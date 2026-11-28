@@ -5,13 +5,14 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @dev Leaf-oriented AVL tree. Unique uint96 position IDs bound the number of
 /// live leaves below 2^96; AVL height is below 192 even at that numeric limit.
-/// Health key width does not determine execution depth. Retired subtrees detach
+/// Health key width does not determine execution depth. Retired leaves detach
 /// before later rotations, preserving direct, bounded paths to historical claims.
 abstract contract SecurityPoolCommitmentTree {
 	uint256 private constant MAX_DEPTH = 192;
 	uint256 internal lastNode;
 	// Leaves hold one position; internal nodes aggregate principal and commitment.
-	// Fee balances and health/retirement tags may remain lazy on internal nodes.
+	// Fee balances and health tags may remain lazy on internal nodes. Only a
+	// detached leaf is ever marked retired.
 	struct Node {
 		uint256 parent;
 		uint256 left;
@@ -243,10 +244,6 @@ abstract contract SecurityPoolCommitmentTree {
 			if (right.healthEpoch < node.healthEpoch) right.healthEpoch = node.healthEpoch;
 			node.healthEpoch = 0;
 		}
-		if (node.retired) {
-			left.retired = true;
-			right.retired = true;
-		}
 		if (node.ethFees != 0 || node.repFees != 0) {
 			uint256 ethAmount = Math.mulDiv(node.ethFees, left.commitment, node.commitment);
 			uint256 repAmount = Math.mulDiv(node.repFees, left.commitment, node.commitment);
@@ -265,7 +262,6 @@ abstract contract SecurityPoolCommitmentTree {
 		node.repFees = uint128(repTotal);
 	}
 
-	/// @dev Push ancestors root-first so a position sees every pending credit and health tag.
 	/// @notice The latest healthy observation recorded on the position's tree path.
 	function healthEpoch(uint96 id) public view returns (uint64 epoch) {
 		uint256 cursor = positions[id].node;
@@ -276,6 +272,7 @@ abstract contract SecurityPoolCommitmentTree {
 		}
 	}
 
+	/// @dev Push ancestors root-first so a position sees every pending credit and health tag.
 	function _touch(uint96 id) internal {
 		uint256 cursor = positions[id].node;
 		require(cursor != 0, 'Unknown commitment position');
@@ -288,12 +285,13 @@ abstract contract SecurityPoolCommitmentTree {
 		while (depth != 0) _push(path[--depth]);
 	}
 
-	function _close(uint256 root) internal {
-		nodes[root].retired = true;
-		nodes[root].parent = 0;
+	/// @dev The caller detaches the leaf first, so it has no ancestors.
+	function _close(uint256 leafId) internal {
+		nodes[leafId].retired = true;
 	}
 
 	function _preview(uint256 leafId) internal view returns (bool retired, uint256 ethFees, uint256 repFees) {
+		retired = nodes[leafId].retired;
 		uint256[MAX_DEPTH] memory path;
 		uint256 depth;
 		uint256 cursor = leafId;
@@ -303,7 +301,6 @@ abstract contract SecurityPoolCommitmentTree {
 		}
 		while (true) {
 			Node storage node = nodes[cursor];
-			retired = retired || node.retired;
 			ethFees += node.ethFees;
 			repFees += node.repFees;
 			if (depth == 0) break;

@@ -104,7 +104,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 
 	test('a bidder refunds each bid once, before and after closing', async () => {
 		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
-		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [1n, context.other.account.address] })).rejects.toThrow('Collateral repair auction has not opened')
+		await expect(context.other.simulateContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [1n, context.other.account.address] })).rejects.toThrow('Auction bid belongs to another bidder')
 		await context.report()
 		await context.open()
 		const loser = await context.bid(context.other, 2n, 100n * unit)

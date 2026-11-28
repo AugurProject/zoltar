@@ -77,7 +77,7 @@ interface IQuestionLedger {
 	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external;
 	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep) external;
 	function resumeForkedEscalationGame() external;
-	function setAwaitingForkContinuation(bool shouldAwait) external;
+	function markAwaitingForkContinuation() external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
 	function authorizeChildQuestionLedger(IQuestionLedger pool) external;
@@ -114,7 +114,6 @@ interface ISecurityPoolFactory {
 	function getQuestionLedgerId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
 	function getQuestionLedger(bytes32 originId, uint248 universeId) external view returns (IQuestionLedger questionLedger);
 	function getQuestionLedgerOriginId(IQuestionLedger questionLedger) external view returns (bytes32 originId);
-	function getQuestionLedgerHasInheritedForkOutcome(IQuestionLedger questionLedger) external view returns (bool);
 	function questionLedgerDeploymentCount() external view returns (uint256);
 	function questionLedgerDeploymentsRange(uint256 startIndex, uint256 count) external view returns (QuestionLedgerDeployment[] memory deployments);
 }

@@ -83,8 +83,6 @@ contract SharedPoolPriceFeed {
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public pendingReportId;
-	address public pendingReportSponsor;
-	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 	uint256 public acceptedExposureLimitAttoEth;
 	uint256 public acceptedRepExposureLimitAttoRep;
 	uint256 public acceptedEpoch;
@@ -110,6 +108,13 @@ contract SharedPoolPriceFeed {
 	event ReportOperationAttempted(uint256 indexed reportId, address indexed sponsor, uint256 indexed operationIndex, bool success);
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
+	/// @dev Report ids start at 1, so a cleared pending report reads the zero candidate.
+	function pendingReportSponsor() external view returns (address) {
+		return reports[pendingReportId].sponsor;
+	}
+	function pendingReportMaxSettlementBaseFeeAttoEthPerGas() public view returns (uint256) {
+		return reports[pendingReportId].maxSettlementBaseFee;
+	}
 	function reportCandidates(uint256 reportId) external view returns (SharedPoolReportEscrow escrow, address sponsor, uint256 maxSettlementBaseFee) {
 		ReportCandidate storage candidate = reports[reportId];
 		return (candidate.escrow, candidate.sponsor, candidate.maxSettlementBaseFee);
@@ -271,14 +276,12 @@ contract SharedPoolPriceFeed {
 		require(bountyAttoEth >= _minimumSettlementBounty(callbackGasLimit), 'Oracle bounty too small');
 		require(msg.value >= bountyAttoEth, 'Not enough ETH for oracle bounty');
 		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
-		pendingReportMaxSettlementBaseFeeAttoEthPerGas = quote.maxSettlementBaseFeeAttoEthPerGas;
-		pendingReportSponsor = sponsor;
 		SharedPoolReportEscrow escrow;
 		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.collateralAmount, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth, callbackGasLimit);
 		pendingReportId = reportId;
-		reports[reportId] = ReportCandidate({escrow: escrow, sponsor: sponsor, outcome: REPORT_PENDING, maxSettlementBaseFee: pendingReportMaxSettlementBaseFeeAttoEthPerGas});
-		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-		emit ReportFundingAssigned(pendingReportId, sponsor);
+		reports[reportId] = ReportCandidate({escrow: escrow, sponsor: sponsor, outcome: REPORT_PENDING, maxSettlementBaseFee: quote.maxSettlementBaseFeeAttoEthPerGas});
+		emit PriceRequested(reportId, quote.maxSettlementBaseFeeAttoEthPerGas);
+		emit ReportFundingAssigned(reportId, sponsor);
 	}
 
 	/// @dev Quote first; custody changes and the self-only escrow call stay in the request path.
@@ -374,7 +377,7 @@ contract SharedPoolPriceFeed {
 			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 			emit PriceCandidateAccepted(reportId, candidatePrice, lastPrice, priceTimestamp, canonicalUpdated);
 		} else {
-			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
+			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas(), lastPrice, lastSettlementTimestamp);
 		}
 		// Rejection grants no price authority. Independently secured canonical
 		// prices can still satisfy the sponsor's signed operation bounds.
@@ -443,14 +446,12 @@ contract SharedPoolPriceFeed {
 		(uint128 amount1, uint128 amount2, , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Report not settled');
 		require(_completeReport(reportId, amount1, amount2, candidate), 'Base fee too high');
-		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
+		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas(), lastPrice, lastSettlementTimestamp);
 	}
 
 	function _clearLatestReport(uint256 reportId) private {
 		if (reportId != pendingReportId) return;
 		pendingReportId = 0;
-		pendingReportSponsor = address(0);
-		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
 	}
 
 	function _validateSettledReport(uint256 reportId, uint256 amount1, uint256 amount2) private view returns (string memory reason, uint256 priceTimestamp) {

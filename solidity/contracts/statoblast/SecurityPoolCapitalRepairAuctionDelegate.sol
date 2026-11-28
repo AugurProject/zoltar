@@ -11,7 +11,6 @@ interface ICapitalRepairAuctionHost {
 	function repToken() external view returns (IERC20);
 	function securityMultiplierBps() external view returns (uint256);
 	function minimumCommitmentAttoEth() external view returns (uint256);
-	function maximumHealthyPrice(uint256 rep, uint256 commitment) external view returns (uint256);
 	function ownerAccount(address owner) external view returns (SecurityPoolCapitalState.Owner memory);
 	function commitmentIndex() external view returns (SecurityPoolCommitmentIndex);
 	function repairAuctionCohort()
@@ -57,12 +56,13 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 		require(adapter.code.length != 0 && lots != 0 && repPerLot != 0 && commitmentPerLot >= host.minimumCommitmentAttoEth(), 'Invalid auction cohort');
 		// The ordinary index floors REP before dividing by K. This congruence
 		// makes that first division exact per lot, including a one-lot winner.
-		require(mulmod(repPerLot, BPS, host.securityMultiplierBps()) == 0, 'Auction collateral ratio rounds per vault');
+		uint256 multiplier = host.securityMultiplierBps();
+		require(mulmod(repPerLot, BPS, multiplier) == 0, 'Auction collateral ratio rounds per vault');
 		uint256 principal = lots * repPerLot;
 		uint256 commitment = lots * commitmentPerLot;
 		(uint256 existing, ) = commitmentIndex.totals();
 		require(host.repToken().balanceOf(address(this)) >= existing + principal + totalFreeAttoRep + retirementCashAttoRep, 'Auction principal unfunded');
-		uint256 threshold = host.maximumHealthyPrice(repPerLot, commitmentPerLot);
+		uint256 threshold = _maximumHealthyPrice(repPerLot, commitmentPerLot, multiplier);
 		uint96 id = commitmentIndex.importPosition(adapter, principal, commitment, threshold, 0, 0, 0);
 		repairAuctionCohort = RepairAuctionCohort({adapter: ISecurityPoolRepairAuctionCapital(adapter), positionId: id, remainingLots: lots, repPerLot: repPerLot, commitmentPerLot: commitmentPerLot});
 		emit RepairAuctionCohortInstalled(adapter, id, lots, repPerLot, commitmentPerLot);
@@ -100,7 +100,7 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 		uint256 maxPrice;
 		if (id != 0) {
 			SecurityPoolCommitmentIndex.Account memory current = commitmentIndex.accountOf(id);
-			maxPrice = ICapitalRepairAuctionHost(address(this)).maximumHealthyPrice(current.rep + principal, current.commitment + commitment);
+			maxPrice = _maximumHealthyPrice(current.rep + principal, current.commitment + commitment, ICapitalRepairAuctionHost(address(this)).securityMultiplierBps());
 		}
 		id = commitmentIndex.moveRepairAuctionShare(cohort.positionId, bidder, id, principal, commitment, maxPrice);
 		account.positionId = id;

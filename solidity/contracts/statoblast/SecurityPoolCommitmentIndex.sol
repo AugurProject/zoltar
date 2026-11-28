@@ -7,6 +7,22 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
+uint256 constant BPS_DENOMINATOR = 10_000;
+uint256 constant PRICE_SCALE = 1e18;
+
+/// @dev Commitment that `rep` backs at price `divisor`, or equivalently the
+/// highest price at which it backs commitment `divisor`. Both divisions round
+/// down; preserve the intermediate rounding when changing the expression.
+function repBackedAmount(uint256 rep, uint256 multiplier, uint256 divisor) pure returns (uint256) {
+	return Math.mulDiv(Math.mulDiv(rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, divisor);
+}
+
+/// @dev Zero commitment returns the uint256 maximum sentinel.
+function maximumHealthyPriceOf(uint256 rep, uint256 commitment, uint256 multiplier) pure returns (uint256) {
+	if (commitment == 0) return type(uint256).max;
+	return repBackedAmount(rep, multiplier, commitment);
+}
+
 /// @notice Security pool-owned collateral, commitment, fee and retirement accounting.
 /// @dev The controller settles time and prices before mutations and owns token
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
@@ -15,9 +31,6 @@ import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 /// new requests, which enter the next cohort. A reservation tracks the reduction
 /// requested when a position retires to its remaining commitment target.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
-	uint256 private constant BPS_DENOMINATOR = 10_000;
-	uint256 private constant PRICE_SCALE = 1e18;
-
 	address private immutable initializer = msg.sender;
 	uint96 public lastPositionId;
 	uint96 public currentBatch;
@@ -48,8 +61,6 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		uint256 removed;
 		uint256 freedRep;
 		address owner;
-		// A cut that alone repairs the position, or leaves only the economic minimum.
-		bool settled;
 	}
 
 	struct Retirement {
@@ -297,15 +308,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @notice Distress begins at the first adverse oracle observation after the
 	/// position's latest recovery. No keeper transaction starts or resets a clock.
-	/// One tree path combines lazy healthy observations and detached retirement.
+	/// One tree path combines lazy healthy observations; retirement marks only the detached leaf.
 	function _distressObservation(uint96 id) private view returns (uint64) {
 		uint256 cursor = positions[id].node;
 		Node storage leaf = nodes[cursor];
-		if (cursor == 0 || leaf.commitment == 0 || leaf.price >= observedPrice) return 0;
+		if (cursor == 0 || leaf.commitment == 0 || leaf.retired || leaf.price >= observedPrice) return 0;
 		uint64 epoch = positions[id].healthyMutationEpoch;
 		while (cursor != 0) {
 			Node storage node = nodes[cursor];
-			if (node.retired) return 0;
 			if (epoch < node.healthEpoch) epoch = node.healthEpoch;
 			cursor = node.parent;
 		}
@@ -340,7 +350,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target, bool ownerExit) public onlyCapitalLedger operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > target, 'Position is not live');
-		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, price);
+		uint256 supported = repBackedAmount(account.rep, multiplier, price);
 		result.owner = account.owner;
 		if (supported >= account.commitment) {
 			positions[id].healthyMutationEpoch = healthObservationEpoch;
@@ -381,12 +391,10 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				replace(id, 0, 0, 0);
 				result.freedRep = account.rep;
 			} else {
-				uint256 maxPrice = Math.mulDiv(Math.mulDiv(account.rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, remaining);
-				replace(id, account.rep, remaining, maxPrice);
+				replace(id, account.rep, remaining, repBackedAmount(account.rep, multiplier, remaining));
 			}
 		}
 		if (remaining <= supported) positions[id].healthyMutationEpoch = healthObservationEpoch;
-		result.settled = removed != 0 && (remaining <= supported || remaining <= minimumCommitment);
 	}
 
 	function eligibleCommitment(uint256 acceptedPrice) public view returns (uint256) {
@@ -431,11 +439,12 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		source = accountOf(id);
 		// Minimum-size commitments can be replaced: REP not paid as a takeover reward returns to
 		// the source owner's free principal rather than transferred to the receiver.
-		cured.settled = cured.removed != 0 && (source.commitment == 0 || source.maxHealthyPrice >= repairPrice);
-		if (cured.settled) return (cured, source, 0, 0, 0);
+		// A cut that alone repairs the position leaves nothing to take over.
+		if (cured.removed != 0 && (source.commitment == 0 || source.maxHealthyPrice >= repairPrice))
+			return (cured, source, 0, 0, 0);
 		uint256 vestedPenalty = Math.mulDiv(source.rep + penaltyPaid, Math.min(elapsed, LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
 		uint256 availableTakeoverReward = vestedPenalty > penaltyPaid ? vestedPenalty - penaltyPaid : 0;
-		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - availableTakeoverReward, BPS_DENOMINATOR, multiplier), PRICE_SCALE, repairPrice);
+		uint256 supported = repBackedAmount(source.rep - availableTakeoverReward, multiplier, repairPrice);
 		uint256 fullCommitment = source.commitment - Math.min(source.commitment, supported);
 		if (source.commitment - fullCommitment < minimumCommitment) fullCommitment = source.commitment;
 		require(fullCommitment != 0, 'Position does not need takeover');
@@ -444,8 +453,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			commitment = source.commitment - Math.min(source.commitment, minimumCommitment);
 		require(commitment != 0, 'Takeover commitment below minimum');
 		takeoverReward = Math.mulDiv(availableTakeoverReward, commitment, fullCommitment);
-		uint256 remainingBacking = Math.mulDiv(source.rep - takeoverReward, BPS_DENOMINATOR, multiplier);
-		require(commitment == fullCommitment || source.commitment - commitment <= Math.mulDiv(remainingBacking, PRICE_SCALE, repairPrice) || source.commitment - commitment > Math.mulDiv(remainingBacking, PRICE_SCALE, price), 'Takeover would strand source between prices');
+		uint256 remainingRep = source.rep - takeoverReward;
+		require(commitment == fullCommitment || source.commitment - commitment <= repBackedAmount(remainingRep, multiplier, repairPrice) || source.commitment - commitment > repBackedAmount(remainingRep, multiplier, price), 'Takeover would strand source between prices');
 		debit = commitment == source.commitment ? source.rep : takeoverReward;
 		liquidationPenalties[id] = LiquidationPenalty(started, penaltyPaid + takeoverReward);
 	}
@@ -471,8 +480,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// rounded intermediate and final results must fit uint256; overflow reverts
 	/// rather than saturating, even when every representable price is healthy.
 	function maximumHealthyPrice(uint256 rep, uint256 commitment, uint256 multiplier) external pure returns (uint256) {
-		if (commitment == 0) return type(uint256).max;
-		return Math.mulDiv(Math.mulDiv(rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, commitment);
+		return maximumHealthyPriceOf(rep, commitment, multiplier);
 	}
 
 	/// @notice Fresh demand can use active K and the residual K a retiring owner
@@ -557,8 +565,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Exact current-state readiness for all-or-nothing targeted service.
 	/// @dev The ledger may checkpoint matured demand before execution. Price
 	/// freshness and ledger freeze/import authorization remain its responsibility.
-	/// Requested amounts are populated even when readiness is blocked. Bulk
-	/// retirement is recognized through lazy ancestors without mutating claims.
+	/// Requested amounts are populated even when readiness is blocked. A served
+	/// retirement is read from the position's own leaf without mutating claims.
 	function previewRetirement(uint96 id, uint256 acceptedPrice, uint256 demand) public view returns (RetirementPreview memory result) {
 		result.effectiveCurrentBatch = currentBatch;
 		if (currentBatch == 0 || roots[currentBatch] == 0)

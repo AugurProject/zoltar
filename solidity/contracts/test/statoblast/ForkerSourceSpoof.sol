@@ -10,7 +10,6 @@ contract ForkerSourceSpoof {
 	struct ReporterQuestion {
 		uint256 balanceAttoRep;
 		address sourceGame;
-		uint248 scheduledUniverseId;
 		uint48 finalAfter;
 		bool winnerHaircutPaidByFork;
 	}

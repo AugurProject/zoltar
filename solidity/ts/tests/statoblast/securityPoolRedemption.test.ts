@@ -230,11 +230,8 @@ describe('Statoblast: native finalized security pool redemptions', () => {
 		// question and reporting windows cannot produce. Measurements use ordinary entry points.
 		const stressSnapshot = await mockWindow.anvilSnapshot()
 		const settlementAuthority = createWriteClient(mockWindow, BigInt(engine))
-		const reporterAuthority = createWriteClient(mockWindow, BigInt(fixture.securityPool))
 		await mockWindow.setBalance(engine, unit)
-		await mockWindow.setBalance(fixture.securityPool, unit)
 		await mockWindow.impersonateAccount(engine)
-		await mockWindow.impersonateAccount(fixture.securityPool)
 		const stressTime = await owner.readContract({ ...securityPool(), functionName: 'securityPoolTime', args: [genesisUniverse] })
 		const cutoff = 0x75555555
 		const feeBucket = BigInt(cutoff) / DAY
@@ -251,6 +248,10 @@ describe('Statoblast: native finalized security pool redemptions', () => {
 			const key = level === 24 ? cutoff : Number(BigInt(cutoff) ^ (1n << BigInt(2 * level + 1)))
 			const game = await owner.readContract({ abi: poolArtifact.abi, address: fixture.poolFor(id).questionLedger, functionName: 'escalationGame' })
 			await writeContractAndWait(settlementAuthority, () => settlementAuthority.writeContract({ ...ledger, functionName: 'scheduleFinality', args: [parentBook, id, key, stressTime] }))
+			// The reporter ledger accepts schedules only from the canonical game itself.
+			const reporterAuthority = createWriteClient(mockWindow, BigInt(game))
+			await mockWindow.setBalance(game, unit)
+			await mockWindow.impersonateAccount(game)
 			await writeContractAndWait(reporterAuthority, () => reporterAuthority.writeContract({ ...reporters, functionName: 'scheduleFinality', args: [game, key] }))
 			expect((await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [parentBook, id] }))[0].finalAfter).toBe(BigInt(key))
 			expect((await owner.readContract({ ...reporters, functionName: 'question', args: [genesisUniverse, id] }))[0].finalAfter).toBe(BigInt(key))

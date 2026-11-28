@@ -90,9 +90,11 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function getReserves() external view returns (uint256, uint256) {
-		return (_yesBalance(), _noBalance());
+		return _effectiveReserves();
 	}
 
+	/// @dev Every share inflow passes `onERC1155Received`, which rejects INVALID, so the
+	/// whole YES and NO balances are the effective reserves.
 	function getEffectiveReserves() external view returns (uint256, uint256) {
 		return _effectiveReserves();
 	}
@@ -115,7 +117,6 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		require(totalSupply() == 0, 'Already initialized');
 		_requireLifecycleOpen(false);
 		require(recipient != address(0), 'Recipient is zero');
-		require(_yesBalance() == 0 && _noBalance() == 0 && _invalidBalance() == 0, 'Nonzero initial balance');
 		uint256 scale = yesAmount < noAmount ? yesAmount : noAmount;
 		require(scale > MINIMUM_LIQUIDITY, 'Initial liquidity too small');
 		shareToken.safeTransferFrom(msg.sender, address(this), yesTokenId, yesAmount, '');
@@ -252,9 +253,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function _effectiveReserves() private view returns (uint256 effectiveYes, uint256 effectiveNo) {
-		effectiveYes = _yesBalance();
-		effectiveNo = _noBalance();
-		require(_invalidBalance() == 0, 'Pair holds INVALID');
+		return (_yesBalance(), _noBalance());
 	}
 
 	function _checkReserves(uint256 minimumYes, uint256 minimumNo) private {

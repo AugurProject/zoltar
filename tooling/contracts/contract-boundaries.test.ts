@@ -15,6 +15,8 @@ test('allows Trading to consume the explicit Statoblast interface surface', () =
 	const sourcePath = 'solidity/contracts/trading/Router.sol'
 	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/interfaces/IQuestionLedger.sol';")).toEqual([])
 	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/BinaryOutcomes.sol';")).toEqual([])
+	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/tokens/TokenId.sol';")).toEqual([])
+	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/tokens/ShareToken.sol';")).toHaveLength(1)
 	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/QuestionLedger.sol';")).toHaveLength(1)
 })
 

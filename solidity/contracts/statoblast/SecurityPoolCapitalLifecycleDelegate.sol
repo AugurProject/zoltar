@@ -24,7 +24,6 @@ interface ICapitalLifecycleHost {
 	function ownerConservativePrice(address owner) external view returns (uint256);
 	function repToken() external view returns (IERC20);
 	function zoltar() external view returns (Zoltar);
-	function maximumHealthyPrice(uint256 rep, uint256 commitment) external view returns (uint256);
 	function isPriceValid() external view returns (bool);
 }
 
@@ -33,6 +32,12 @@ interface ICapitalLifecycleHost {
 /// wrappers guard owner authorization and authenticate fork accounting callers.
 contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	using SafeERC20Ops for IERC20;
+	struct TakeoverPlan {
+		uint256 remainingCommitmentAttoEth;
+		uint256 remainingPrincipalAttoRep;
+		uint256 receivedPrincipalAttoRep;
+		uint256 remainingMaxPrice;
+	}
 	address public immutable implementation = address(this);
 	modifier onlyDelegateCall() {
 		require(address(this) != implementation, 'Only capital delegatecall');
@@ -47,7 +52,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 			require(host.isPriceValid(), 'Capital price stale');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			require(position.rep >= _requiredRep(host, position.commitment, targetHealthFactorBps), 'Chosen health target unmet');
+			require(position.rep >= _requiredRep(host, position.commitment, targetHealthFactorBps, host.securityMultiplierBps()), 'Chosen health target unmet');
 		}
 		owner.targetHealthFactorBps = targetHealthFactorBps;
 	}
@@ -102,14 +107,15 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			owners[_capitalOwner()].fundingPrice = FundingPrice(Math.max(host.ownerConservativePrice(_capitalOwner()), reportPrice), epoch);
 		}
 		uint256 rep = owner.freeAttoRep + old.rep;
-		require(rep >= _requiredRep(host, commitment, health), 'Chosen health target unmet');
+		uint256 multiplier = host.securityMultiplierBps();
+		require(rep >= _requiredRep(host, commitment, health, multiplier), 'Chosen health target unmet');
 		totalFreeAttoRep -= owner.freeAttoRep;
 		owner.freeAttoRep = 0;
+		uint256 maxPrice = _maximumHealthyPrice(rep, commitment, multiplier);
 		if (id == 0) {
-			id = commitmentIndex.create(_capitalOwner(), rep, commitment, host.maximumHealthyPrice(rep, commitment));
+			id = commitmentIndex.create(_capitalOwner(), rep, commitment, maxPrice);
 			owner.positionId = id;
 		} else {
-			uint256 maxPrice = host.maximumHealthyPrice(rep, commitment);
 			commitmentIndex.replace(id, rep, commitment, maxPrice);
 			if (maxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(id);
 		}
@@ -134,8 +140,9 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(host.isPriceValid(), 'Capital price stale');
 			require(commitmentIndex.eligibleCommitment(conservativePrice) >= demandAttoEth, 'Security pool backing insufficient');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
-			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(host, position.commitment, _target(owner)), 'Owner collateral too low');
-			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);
+			uint256 multiplier = host.securityMultiplierBps();
+			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(host, position.commitment, _target(owner), multiplier), 'Owner collateral too low');
+			uint256 maxPrice = _maximumHealthyPrice(position.rep - pledged, position.commitment, multiplier);
 			commitmentIndex.replace(owner.positionId, position.rep - pledged, position.commitment, maxPrice);
 			if (position.commitment == 0 || maxPrice >= liquidationPrice)
 				commitmentIndex.clearLiquidation(owner.positionId);
@@ -159,7 +166,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 
 	function cure(uint96 id, uint256 target, bool ownerExit) external onlyDelegateCall returns (uint256 removed) {
-		require(id != 0 && id != repairAuctionCohort.positionId, 'Materialize an individual repair auction bidder');
+		// The ledger passes only the caller's own live position, never the auction cohort.
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, host.securityMultiplierBps(), host.minimumCommitmentAttoEth(), demandAttoEth, target, ownerExit);
 		removed = result.removed;
@@ -188,7 +195,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			totalFreeAttoRep += cured.freedRep;
 			emit CommitmentCured(id, cured.removed);
 		}
-		if (cured.settled) return 0;
+		// A cure that alone repairs the source leaves nothing to take over.
+		if (repaired == 0) return 0;
 		commitment = repaired;
 		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.securityPool()).priceFeed(host.universeId()));
 		require(source.rep <= feed.acceptedRepExposureLimitAttoRep(), 'Accepted report REP exposure exceeded');
@@ -208,20 +216,17 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		// Any previously idle receiver principal joins its one live position.
 		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;
 		require(receiverFreePrincipalAttoRep <= maximumOwnRep, 'Receiver consent exceeded');
-		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(host, existing.commitment + commitment, _target(receiver));
+		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(host, existing.commitment + commitment, _target(receiver), securityMultiplierBps);
 		require(existing.rep + receiverFreePrincipalAttoRep + takeoverReward >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
 		require(existing.commitment + commitment >= minimumCommitmentAttoEth, 'Receiver commitment below minimum');
-		TakeoverPlan memory plan = TakeoverPlan({remainingCommitmentAttoEth: source.commitment - commitment, remainingPrincipalAttoRep: source.rep - debit, receivedPrincipalAttoRep: receiverFreePrincipalAttoRep + takeoverReward});
+		TakeoverPlan memory plan = TakeoverPlan({remainingCommitmentAttoEth: source.commitment - commitment, remainingPrincipalAttoRep: source.rep - debit, receivedPrincipalAttoRep: receiverFreePrincipalAttoRep + takeoverReward, remainingMaxPrice: _maximumHealthyPrice(source.rep - debit, source.commitment - commitment, securityMultiplierBps)});
 		if (enforceBounds) {
 			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
 		}
-		receiverId = _transferTakeoverPosition(id, commitment, debit, receiver, existing, plan, receiverOwner, minimumCommitmentAttoEth);
-		if (
-			plan.remainingCommitmentAttoEth == 0 ||
-			ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth) >=
-				liquidationPrice
-		) commitmentIndex.clearLiquidation(id);
+		receiverId = _transferTakeoverPosition(id, commitment, debit, receiver, existing, plan, receiverOwner, minimumCommitmentAttoEth, securityMultiplierBps);
+		// A fully transferred source has the maximum sentinel price.
+		if (plan.remainingMaxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(id);
 		receiver.freeAttoRep -= receiverFreePrincipalAttoRep;
 		totalFreeAttoRep -= receiverFreePrincipalAttoRep;
 		owners[source.owner].account.freeAttoRep += debit - takeoverReward;
@@ -229,23 +234,23 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		emit CommitmentTakenOver(id, receiverId, commitment, takeoverReward);
 	}
 
-	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 debit, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner, uint256 minimumCommitmentAttoEth) private returns (uint96 receiverId) {
+	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 debit, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner, uint256 minimumCommitmentAttoEth, uint256 multiplier) private returns (uint96 receiverId) {
 		receiverId = receiver.positionId;
 		uint256 receiverPrincipalAttoRep;
 		uint256 receiverCommitmentAttoEth;
 		if (receiverId == 0) {
-			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment), minimumCommitmentAttoEth);
+			receiverId = commitmentIndex.split(id, receiverOwner, debit, commitment, plan.remainingMaxPrice, _maximumHealthyPrice(plan.receivedPrincipalAttoRep, commitment, multiplier), minimumCommitmentAttoEth);
 			receiver.positionId = receiverId;
 			receiverPrincipalAttoRep = plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = commitment;
 		} else {
 			receiverPrincipalAttoRep = existing.rep + plan.receivedPrincipalAttoRep;
 			receiverCommitmentAttoEth = existing.commitment + commitment;
-			commitmentIndex.transferTo(id, receiverId, debit, commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(plan.remainingPrincipalAttoRep, plan.remainingCommitmentAttoEth), ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth), minimumCommitmentAttoEth);
+			commitmentIndex.transferTo(id, receiverId, debit, commitment, plan.remainingMaxPrice, _maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth, multiplier), minimumCommitmentAttoEth);
 		}
 		// Balanced transfer preserved a closed cohort's commitment. This replacement only
 		// adjusts collateral and therefore cannot refill that cohort.
-		uint256 maxPrice = ICapitalLifecycleHost(address(this)).maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth);
+		uint256 maxPrice = _maximumHealthyPrice(receiverPrincipalAttoRep, receiverCommitmentAttoEth, multiplier);
 		commitmentIndex.replace(receiverId, receiverPrincipalAttoRep, receiverCommitmentAttoEth, maxPrice);
 		if (maxPrice >= liquidationPrice) commitmentIndex.clearLiquidation(receiverId);
 	}
@@ -277,7 +282,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		require(account.positionId == 0 && account.freeAttoRep == 0, 'Owner already imported');
 		account.targetHealthFactorBps = target;
 		require(position.commitment != 0 && position.rep != 0, 'Empty fork choice');
-		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, ICapitalLifecycleHost(address(this)).maximumHealthyPrice(position.rep, position.commitment), position.batch, position.remainingCommitment, position.retirementOrder);
+		uint96 id = commitmentIndex.importPosition(owner, position.rep, position.commitment, _maximumHealthyPrice(position.rep, position.commitment, ICapitalLifecycleHost(address(this)).securityMultiplierBps()), position.batch, position.remainingCommitment, position.retirementOrder);
 		account.positionId = id;
 	}
 	function finishForkImport(uint256 fundedDemand) external onlyDelegateCall {
@@ -298,8 +303,8 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	function _requireOpen(ICapitalLifecycleHost host) private view {
 		require(!importing && host.zoltar().getForkTime(host.universeId()) == 0 && !frozen, 'Capital universe inactive');
 	}
-	function _requiredRep(ICapitalLifecycleHost host, uint256 commitment, uint256 health) private view returns (uint256) {
+	function _requiredRep(ICapitalLifecycleHost host, uint256 commitment, uint256 health, uint256 multiplier) private view returns (uint256) {
 		return
-			commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(_capitalOwner()), host.securityMultiplierBps(), health);
+			commitmentIndex.requiredRep(commitment, host.ownerConservativePrice(_capitalOwner()), multiplier, health);
 	}
 }

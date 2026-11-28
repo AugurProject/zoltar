@@ -34,8 +34,9 @@ export function findContractBoundaryViolations(sourcePath: string, source: strin
 		}
 
 		if (sourcePath.startsWith('solidity/contracts/trading/') && resolved.startsWith('solidity/contracts/statoblast/')) {
-			const allowed = resolved === 'solidity/contracts/statoblast/BinaryOutcomes.sol' || resolved.startsWith('solidity/contracts/statoblast/interfaces/') || resolved.startsWith('solidity/contracts/statoblast/openOracle/openzeppelin/')
-			if (!allowed) findings.push({ file: sourcePath, importPath, reason: 'Trading may consume Statoblast only through interfaces, outcome types, and the existing vendored math library' })
+			// TokenId is the pure share-token id codec for those outcome types.
+			const allowed = resolved === 'solidity/contracts/statoblast/BinaryOutcomes.sol' || resolved === 'solidity/contracts/statoblast/tokens/TokenId.sol' || resolved.startsWith('solidity/contracts/statoblast/interfaces/') || resolved.startsWith('solidity/contracts/statoblast/openOracle/openzeppelin/')
+			if (!allowed) findings.push({ file: sourcePath, importPath, reason: 'Trading may consume Statoblast only through interfaces, outcome types and their token id codec, and the existing vendored math library' })
 		}
 
 		if (sourcePath.startsWith('solidity/contracts/statoblast/openOracle/') && !resolved.startsWith('solidity/contracts/statoblast/openOracle/')) {

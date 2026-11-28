@@ -56,29 +56,20 @@ contract SecurityPoolCapitalFeeStreams {
 
 	/// @dev The caller must allocate all older income before it funds a new stream.
 	/// One checkpoint per wall-clock second is sufficient, regardless of calls.
+	/// Each funded amount is its stream's rate numerator over the shared duration.
 	function addStream(uint256 ethAmount, uint256 repAmount) external onlyCapitalLedger {
-		_addStream(ethAmount, repAmount);
-	}
-
-	function _requireBudget() private view {
-		require(outstandingEth + deferredEth <= MAX_OUTSTANDING && outstandingRep + deferredRep <= MAX_OUTSTANDING, 'Fee budget exceeds token domain');
-	}
-
-	function _addStream(uint256 ethAmount, uint256 repAmount) private {
 		require(releasedThrough == block.timestamp, 'Checkpoint fees before funding');
 		require(uint256(releasedThrough) + rewardDuration <= MAX_TIMESTAMP, 'Invalid fee duration');
 		require(ethAmount != 0 || repAmount != 0, 'Empty fee stream');
 		outstandingEth += ethAmount;
 		outstandingRep += repAmount;
-		_requireBudget();
-		uint256 ethRateNumerator = ethAmount;
-		uint256 repRateNumerator = repAmount;
+		require(outstandingEth + deferredEth <= MAX_OUTSTANDING && outstandingRep + deferredRep <= MAX_OUTSTANDING, 'Fee budget exceeds token domain');
 		uint48 end = releasedThrough + rewardDuration;
 		Expiry memory previous = expiries[lastExpiryId];
 		if (previous.end != end) ++lastExpiryId;
-		expiries[lastExpiryId] = Expiry({end: end, ethRateNumerator: previous.ethRateNumerator + ethRateNumerator, repRateNumerator: previous.repRateNumerator + repRateNumerator, ethIntegralNumerator: previous.ethIntegralNumerator + ethRateNumerator * end, repIntegralNumerator: previous.repIntegralNumerator + repRateNumerator * end});
-		lastEthIntegralNumerator += ethRateNumerator * releasedThrough;
-		lastRepIntegralNumerator += repRateNumerator * releasedThrough;
+		expiries[lastExpiryId] = Expiry({end: end, ethRateNumerator: previous.ethRateNumerator + ethAmount, repRateNumerator: previous.repRateNumerator + repAmount, ethIntegralNumerator: previous.ethIntegralNumerator + ethAmount * end, repIntegralNumerator: previous.repIntegralNumerator + repAmount * end});
+		lastEthIntegralNumerator += ethAmount * releasedThrough;
+		lastRepIntegralNumerator += repAmount * releasedThrough;
 	}
 
 	/// @notice Return income earned since the previous checkpoint. The authority
