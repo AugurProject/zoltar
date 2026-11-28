@@ -156,7 +156,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		healthy = isPriceValid() ? commitmentIndex.eligibleCommitment(conservativePrice) : 0;
 	}
 	function requiredRep(uint256 commitment, uint256 health) public view returns (uint256) {
-		return _requiredRep(commitment, health, conservativePrice);
+		return commitmentIndex.requiredRep(commitment, conservativePrice, securityMultiplierBps, health);
 	}
 	/// @notice A funded growth proof keeps its collateral floor until a newer
 	/// canonical report covers the enlarged security pool. No owner scan is needed.
@@ -165,12 +165,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			owners[owner].fundingPrice.epoch == acceptedPriceEpoch
 				? Math.max(conservativePrice, owners[owner].fundingPrice.floor)
 				: conservativePrice;
-	}
-	function _requiredRep(uint256 commitment, uint256 health, uint256 price) private view returns (uint256) {
-		return commitmentIndex.requiredRep(commitment, price, securityMultiplierBps, health);
-	}
-	function maximumHealthyPrice(uint256 rep, uint256 commitment) public view returns (uint256) {
-		return commitmentIndex.maximumHealthyPrice(rep, commitment, securityMultiplierBps);
 	}
 	function _requireOpen() private view {
 		require(!importing && zoltar.getForkTime(universeId()) == 0 && !frozen, 'Capital universe inactive');
@@ -203,7 +197,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			// addresses could. The rescue must hold at the takeover repair price under a fresh price.
 			if (position.maxHealthyPrice < liquidationPrice) {
 				_requireFresh();
-				require(maximumHealthyPrice(position.rep + amount, position.commitment) >= conservativePrice, 'Deposit must fully rescue the liquidating position');
+				require(_maximumHealthyPrice(position.rep + amount, position.commitment, securityMultiplierBps) >= conservativePrice, 'Deposit must fully rescue the liquidating position');
 			}
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
@@ -218,12 +212,13 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	function setHealthTarget(uint256 targetHealthFactorBps) external nonReentrant {
+		_requireOpen();
+		_checkpointAccounting();
 		_setHealthTarget(targetHealthFactorBps);
 	}
+	/// @dev The caller has required an open universe and checkpointed fees.
 	function _setHealthTarget(uint256 targetHealthFactorBps) private {
-		_requireOpen();
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
-		_checkpointAccounting();
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.setHealthTarget, (targetHealthFactorBps)));
 		emit HealthTargetSet(_capitalOwner(), targetHealthFactorBps);
 	}
@@ -406,10 +401,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @notice Auction repair; the takeover reward from the source stays pledged in the receiver vault.
 	function takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
 		TakeoverBounds memory bounds;
+		_requireOpen();
+		_checkpointAccounting();
 		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, OMIT_TAKEOVER_BOUNDS);
 	}
 	/// @notice Keeper-owned acquisition with signed owner exposure and quote bounds.
 	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
+		_requireOpen();
+		_checkpointAccounting();
 		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
 	function takeOverRepairAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
@@ -430,11 +429,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		reportOwner = address(0);
 	}
 
+	/// @dev The caller has required an open universe and checkpointed fees. The
+	/// index requires an existing adverse observation. Its auction remains
+	/// executable at the last accepted valuation after that report expires.
 	function _takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96) {
-		_requireOpen();
-		// The index requires an existing adverse observation. Its auction remains
-		// executable at the last accepted valuation after that report expires.
-		_checkpointAccounting();
 		return
 			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, enforceBounds))), (uint96));
 	}
@@ -480,7 +478,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		if (commitment == 0 || (isPriceValid() && maxPrice >= liquidationPrice)) commitmentIndex.clearLiquidation(id);
 	}
 	function _replace(uint96 id, uint256 rep, uint256 commitment) private {
-		uint256 maxPrice = maximumHealthyPrice(rep, commitment);
+		uint256 maxPrice = _maximumHealthyPrice(rep, commitment, securityMultiplierBps);
 		commitmentIndex.replace(id, rep, commitment, maxPrice);
 		_clearHealthyLiquidation(id, commitment, maxPrice);
 	}

@@ -8,6 +8,7 @@ import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
+import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { SecurityPoolUniformPriceRepairAuction } from './SecurityPoolUniformPriceRepairAuction.sol';
 import { CreationCodeDeployer } from './CreationCodeStorage.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
@@ -51,6 +52,9 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	uint256 public lotAttoEth;
 	uint256 public targetLots;
 	uint256 public immutable repGrid;
+	uint256 private immutable securityMultiplierBps;
+	SecurityPoolCommitmentIndex private immutable commitmentIndex;
+	IERC20 private immutable collateralToken;
 	uint256 public openingConservativePrice;
 	uint256 public minimumCollateralAttoRepPerLot;
 	bool private constant REQUIRE_FRESH_QUOTE = true;
@@ -76,8 +80,12 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 		uint256 minimumLot = securityPool.minimumCommitmentAttoEth();
 		(targetLots, lotAttoEth) = _coveringLots(shortfall, Math.max(1, shortfall / minimumLot), minimumLot);
 		uint256 multiplier = capital.securityMultiplierBps();
+		securityMultiplierBps = multiplier;
 		repGrid = multiplier / _gcd(multiplier, 10_000);
-		engine = new SecurityPoolUniformPriceRepairAuction(address(this), ICollateralConfig(root).collateralToken());
+		// The child ledger is initialized with its index before any auction exists.
+		commitmentIndex = capital.commitmentIndex();
+		collateralToken = ICollateralConfig(root).collateralToken();
+		engine = new SecurityPoolUniformPriceRepairAuction(address(this), collateralToken);
 	}
 
 	modifier nonReentrant() {
@@ -101,14 +109,14 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 		ICollateralRepairAuctionPriceFeed feed = ICollateralRepairAuctionPriceFeed(securityPool.priceFeed(universeId));
 		require(address(feed) != address(0) && _fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote is not funded and fresh');
 		openingConservativePrice = feed.conservativePrice();
-		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
+		(uint256 required, uint256 floor) = _lotFloor(openingConservativePrice);
 		// Fewer, larger lots bound REP-grid rounding while still covering the
 		// whole deficit. A single full-deficit lot is the liveness exception.
-		while (targetLots > 1 && (Math.ceilDiv(required, repGrid) * repGrid - required) * 100 >= required) {
+		while (targetLots > 1 && (floor - required) * 100 >= required) {
 			(targetLots, lotAttoEth) = _coveringLots(shortfallAttoEth, targetLots / 2, securityPool.minimumCommitmentAttoEth());
-			required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
+			(required, floor) = _lotFloor(openingConservativePrice);
 		}
-		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
+		minimumCollateralAttoRepPerLot = floor;
 		require(minimumCollateralAttoRepPerLot != 0 && minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
 		require(_fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote does not cover final lots');
 		engine.startRepairAuction(closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid);
@@ -120,14 +128,12 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	/// The bid's minimum REP must back the commitment at the protocol floor at the
 	/// opening price; a higher closing price raises every winning lot to that
 	/// price's floor. Winning lots join the bidder's own capital account, whose
-	/// owner chooses any higher health target after the auction.
+	/// owner chooses any higher health target after the auction. The engine
+	/// accepts bids only while open and rejects an empty bid.
 	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot) external nonReentrant returns (uint256 bidId) {
-		require(opened && !finalized, 'Collateral repair auction is not accepting bids');
 		require(securityPool.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
-		require(lots != 0, 'Invalid collateral repair auction lots');
 		require(minimumAttoRepPerLot >= minimumCollateralAttoRepPerLot, 'Auction bid does not back its lots');
-		IERC20 collateral = ICollateralConfig(address(securityPool)).collateralToken();
-		Collateral.pull(collateral, msg.sender, address(engine), lots * lotAttoEth);
+		Collateral.pull(collateralToken, msg.sender, address(engine), lots * lotAttoEth);
 		bidId = engine.submitBid(msg.sender, lots, minimumAttoRepPerLot);
 		IRepairAuctionCapitalBidders(address(capital)).registerRepairAuctionBidder(msg.sender);
 	}
@@ -154,21 +160,18 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 			// that backs it at the closing conservative price, and fewer lots fill
 			// when the inventory cannot provide that.
 			uint256 floorAttoRepPerLot;
-			if (eligible)
-				floorAttoRepPerLot =
-					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
+			if (eligible) (, floorAttoRepPerLot) = _lotFloor(feed.conservativePrice());
 			// The engine pays the raised collateral here as it finalizes.
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
 			// Equal lots round up, so a full fill can exceed the deficit: by less
 			// than one raw collateral unit per lot once the deficit spans at least one minimum
 			// commitment, and otherwise by up to the minimum lot. The child book
 			// accepts at most the deficit, and the surplus has no owner, so it is burned.
-			IERC20 collateral = ICollateralConfig(address(securityPool)).collateralToken();
 			if (result.raisedAttoEth > shortfallAttoEth) {
-				Collateral.send(collateral, Constants.BURN_ADDRESS, result.raisedAttoEth - shortfallAttoEth);
+				Collateral.send(collateralToken, Constants.BURN_ADDRESS, result.raisedAttoEth - shortfallAttoEth);
 				result.raisedAttoEth = shortfallAttoEth;
 			}
-			Collateral.send(collateral, forkAuthority, result.raisedAttoEth);
+			Collateral.send(collateralToken, forkAuthority, result.raisedAttoEth);
 		} else engine.finalizeUnopened();
 		// Sold inventory enters capital custody for winning bids. Unsold inventory,
 		// including any indivisible remainder, returns to the fork authority.
@@ -197,8 +200,8 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	/// @notice The bidder takes back one bid's unused collateral: the whole bid once
 	/// better bids exclude it before closing, or its unfilled lots after closing.
 	/// Refunds and position materialization are independent and never scan bids.
+	/// Before opening no bid exists, so the engine rejects every refund.
 	function refundBid(uint256 bidId, address recipient) external nonReentrant returns (uint256 amountAttoEth) {
-		require(opened, 'Collateral repair auction has not opened');
 		return engine.refundBid(bidId, msg.sender, recipient);
 	}
 
@@ -209,6 +212,12 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 			(!requireFresh || feed.priceValidUntil() > atTime) &&
 			feed.acceptedExposureLimitAttoEth() >= securityPool.oracleExposure(universeId) &&
 			feed.acceptedRepExposureLimitAttoRep() >= inventoryAttoRep;
+	}
+	/// @dev REP that backs one lot at the protocol floor at `price`, and that
+	/// amount rounded up to the REP grid.
+	function _lotFloor(uint256 price) private view returns (uint256 required, uint256 floor) {
+		required = commitmentIndex.requiredRep(lotAttoEth, price, securityMultiplierBps, 10_000);
+		floor = Math.ceilDiv(required, repGrid) * repGrid;
 	}
 	function _gcd(uint256 a, uint256 b) private pure returns (uint256) {
 		while (b != 0) (a, b) = (b, a % b);
