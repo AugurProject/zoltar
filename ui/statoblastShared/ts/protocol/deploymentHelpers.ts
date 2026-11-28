@@ -7,8 +7,7 @@ import { createStatoblastInitCodes } from '@zoltar/statoblast-shared/deployment/
 import { statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import {
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
-	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+	statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
@@ -52,8 +51,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer,
 		securityPoolForkCoordinatorDeployer: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
 		securityPoolRepairAuctionDeployer: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
-		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
+		questionLedgerDelegate: statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	},
 	{ proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS, zeroSalt: ZERO_SALT },
@@ -74,20 +72,18 @@ const {
 	getSecurityPoolReporterLedgerDeployerByteCode,
 	getSecurityPoolForkCoordinatorDeployerByteCode,
 	getSecurityPoolRepairAuctionDeployerByteCode,
-	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerAccountingModuleByteCode,
+	getQuestionLedgerDelegateByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
-export { getEscalationGameFactoryByteCode, getSharedPoolPriceFeedFactoryByteCode, getSharedPoolPriceFeedDeploymentWorkerByteCode, getSecurityPoolFactoryByteCode, getQuestionForkerByteCode, getQuestionLedgerOperationsDelegateByteCode, getQuestionLedgerAccountingModuleByteCode, getShareTokenFactoryByteCode }
+export { getEscalationGameFactoryByteCode, getSharedPoolPriceFeedFactoryByteCode, getSharedPoolPriceFeedDeploymentWorkerByteCode, getSecurityPoolFactoryByteCode, getQuestionForkerByteCode, getQuestionLedgerDelegateByteCode, getShareTokenFactoryByteCode }
 
 /** The linked creation code the canonical factory pins by hash and deploys for every security pool. */
 export const getSecurityPoolCreationCode = statoblastInitCodes.getSecurityPoolCreationCode
 
 export const getSecurityPoolRuntimeCode = (): Hex => `0x${statoblast_SecurityPool_SecurityPool.evm.deployedBytecode.object}`
 
-export const getQuestionLedgerAccountingModuleRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.deployedBytecode.object}`
-export const getQuestionLedgerOperationsDelegateRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.deployedBytecode.object}`
+export const getQuestionLedgerDelegateRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate.evm.deployedBytecode.object}`
 
 export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()) {
 	const zoltarAddresses = getZoltarContractAddresses(profile)
@@ -103,8 +99,7 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 export function getInfraStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
 	const addresses = getInfraContractAddresses(profile)
 	return {
-		questionLedgerEventEmitter: constructorArgumentsFromInitCode(getQuestionLedgerAccountingModuleByteCode(), statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.bytecode.object),
-		questionLedgerOperationsDelegate: constructorArgumentsFromInitCode(getQuestionLedgerOperationsDelegateByteCode(), statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.bytecode.object),
+		questionLedgerDelegate: constructorArgumentsFromInitCode(getQuestionLedgerDelegateByteCode(), statoblast_QuestionLedgerDelegate_QuestionLedgerDelegate.evm.bytecode.object),
 		openOracle: '',
 		sharedPoolPriceFeedDeploymentWorker: '',
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
@@ -137,13 +132,11 @@ type BootstrapDescendantAddresses = {
 	securityPoolCapitalRepairAuctionDelegate: Address
 	securityPoolCapitalFeeStreamsImplementation: Address
 	questionLedgerDeployer: Address
-	questionLedgerDeploymentWorker: Address
 }
 
 export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()): BootstrapDescendantAddresses {
 	const infrastructure = getInfraContractAddresses(profile)
 	const questionLedgerDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
-	const questionLedgerDeploymentWorker = getCreateAddress({ from: questionLedgerDeployer, nonce: 1n })
 	return {
 		sharedPoolPriceFeedCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 1n }),
 		sharedPoolPriceFeedCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 2n }),
@@ -151,9 +144,8 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
 		questionLedgerDeployer,
-		questionLedgerDeploymentWorker,
-		questionLedgerCreationCodeFirstChunk: getCreateAddress({ from: questionLedgerDeploymentWorker, nonce: 1n }),
-		questionLedgerCreationCodeSecondChunk: getCreateAddress({ from: questionLedgerDeploymentWorker, nonce: 2n }),
+		questionLedgerCreationCodeFirstChunk: getCreateAddress({ from: questionLedgerDeployer, nonce: 1n }),
+		questionLedgerCreationCodeSecondChunk: getCreateAddress({ from: questionLedgerDeployer, nonce: 2n }),
 		securityPoolCapitalCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }),
 		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
 		securityPoolCommitmentIndexImplementation: getCreateAddress({ from: infrastructure.securityPoolCommitmentIndexDeployer, nonce: 1n }),

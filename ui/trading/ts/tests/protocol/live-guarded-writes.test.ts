@@ -156,7 +156,7 @@ describe('live guarded transaction writes', () => {
 			const client = blockTwoWalletClient(async method => {
 				if (method === 'eth_call') {
 					if (overCapacity) throw new Error('execution reverted: Over capacity')
-					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n]])
 				}
 				if (method === 'eth_sendTransaction') {
 					sends += 1
@@ -185,7 +185,7 @@ describe('live guarded transaction writes', () => {
 				calls.push(decoded)
 				if (method === 'eth_sendTransaction') return transactionHash
 				if (decoded.functionName === 'removeLiquidity') return encodeAbiParameters([uint256, uint256], [5n, 5n])
-				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n]])
 			}
 			throw new Error(`Unexpected RPC method ${method}`)
 		})
@@ -242,7 +242,7 @@ describe('live guarded transaction writes', () => {
 			if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
 			const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
 			if (decoded.functionName !== 'addLiquidityWithEth') throw new Error(`Unexpected simulation ${decoded.functionName}`)
-			return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 20n, 10n]])
+			return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 10n]])
 		})
 		const quote = await simulateLiquidity(client, configuration, market, account, 'add', 20n, 5_000n, { validityMinutes: 7n }, 50n)
 		chain.noUsed = 20n
@@ -262,8 +262,8 @@ describe('live guarded transaction writes', () => {
 					return decoded.functionName === 'balanceOf' ? encodeAbiParameters([uint256], [13n]) : '0x'
 				}
 				const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
-				if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, 12n, 10n, 1n, 5_000n, 5_001n]])
-				if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+				if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 2n, 12n, 1n, 5_000n, 5_001n]])
+				if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n]])
 				throw new Error(`Unexpected simulation ${decoded.functionName}`)
 			}
 			if (method === 'eth_sendTransaction') {

@@ -6,7 +6,7 @@ import { createWriteClient, writeContractAndWait } from '../../testSupport/simul
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { zeroHash, zeroPeakArray } from '../escalationGame/carryHelpers'
+import { zeroPeakArray } from '../escalationGame/carryHelpers'
 import { initializeForkCarrySnapshotAbi, initializeForkCarrySnapshotWithResolutionBalancesAbi } from '../carrySnapshotAbis'
 import {
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
@@ -47,7 +47,6 @@ describe('Statoblast: fixed security pool reporter clock', () => {
 						[0n, 0n, 0n],
 						[0n, 0n, 0n],
 						[1_000n, 1_000n, 1_000n],
-						[zeroHash(), zeroHash(), zeroHash()],
 					],
 				}),
 			)
@@ -77,7 +76,6 @@ describe('Statoblast: fixed security pool reporter clock', () => {
 						[zeroPeakArray(), zeroPeakArray(), zeroPeakArray()],
 						[0n, 0n, 0n],
 						[0n, 0n, 0n],
-						[zeroHash(), zeroHash(), zeroHash()],
 					],
 				}),
 			)

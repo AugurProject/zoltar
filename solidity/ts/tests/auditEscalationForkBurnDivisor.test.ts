@@ -1,5 +1,5 @@
 import { overrideGenesisTheoreticalSupply } from '../testSupport/simulator/utils/utilities'
-import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { initializeForkCarrySnapshotWithResolutionBalancesAbi } from './carrySnapshotAbis'
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
@@ -21,7 +21,7 @@ import {
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
-import { hashCarryLeaf, SparseNullifierTree } from './carryProofHelpers'
+import { hashCarryLeaf } from './carryProofHelpers'
 
 const ESCALATION_TIME_LENGTH = 4_233_600n
 const FORK_THRESHOLD = 20n * 10n ** 18n
@@ -46,7 +46,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			encodeDeployData({
 				abi: proofTestPoolArtifact.abi,
 				bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
-				args: [zoltar, 0n, zeroAddress],
+				args: [zoltar, 0n],
 			}),
 		)
 		const escalationGame = await deployContract(
@@ -84,6 +84,10 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		return { escalationGame, questionLedger }
 	}
 
+	// Reporter custody, not the game's own token balance, backs a security pool game.
+	const fundReporterBalance = async (questionLedger: Address, amountAttoRep: bigint) => await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'fundReporterBalance', args: [amountAttoRep] }))
+	const readBacking = async (escalationGame: Address) => await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getDisputeBackingAttoRep' })
+
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
@@ -104,10 +108,10 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				peaks[outcome][0] = hashCarryLeaf(client.account.address, outcome, balances[outcome], BigInt(outcome), balances[outcome], BigInt(outcome + 1))
 			}
 			for (let outcome = 0; outcome < 3; outcome++) {
-				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: questionLedger, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances, [zeroHash, zeroHash, zeroHash]] }))
+				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: questionLedger, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances] }))
 			}
-			await drainEscalationGameRepForTest(mockWindow, repTokenAddress, escalationGame, client.account.address)
-			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, childBacking] }))
+			await drainEscalationGameRepForTest(mockWindow, escalationGame, client.account.address)
+			await fundReporterBalance(questionLedger, childBacking)
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'isForkCarryFundingComplete' }), true, 'mutually exclusive reporter claims must use the actual remaining escrow, not sum of all original principal')
 			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'resumeEscalationGameFromFork' }))
 			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkResumedAt' })
@@ -122,11 +126,10 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				leafIndex: 0n,
 				merkleMountainRangeSiblings: [] as readonly Hex[],
 				merkleMountainRangePeakIndex: 0n,
-				nullifierSiblings: new SparseNullifierTree().getProof(1n),
 			}
 			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, proof] }))
 			assert.strictEqual((await getERC20Balance(client, repTokenAddress, client.account.address)) - walletBefore, NON_DECISION_THRESHOLD + (NON_DECISION_THRESHOLD * 3n) / 5n, 'the full original winning payout must remain funded after the surplus is removed')
-			assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), 0n)
+			assert.strictEqual(await readBacking(escalationGame), 0n)
 		})
 
 	test('requires the full authenticated backing snapshot even for a small nominal source', async () => {
@@ -158,7 +161,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 							[0n, 1n, 0n],
 							[0n, sourcePrincipalAtFork, 0n],
 							[0n, sourcePrincipalAtFork, 0n],
-							[zeroHash, zeroHash, zeroHash],
 						],
 					}),
 				)
@@ -167,8 +169,8 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		}
 
 		const { escalationGame: underfundedGame, questionLedger: underfundedPool } = await deployContinuation(exactMinimumBacking)
-		await drainEscalationGameRepForTest(mockWindow, repTokenAddress, underfundedGame, client.account.address)
-		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [underfundedGame, exactMinimumBacking - 1n] }))
+		await drainEscalationGameRepForTest(mockWindow, underfundedGame, client.account.address)
+		await fundReporterBalance(underfundedPool, exactMinimumBacking - 1n)
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -238,13 +240,11 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 							[0n, 1n, 1n],
 							[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
 							[0n, inheritedBalance, inheritedBalance],
-							[zeroHash, zeroHash, zeroHash],
 						],
 					}),
 				)
 			}
-			const backing = await getERC20Balance(client, repTokenAddress, escalationGame)
-			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, FORK_THRESHOLD - backing] }))
+			await fundReporterBalance(questionLedger, FORK_THRESHOLD - (await readBacking(escalationGame)))
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'canTriggerOwnFork' }), false)
 			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'resumeEscalationGameFromFork' }))
 			// A real REP burn lowers the universe threshold without changing this game's
@@ -338,7 +338,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 						[0n, 1n, 1n],
 						[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
 						[0n, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD],
-						[zeroHash, zeroHash, zeroHash],
 					],
 				}),
 			)
@@ -347,16 +346,9 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		// Snapshot initialization transfers the full parent REP principal. Replacing it
 		// with one attoREP less than the exact post-fork backing tests both the view gate and
 		// the state-changing resume guard at the solvency boundary.
-		await drainEscalationGameRepForTest(mockWindow, repTokenAddress, escalationGame, client.account.address)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: ReputationToken_ReputationToken.abi,
-				address: repTokenAddress,
-				functionName: 'transfer',
-				args: [escalationGame, childBacking - 1n],
-			}),
-		)
-		assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), childBacking - 1n, 'child game must begin one attoREP below the safe post-fork backing')
+		await drainEscalationGameRepForTest(mockWindow, escalationGame, client.account.address)
+		await fundReporterBalance(questionLedger, childBacking - 1n)
+		assert.strictEqual(await readBacking(escalationGame), childBacking - 1n, 'child game must begin one attoREP below the safe post-fork backing')
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -376,14 +368,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			}),
 			/Fork carry underfunded/,
 		)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: ReputationToken_ReputationToken.abi,
-				address: repTokenAddress,
-				functionName: 'transfer',
-				args: [escalationGame, 1n],
-			}),
-		)
+		await fundReporterBalance(questionLedger, 1n)
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -430,7 +415,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			leafIndex: 0n,
 			merkleMountainRangeSiblings: [] as readonly Hex[],
 			merkleMountainRangePeakIndex: 0n,
-			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		}
 		const walletRepBeforeClaim = await getERC20Balance(client, repTokenAddress, client.account.address)
 
@@ -444,6 +428,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			}),
 		)
 		assert.strictEqual((await getERC20Balance(client, repTokenAddress, client.account.address)) - walletRepBeforeClaim, expectedWinningPayout, 'the backed winner must receive the full payout')
-		assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), 0n, 'the exactly backed game should settle with no residual REP')
+		assert.strictEqual(await readBacking(escalationGame), 0n, 'the exactly backed game should settle with no residual REP')
 	})
 })

@@ -13,15 +13,15 @@ import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolSettlement } from './SecurityPoolSettlement.sol';
 import { SecurityPoolServices } from './SecurityPoolServices.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
-import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
+import { CreationCodeDeployer } from './CreationCodeStorage.sol';
 
 /// @dev Creation code is separated so every deployment helper fits EIP-170.
 /// Each returned instance binds its immutable authority to the supplied security pool.
-contract SecurityPoolCapitalLedgerDeployer is SecurityPoolCreationCodeDeployer {
+contract SecurityPoolCapitalLedgerDeployer is CreationCodeDeployer {
 	SecurityPoolCapitalLifecycleDelegate
 		public
 		immutable lifecycleDelegate = new SecurityPoolCapitalLifecycleDelegate();
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolCapitalLedger).creationCode) {}
+	constructor() CreationCodeDeployer(type(SecurityPoolCapitalLedger).creationCode) {}
 
 	function createImplementation(Zoltar zoltar, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalFeeStreamsDeployer modules) external returns (SecurityPoolCapitalLedger) {
 		return
@@ -54,10 +54,10 @@ contract SecurityPoolCapitalFeeStreamsDeployer {
 		streams.initialize(timestamp, vestingDuration);
 	}
 }
-contract SecurityPoolSettlementBookDeployer is SecurityPoolCreationCodeDeployer {
+contract SecurityPoolSettlementBookDeployer is CreationCodeDeployer {
 	/// @dev Daily bucket numbers below the fee-end ceiling fit in 17 bits.
 	uint48 public constant FEE_END_GRANULARITY = 1 days;
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolSettlementBook).creationCode) {}
+	constructor() CreationCodeDeployer(type(SecurityPoolSettlementBook).creationCode) {}
 	function create(address authority, uint256 minimumOutcomeRate) external returns (SecurityPoolSettlementBook) {
 		return SecurityPoolSettlementBook(_deploy(abi.encode(authority, minimumOutcomeRate, FEE_END_GRANULARITY)));
 	}
@@ -67,8 +67,8 @@ contract SecurityPoolSettlementDeployer {
 		return new SecurityPoolSettlement(authority, ICollateralConfig(authority).collateralToken());
 	}
 }
-contract SecurityPoolServicesDeployer is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolServices).creationCode) {}
+contract SecurityPoolServicesDeployer is CreationCodeDeployer {
+	constructor() CreationCodeDeployer(type(SecurityPoolServices).creationCode) {}
 	function create(address authority) external returns (SecurityPoolServices) {
 		return SecurityPoolServices(payable(_deploy(abi.encode(authority))));
 	}

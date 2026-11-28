@@ -42,15 +42,7 @@ function getQuestionLedgerOriginId(originUniverseId: bigint, questionId: bigint,
 function getQuestionLedgerDeployerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: securityPoolFactory,
-		// The factory creates only its deployment helper.
-		nonce: 1n,
-	})
-}
-
-function getQuestionLedgerDeploymentWorkerAddress(securityPoolFactory: Address) {
-	return getCreateAddress({
-		from: getQuestionLedgerDeployerAddress(securityPoolFactory),
-		// The fixed event emitter is deployed separately; the worker is the first child.
+		// The factory creates only its question ledger deployer.
 		nonce: 1n,
 	})
 }
@@ -89,7 +81,7 @@ export function createQuestionLedgerAddressHelper(config: QuestionLedgerAddressC
 				zoltar: infraContracts.zoltar,
 				zoltarQuestionData: infraContracts.zoltarQuestionData,
 			}),
-			from: getQuestionLedgerDeploymentWorkerAddress(infraContracts.securityPoolFactory),
+			from: getQuestionLedgerDeployerAddress(infraContracts.securityPoolFactory),
 			salt: toHex(0, { size: 32 }),
 		})
 		const escalationGame = getCreate2Address({

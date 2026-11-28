@@ -9,10 +9,8 @@ import {
 	securityPoolAuctionClaimBatch,
 	loadSecurityPoolAuctionClaimableBidIds,
 	securityPoolAuctionClaimReason,
-	buildSecurityPoolAuctionRefundClaimRequest,
-	buildSecurityPoolAuctionRefundCreditRequest,
-	buildSecurityPoolAuctionRefundWithdrawRequest,
-	quoteSecurityPoolAuctionRefundClaim,
+	buildSecurityPoolAuctionRefundRequest,
+	quoteSecurityPoolAuctionRefund,
 	loadSecurityPoolAuctionSnapshot,
 	securityPoolAuctionOpeningReason,
 	quoteSecurityPoolAuctionBid,
@@ -30,14 +28,7 @@ const auction: Address = '0x0000000000000000000000000000000000000009'
 const engine: Address = '0x0000000000000000000000000000000000000010'
 const unit = 10n ** 18n
 const hash: Hex = `0x${'11'.repeat(32)}`
-const abi = parseAbi([
-	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)',
-	'function settleRefund(uint256 bidId)',
-	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)',
-	'function withdrawRefunds(address recipient)',
-	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256)',
-])
+const abi = parseAbi(['function open()', 'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)', 'function refundBid(uint256 bidId,address recipient) returns (uint256)', 'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)'])
 function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?: bigint; walletAttoEth?: bigint; finalized?: boolean; opened?: boolean } = {}) {
 	const calls: { functionName: string; address: Address; blockNumber: bigint; args?: readonly unknown[] }[] = []
 	const opened = options.opened ?? true
@@ -54,7 +45,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		oracleExposure: 20n * unit,
 		getRepToken: rep,
 		getForkTime: 0n,
-		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false],
+		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false, zeroAddress, 0n],
 		forkAuthority: controller,
 		capital,
 		engine,
@@ -84,12 +75,11 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		lastSettlementTimestamp: 90n,
 		acceptedExposureLimitAttoEth: 20n * unit,
 		acceptedRepExposureLimitAttoRep: 100n * unit,
-		refundCreditAttoEth: 0n,
 		earlyRefundAttoEth: 0n,
 		bidderBidCount: 3n,
 		balanceOf: options.walletAttoEth ?? 100n * unit,
 		allowance: 100n * unit,
-		clearing: [6n * unit, 3n, 3n * unit, 18n * unit, 0n, 0n, 0n, 3n, false],
+		clearing: [6n * unit, 3n, 3n * unit, 18n * unit, false],
 		...overrides,
 	}
 	const client: Parameters<typeof loadSecurityPoolAuctionSnapshot>[0]['client'] = {
@@ -106,7 +96,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 			if (parameters.functionName === 'bidderBidId') return BigInt(String(parameters.args?.[1])) + 1n
 			if (parameters.functionName === 'bids' && typeof id === 'bigint') return [bidder, false, false, 2n, 5n * unit]
 			if (parameters.functionName === 'previewBid' && typeof id === 'bigint') return [bidder, 1n, unit, 6n * unit, unit]
-			if (parameters.functionName === 'repairAuctionPositions' && Array.isArray(id)) return id.map(() => overrides['repairAuctionPosition'] ?? [bidder, 0n, 6n * unit, unit, 30n, false, false, 7n, 9n])
+			if (parameters.functionName === 'repairAuctionPositions' && Array.isArray(id)) return id.map(() => overrides['repairAuctionPosition'] ?? [bidder, 6n * unit, unit, 30n, false, 7n, 9n])
 			if (!(parameters.functionName in values)) throw new Error(`Unexpected auction read ${parameters.functionName}`)
 			return values[parameters.functionName]
 		},
@@ -188,7 +178,7 @@ describe('security pool collateral repair auction SDK', () => {
 		}
 		await expect(load(fixture({ bids: [securityPool, false, false, 2n, 5n * unit] }))).rejects.toThrow('another wallet')
 		await expect(load(fixture({ previewBid: [securityPool, 1n, unit, 6n * unit, unit] }, { finalized: true }))).rejects.toThrow('fill identity')
-		await expect(load(fixture({ repairAuctionPosition: [securityPool, 0n, 6n * unit, unit, 30n, false, false, 7n, 9n] }, { finalized: true }))).rejects.toThrow('capital position identity')
+		await expect(load(fixture({ repairAuctionPosition: [securityPool, 6n * unit, unit, 30n, false, 7n, 9n] }, { finalized: true }))).rejects.toThrow('capital position identity')
 	})
 	test('opening needs both funded exposure budgets, a fresh observation and the immutable deadline', async () => {
 		const snapshot = await load(fixture({}, { opened: false }))
@@ -252,60 +242,50 @@ describe('security pool collateral repair auction SDK', () => {
 		expect(() => buildSecurityPoolAuctionBidRequest(closed, bidTerms)).toThrow('not accepting')
 		expect(buildSecurityPoolAuctionBidRequest(await load(fixture({}, { walletAttoEth: 2n * unit })), bidTerms).value).toBe(0n)
 	})
-	test('provably losing bids can credit and withdraw collateral before closing', async () => {
-		const snapshot = await load(fixture({ earlyRefundAttoEth: 2n * unit }))
-		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
-		const credited = await load(fixture({ refundCreditAttoEth: 2n * unit }))
-		expect(buildSecurityPoolAuctionRefundWithdrawRequest(credited, bidder)).toMatchObject({ to: auction, value: 0n })
-	})
-	test('a combined refund claim settles only uncredited bids and discloses the whole accumulated credit', async () => {
-		const early = await load(fixture({ earlyRefundAttoEth: 2n * unit, refundCreditAttoEth: unit }))
-		expect(quoteSecurityPoolAuctionRefundClaim(early, 1n)).toEqual({ bidId: 1n, settles: true, bidRefundAttoEth: 2n * unit, creditedAttoEth: unit, totalAttoEth: 3n * unit })
-		const request = buildSecurityPoolAuctionRefundClaimRequest(early, 1n, bidder)
+	test('a bidder refunds one provably losing bid before closing, or its unfilled lots after closing, once', async () => {
+		const early = await load(fixture({ earlyRefundAttoEth: 2n * unit }))
+		expect(quoteSecurityPoolAuctionRefund(early, 1n)).toBe(2n * unit)
+		const request = buildSecurityPoolAuctionRefundRequest(early, 1n, bidder)
 		expect(request).toMatchObject({ account: bidder, to: auction, value: 0n })
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'settleAndWithdrawRefund', args: [1n, bidder] })
-		// A keeper's earlier credit is skipped, not double counted.
-		const credited = await load(fixture({ bids: [bidder, true, false, 2n, 5n * unit], refundCreditAttoEth: 3n * unit, bidderBidCount: 1n }))
-		expect(quoteSecurityPoolAuctionRefundClaim(credited, 1n)).toEqual({ bidId: 1n, settles: false, bidRefundAttoEth: 0n, creditedAttoEth: 3n * unit, totalAttoEth: 3n * unit })
-		const withdrawn = await load(fixture({ bids: [bidder, true, false, 2n, 5n * unit], bidderBidCount: 1n }))
-		expect(() => quoteSecurityPoolAuctionRefundClaim(withdrawn, 1n)).toThrow('No refund credit remains')
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'refundBid', args: [1n, bidder] })
+		const refunded = await load(fixture({ bids: [bidder, true, false, 2n, 5n * unit], bidderBidCount: 1n }))
+		expect(() => quoteSecurityPoolAuctionRefund(refunded, 1n)).toThrow('already refunded')
 		const pending = await load(fixture())
-		expect(() => quoteSecurityPoolAuctionRefundClaim(pending, 1n)).toThrow('may still win')
-		expect(() => quoteSecurityPoolAuctionRefundClaim(early, 100n)).toThrow('page')
-		expect(() => buildSecurityPoolAuctionRefundClaimRequest(early, 1n, zeroAddress)).toThrow('recipient')
+		expect(() => quoteSecurityPoolAuctionRefund(pending, 1n)).toThrow('may still win')
+		expect(() => quoteSecurityPoolAuctionRefund(early, 100n)).toThrow('page')
+		expect(() => buildSecurityPoolAuctionRefundRequest(early, 1n, zeroAddress)).toThrow('recipient')
 		const closed = await load(fixture({}, { finalized: true }))
-		expect(quoteSecurityPoolAuctionRefundClaim(closed, 1n)).toMatchObject({ settles: true, bidRefundAttoEth: unit, totalAttoEth: unit })
-		const fullWinner = await load(fixture({ previewBid: [bidder, 2n, 2n * unit, 12n * unit, 0n], refundCreditAttoEth: unit, bidderBidCount: 1n }, { finalized: true }))
-		expect(() => buildSecurityPoolAuctionRefundCreditRequest(fullWinner, 1n)).toThrow('no unused collateral')
-		expect(quoteSecurityPoolAuctionRefundClaim(fullWinner, 1n)).toMatchObject({ bidRefundAttoEth: 0n, creditedAttoEth: unit, totalAttoEth: unit })
-		if (fullWinner.auction === undefined) throw new Error('Missing auction')
-		fullWinner.auction.refundAttoEth = 0n
-		expect(() => quoteSecurityPoolAuctionRefundClaim(fullWinner, 1n)).toThrow('No refund credit')
+		expect(quoteSecurityPoolAuctionRefund(closed, 1n)).toBe(unit)
+		const fullWinner = await load(fixture({ previewBid: [bidder, 2n, 2n * unit, 12n * unit, 0n], bidderBidCount: 1n }, { finalized: true }))
+		expect(() => buildSecurityPoolAuctionRefundRequest(fullWinner, 1n, bidder)).toThrow('no unused collateral')
 	})
 	test('early refund reads reject partial amounts and keep potential winners committed', async () => {
 		const pending = await load(fixture())
 		expect(pending.auction?.bids[0]?.earlyRefundAttoEth).toBe(0n)
-		expect(() => buildSecurityPoolAuctionRefundCreditRequest(pending, 1n)).toThrow('may still win')
+		expect(() => buildSecurityPoolAuctionRefundRequest(pending, 1n, bidder)).toThrow('may still win')
 		await expect(load(fixture({ earlyRefundAttoEth: unit }))).rejects.toThrow('early auction refund accounting')
 		const source = fixture({ bids: [bidder, true, false, 2n, 5n * unit], bidderBidCount: 1n })
-		const credited = await load(source)
-		expect(() => buildSecurityPoolAuctionRefundCreditRequest(credited, 1n)).toThrow('unsettled bid')
+		const refunded = await load(source)
+		expect(() => buildSecurityPoolAuctionRefundRequest(refunded, 1n, bidder)).toThrow('already refunded')
 		expect(source.calls.some(call => call.functionName === 'earlyRefundAttoEth')).toBe(false)
 	})
 	test('partial fills expose original principal while unused bid refunds remain separate transactions', async () => {
-		const snapshot = await load(fixture({ [`${engine}:refundCreditAttoEth`]: unit }, { finalized: true }))
+		const snapshot = await load(fixture({}, { finalized: true }))
 		expect(snapshot.auction?.bids[0]?.fill).toEqual({ filledLots: 1n, usedAttoEth: unit, refundAttoEth: unit, principalAttoRep: 6n * unit })
-		expect(snapshot.auction).toMatchObject({ refundAttoEth: unit, clearing: { soldAttoRep: 18n * unit } })
-		expect(snapshot.auction?.bids[0]?.position).toMatchObject({ positionId: 0n, materialized: false, principalAttoRep: 6n * unit, commitmentAttoEth: unit, liquidationStarted: 30n, earnedAttoEth: 7n, earnedAttoRep: 9n })
-		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
+		expect(snapshot.auction).toMatchObject({ clearing: { soldAttoRep: 18n * unit } })
+		expect(snapshot.auction?.bids[0]).toMatchObject({ materialized: false })
+		expect(snapshot.auction?.bids[0]?.position).toMatchObject({ principalAttoRep: 6n * unit, commitmentAttoEth: unit, liquidationStarted: 30n, earnedAttoEth: 7n, earnedAttoRep: 9n })
+		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundRequest(snapshot, 1n, bidder).data })).toEqual({ functionName: 'refundBid', args: [1n, bidder] })
 		expect(buildSecurityPoolAuctionMaterializeRequest(snapshot, [1n])).toMatchObject({ account: bidder, to: capital, value: 0n })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionMaterializeRequest(snapshot, [1n, 2n]).data })).toEqual({ functionName: 'materializeRepairAuctionBids', args: [[1n, 2n]] })
-		const joined = await load(fixture({ bids: [bidder, false, true, 2n, 5n * unit], repairAuctionPosition: [bidder, 4n, 6n * unit, unit, 0n, true, true, 0n, 0n] }, { finalized: true }))
-		expect(joined.auction?.bids[0]).toMatchObject({ claimed: true, position: { positionId: 4n, materialized: true } })
+		const joined = await load(fixture({ bids: [bidder, false, true, 2n, 5n * unit], repairAuctionPosition: [bidder, 6n * unit, unit, 0n, true, 0n, 0n] }, { finalized: true }))
+		expect(joined.auction?.bids[0]).toMatchObject({ claimed: true, materialized: true, position: { principalAttoRep: 6n * unit } })
+		// A winning bid's removed fee ownership and its ledger claim always change together.
+		await expect(load(fixture({ bids: [bidder, false, true, 2n, 5n * unit], repairAuctionPosition: [bidder, 6n * unit, unit, 0n, false, 0n, 0n] }, { finalized: true }))).rejects.toThrow('identity mismatch')
 		expect(securityPoolAuctionClaimReason(joined, 1n)).toBe('This bid is claimed.')
 		expect(() => buildSecurityPoolAuctionMaterializeRequest(joined, [1n])).toThrow('This bid is claimed.')
 		// A losing bid still needs a claim before its bidder can choose a fork branch.
-		const lost = await load(fixture({ previewBid: [bidder, 0n, 0n, 0n, 2n * unit], repairAuctionPosition: [bidder, 0n, 0n, 0n, 0n, false, false, 0n, 0n] }, { finalized: true }))
+		const lost = await load(fixture({ previewBid: [bidder, 0n, 0n, 0n, 2n * unit], repairAuctionPosition: [bidder, 0n, 0n, 0n, false, 0n, 0n] }, { finalized: true }))
 		expect(lost.auction?.bids[0]).toMatchObject({ claimable: true, claimed: false, position: undefined })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionMaterializeRequest(lost, [1n]).data })).toEqual({ functionName: 'materializeRepairAuctionBids', args: [[1n]] })
 		expect(() => buildSecurityPoolAuctionMaterializeRequest(snapshot, [])).toThrow('at least one bid')
@@ -317,9 +297,7 @@ describe('security pool collateral repair auction SDK', () => {
 		expect(securityPoolAuctionClaimBatch(many)).toEqual({ bidIds: many.slice(0, MAX_REPAIR_AUCTION_CLAIM_BATCH), completes: false })
 		expect(securityPoolAuctionClaimBatch(many.slice(0, MAX_REPAIR_AUCTION_CLAIM_BATCH))).toEqual({ bidIds: many.slice(0, MAX_REPAIR_AUCTION_CLAIM_BATCH), completes: true })
 		expect(() => buildSecurityPoolAuctionMaterializeRequest(snapshot, [100n])).toThrow('page')
-		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundWithdrawRequest(snapshot, bidder).data })).toEqual({ functionName: 'withdrawRefunds', args: [bidder] })
-		expect(() => buildSecurityPoolAuctionRefundCreditRequest(snapshot, 100n)).toThrow('page')
-		expect(() => buildSecurityPoolAuctionRefundWithdrawRequest(snapshot, zeroAddress)).toThrow('recipient')
+		expect(() => buildSecurityPoolAuctionRefundRequest(snapshot, 100n, bidder)).toThrow('page')
 	})
 	test('rejects reorgs after bidder authentication and malformed fill accounting', async () => {
 		const source = fixture()
@@ -338,7 +316,7 @@ describe('security pool collateral repair auction SDK', () => {
 		expect(open.calls.some(call => call.functionName === 'repairAuctionPositions')).toBe(false)
 		expect(securityPoolAuctionClaimReason(pending, 1n)).toContain('after the auction closes')
 		expect(() => buildSecurityPoolAuctionMaterializeRequest(pending, [1n])).toThrow('after the auction closes')
-		const excluded = await load(fixture({ bids: [bidder, true, false, 2n, 5n * unit], repairAuctionPosition: [bidder, 0n, 0n, 0n, 0n, false, false, 0n, 0n] }))
+		const excluded = await load(fixture({ bids: [bidder, true, false, 2n, 5n * unit], repairAuctionPosition: [bidder, 0n, 0n, 0n, false, 0n, 0n] }))
 		expect(excluded.auction?.bids.map(bid => [bid.claimable, bid.claimed])).toEqual([
 			[true, false],
 			[true, false],
@@ -398,7 +376,10 @@ test('opening rejects an unaffordable default lot instead of retrying the commit
 
 test('#1634 final coverage also reserves the branch chosen commitment', async () => {
 	const snapshot = await load(
-		fixture({ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 1n, lotAttoEth: 1n, targetLots: 58n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, oracleExposure: 258n, acceptedExposureLimitAttoEth: 258n, branches: [0n, 1n, 0n, 200n, 0n, 0n, true, true, false] }, { opened: false }),
+		fixture(
+			{ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 1n, lotAttoEth: 1n, targetLots: 58n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, oracleExposure: 258n, acceptedExposureLimitAttoEth: 258n, branches: [0n, 1n, 0n, 200n, 0n, 0n, true, true, false, zeroAddress, 0n] },
+			{ opened: false },
+		),
 	)
 	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('final auction collateral exposure')
 })

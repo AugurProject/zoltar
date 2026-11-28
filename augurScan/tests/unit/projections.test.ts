@@ -95,7 +95,6 @@ describe('state projections', () => {
 	})
 
 	test('normalizes every share supply event to the same logical field', () => {
-		const [explicitSupply] = projectionsFrom(log('ShareTokenSupplySet', { shareTokenSupplyAttoShares: atomic(80n) }))
 		const [createdSupply] = projectionsFrom(
 			log('CompleteSetCreated', {
 				resultingShareTokenSupplyAttoShares: atomic(100n),
@@ -109,7 +108,6 @@ describe('state projections', () => {
 			}),
 		)
 
-		expect(explicitSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(80n) } })
 		expect(createdSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(100n) } })
 		expect(redeemedSupply).toMatchObject({ type: 'poolState', state: { shareTokenSupplyAttoShares: atomic(60n) } })
 	})
@@ -338,7 +336,6 @@ describe('state projections', () => {
 		for (const [name, data] of [
 			['RefundWithdrawn', { bidder: vault, recipient: vault, amountAttoEth: atomic(1n) }],
 			['FeesRemoved', { bidId: '1', attoEth: atomic(1n), attoRep: atomic(2n) }],
-			['RaisedWithdrawn', { recipient: vault, amountAttoEth: atomic(3n) }],
 		] as const)
 			expect(projectionsFrom(log(name, data)).at(-1)).toMatchObject({ type: 'domainEvent', domain: 'auction', entityType: 'auction', semanticEventKind: name })
 	})
@@ -476,7 +473,6 @@ describe('previously raw-only lifecycle evidence', () => {
 	for (const [name, data, kind, entityType, identity] of [
 		['OrdinarySettlementInitialized', { outcome: '1', winningPrincipalAttoRep: 100n.toString(), reservedAttoRep: 130n.toString() }, 'escalationGame', 'escalation', pool],
 		['ReputationTokenInitialized', { universeId: '7', repNumber: '2' }, 'reputationToken', 'reputation-token', pool],
-		['ChildReputationTokenInitialized', { universeId: '7', reputationToken: vault, repNumber: '2' }, 'zoltar', 'fork', '7'],
 		['PositionExitedByTransfer', { owner: vault, pair: vault, completeSetShares: '12' }, 'ammRouter', 'amm', vault],
 		['CompleteSetRedeemedByTransfer', { questionLedger: vault, completeSetShares: '12' }, 'ammRouter', 'pool', vault],
 	] as const) {

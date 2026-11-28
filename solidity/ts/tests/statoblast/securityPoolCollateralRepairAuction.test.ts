@@ -119,7 +119,7 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		// Unclaimed lots stay in the shared cohort: the account shows only its own position until the bid is claimed.
 		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] })).slice(0, 2)).toEqual(base.slice(0, 2))
 		const [unclaimedFirst] = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPositions', args: [[first.id]] })
-		expect(unclaimedFirst).toMatchObject({ bidder: first.bidder, principal: firstFill.principalAttoRep, commitment: 2n * unit, claimed: false, materialized: false })
+		expect(unclaimedFirst).toMatchObject({ bidder: first.bidder, principal: firstFill.principalAttoRep, commitment: 2n * unit, claimed: false })
 		// Anyone may claim.
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBids', args: [[first.id]] }))
 		const virtual = [base[0] + firstFill.principalAttoRep, base[1] + 2n * unit]
@@ -130,12 +130,10 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		expect(account.targetHealthFactorBps).toBe(accountBefore.targetHealthFactorBps)
 		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] })).slice(0, 2)).toEqual(virtual.slice(0, 2))
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'unclaimedRepairAuctionBids', args: [first.bidder] })).toBe(0n)
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [second.id] }))
-		expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [context.other.account.address] })).toBe(unit)
 		const before = await context.balance(context.other.account.address)
 		const refundRecipient = context.owner.account.address
 		const ethBefore = await collateralBalance(context.owner, fixture.securityPool, refundRecipient)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [refundRecipient] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [second.id, refundRecipient] }))
 		expect(await context.balance(context.other.account.address)).toBe(before)
 		expect(await collateralBalance(context.owner, fixture.securityPool, refundRecipient)).toBe(ethBefore + unit)
 		const settlement = await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
@@ -202,9 +200,10 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		expect((await account(bidder)).positionId).toBe(before.positionId)
 		expect(await context.owner.readContract({ ...capital, functionName: 'totals' })).toEqual(totals)
 		const [winnerView, partialView, loserView] = await bidPositions([winner.id, partial.id, loser.id])
-		expect(winnerView).toMatchObject({ bidder, claimed: true, materialized: true, positionId: before.positionId })
-		expect(partialView).toMatchObject({ bidder, claimed: true, materialized: true, positionId: before.positionId })
-		expect(loserView).toMatchObject({ bidder: losing, claimed: true, materialized: false, principal: 0n })
+		// Claimed lots belong to the bidder's account, whose position the account reports.
+		expect(winnerView).toMatchObject({ bidder, claimed: true, principal: winnerFill.principalAttoRep, earnedAttoEth: 0n, earnedAttoRep: 0n })
+		expect(partialView).toMatchObject({ bidder, claimed: true, principal: partialFill.principalAttoRep, earnedAttoEth: 0n, earnedAttoRep: 0n })
+		expect(loserView).toMatchObject({ bidder: losing, claimed: true, principal: 0n })
 		expect((await account(losing)).positionId).toBe(0n)
 	})
 
@@ -258,7 +257,7 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBeLessThan(context.deadline)
 		await context.finalize()
 		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(0n)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [bid.id, context.other.account.address] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [bid.id, context.other.account.address] }))
 		expect(await collateralBalance(context.other, fixture.securityPool, context.other.account.address)).toBe(before)
 	})
 
@@ -307,8 +306,7 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		const book = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
 		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })
 		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'recoveryRep', args: [bookId] })).toBe(1_000n * unit)
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [bid.id] }))
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [context.other.account.address] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [bid.id, context.other.account.address] }))
 		expect(await context.balance(context.other.account.address)).toBe(before)
 		expect(await context.other.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'demandAttoEth' })).toBe(5n * unit)
 	})

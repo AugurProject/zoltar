@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { IERC165 } from '../interfaces/IERC165.sol';
-import { IERC1155Supply } from '../interfaces/IERC1155Supply.sol';
+import { IERC1155 } from '../interfaces/IERC1155.sol';
 import { IERC1155Receiver } from '../interfaces/IERC1155Receiver.sol';
 
 /**
@@ -12,21 +12,19 @@ import { IERC1155Receiver } from '../interfaces/IERC1155Receiver.sol';
  * See https://eips.ethereum.org/EIPS/eip-1155
  * Originally based on code by Enjin: https://github.com/enjin/erc-1155
  */
-contract ERC1155 is IERC1155Supply {
+contract ERC1155 is IERC1155 {
 	bytes4 private constant ERC1155_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155Received.selector;
 	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155BatchReceived.selector;
 	bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
 
 	// Mapping from token ID to account balances
-	mapping(uint256 => mapping(address => uint256)) public _balances;
+	mapping(uint256 => mapping(address => uint256)) internal _balances;
 
 	// Mapping from token ID to total supply
-	mapping(uint256 => uint256) public _supplies;
+	mapping(uint256 => uint256) internal _supplies;
 
 	// Mapping from account to operator approvals
-	mapping(address => mapping(address => bool)) public _operatorApprovals;
-
-	constructor() {}
+	mapping(address => mapping(address => bool)) internal _operatorApprovals;
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
 		return interfaceId == type(IERC165).interfaceId || interfaceId == ERC1155_INTERFACE_ID;
@@ -46,6 +44,7 @@ contract ERC1155 is IERC1155Supply {
 		return _balances[id][account];
 	}
 
+	/// @notice Per-token supply, an optional extension to the standard ERC-1155 interface.
 	function totalSupply(uint256 id) public view returns (uint256) {
 		return _supplies[id];
 	}
@@ -111,15 +110,7 @@ contract ERC1155 is IERC1155Supply {
 		@param id ID of the token type
 		@param value Transfer amount
 	*/
-	function safeTransferFrom(address from, address to, uint256 id, uint256 value) external {
-		_transferFrom(from, to, id, value, '');
-	}
-
 	function safeTransferFrom(address from, address to, uint256 id, uint256 value, bytes calldata data) external {
-		_transferFrom(from, to, id, value, data);
-	}
-
-	function _transferFrom(address from, address to, uint256 id, uint256 value, bytes memory data) internal {
 		require(to != address(0), 'ERC1155: transfer target address must be non-zero');
 		require(from == msg.sender || isApprovedForAll(from, msg.sender), 'ERC1155: caller needs operator approval for third-party transfers');
 
@@ -144,15 +135,7 @@ contract ERC1155 is IERC1155Supply {
 		@param ids IDs of each token type
 		@param values Transfer amounts per token type
 	*/
-	function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata values) external {
-		_batchTransferFrom(from, to, ids, values, '');
-	}
-
 	function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external {
-		_batchTransferFrom(from, to, ids, values, data);
-	}
-
-	function _batchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values, bytes memory data) internal {
 		require(ids.length == values.length, 'ERC1155: batch transfer IDs and values arrays must have the same length');
 		require(to != address(0), 'ERC1155: batch transfer target address must be non-zero');
 		require(from == msg.sender || isApprovedForAll(from, msg.sender), 'ERC1155: caller needs operator approval for third-party batch transfers');

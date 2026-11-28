@@ -116,7 +116,7 @@ postgresTest(
 						chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical
 					) VALUES
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'RepairAuctionStarted',
-							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1000","targetLots":"10","inventoryAttoRep":"900","maximumAttoRepPerLot":"90"}'::jsonb, true),
+							'{"closesAt":"1767229200","lotAttoEth":"1000","targetLots":"10","inventoryAttoRep":"900","maximumAttoRepPerLot":"90"}'::jsonb, true),
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 3, 1, ${auctionAddress}, 'BidSubmitted',
 							'{"bidId":"1","bidder":"0x1000000000000000000000000000000000000001","lots":"4","minimumAttoRepPerLot":"60"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 2, 2, ${auctionAddress}, 'BidSubmitted',
@@ -170,8 +170,8 @@ postgresTest(
 				report_data: { marker: 'historical' },
 			})
 			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: null, balance_read_status: null })])
-			// Block 1 is stamped 21 seconds after RepairAuctionStarted.opensAt and well before closesAt.
-			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0, status: 'Open' })])
+			// Block 1 is stamped well before RepairAuctionStarted.closesAt.
+			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, status: 'Open' })])
 			const auctionDetailResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
 			expect(auctionDetailResponse?.status).toBe(200)
 			const auctionDetail = (await auctionDetailResponse?.json()) as { data: { demandCurve: unknown; demandCurveTruncated: boolean; finalization: { event_data: unknown } } }

@@ -11,27 +11,20 @@ import { SecurityPoolSettlement } from './SecurityPoolSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { ISecurityPoolReporterLedger, ISecurityPoolReporterHost } from './interfaces/ISecurityPoolReporterLedger.sol';
 
-/// @dev One adapter for native game logic and security pool reporter custody. Standalone
-/// games (including narrow test pool contexts) keep their existing direct REP custody.
+/// @dev One adapter for native game logic and security pool reporter custody. The factory
+/// starts games only for question ledgers bound to a security pool, so every game uses it.
 library EscalationGameRepCustody {
 	using SafeERC20Ops for IERC20;
 
 	function securityPool(address poolAddress) internal view returns (address authority) {
 		IQuestionLedger pool = IQuestionLedger(payable(poolAddress));
-		// Narrow standalone test contexts do not implement security pool binding.
-		try pool.securityPoolCustody() returns (address custody) {
-			if (custody == address(0)) return address(0);
-		} catch {
-			return address(0);
-		}
+		if (pool.securityPoolCustody() == address(0)) return address(0);
 		authority = pool.securityPoolFactory().securityPoolOf(pool);
 		require(authority != address(0), 'Bound reporter security pool is missing');
 	}
 
 	function ledger(address poolAddress) internal view returns (ISecurityPoolReporterLedger custody) {
-		address authority = securityPool(poolAddress);
-		if (authority == address(0)) return ISecurityPoolReporterLedger(address(0));
-		address ledgerAddress = ISecurityPoolReporterHost(authority).reporterLedger(IQuestionLedger(payable(poolAddress)).universeId());
+		address ledgerAddress = ISecurityPoolReporterHost(securityPool(poolAddress)).reporterLedger(IQuestionLedger(payable(poolAddress)).universeId());
 		require(ledgerAddress.code.length != 0, 'Security pool reporter ledger is missing');
 		return ISecurityPoolReporterLedger(ledgerAddress);
 	}
@@ -42,47 +35,35 @@ library EscalationGameRepCustody {
 		ISecurityPoolReporterHost root = ISecurityPoolReporterHost(authority);
 		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(root.reporterLedger(universe)).question(universe, questionId);
 		if (reporter.finalAfter != 0) return reporter.finalAfter;
-		// Standalone custody harnesses may have no settlement engine.
-		try root.settlement() returns (address engine) {
-			if (engine != address(0)) {
-				SecurityPoolSettlement settlement = SecurityPoolSettlement(engine);
-				uint64 bookId = settlement.bookIds(universe);
-				if (bookId != 0) {
-					(SecurityPoolSettlementBook.Question memory claim, ) = settlement.ledger().question(bookId, questionId);
-					return claim.finalAfter;
-				}
-			}
-		} catch {}
-		return 0;
+		// A pool still in staged setup has no settlement engine yet.
+		address engine = root.settlement();
+		if (engine == address(0)) return 0;
+		SecurityPoolSettlement settlement = SecurityPoolSettlement(engine);
+		uint64 bookId = settlement.bookIds(universe);
+		if (bookId == 0) return 0;
+		(SecurityPoolSettlementBook.Question memory claim, ) = settlement.ledger().question(bookId, questionId);
+		return claim.finalAfter;
 	}
 
-	function balance(address poolAddress, address tokenAddress) internal view returns (uint256) {
-		ISecurityPoolReporterLedger custody = ledger(poolAddress);
-		return
-			address(custody) == address(0)
-				? IERC20(tokenAddress).balanceOf(address(this))
-				: custody.balanceOfGame(address(this));
+	function balance(address poolAddress) internal view returns (uint256) {
+		return ledger(poolAddress).balanceOfGame(address(this));
 	}
 
 	function receiveDeposit(address poolAddress, address tokenAddress, uint256 amountAttoRep, uint48 finalAfter) internal {
 		address authority = securityPool(poolAddress);
-		if (authority == address(0)) return;
 		ISecurityPoolReporterHost(authority).registerReporterGame(address(this));
 		ISecurityPoolReporterLedger custody = ledger(poolAddress);
 		IERC20(tokenAddress).safeTransfer(address(custody), amountAttoRep);
 		custody.depositAndScheduleFinality(address(this), amountAttoRep, _finalityInSecurityPoolTime(authority, poolAddress, finalAfter));
 	}
 
-	function transfer(address poolAddress, address tokenAddress, address recipient, uint256 amountAttoRep) internal {
+	function transfer(address poolAddress, address recipient, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
-		ISecurityPoolReporterLedger custody = ledger(poolAddress);
-		if (address(custody) == address(0)) IERC20(tokenAddress).safeTransfer(recipient, amountAttoRep);
-		else custody.transferFromGame(address(this), recipient, amountAttoRep);
+		ledger(poolAddress).transferFromGame(address(this), recipient, amountAttoRep);
 	}
 
 	function scheduleFinality(address poolAddress, uint48 finalAfter) internal {
 		address authority = securityPool(poolAddress);
-		if (authority == address(0)) return;
 		ISecurityPoolReporterHost(authority).registerReporterGame(address(this));
 		ledger(poolAddress).scheduleFinality(address(this), _finalityInSecurityPoolTime(authority, poolAddress, finalAfter));
 		ISecurityPoolReporterHost(authority).onQuestionFinalityChanged(normalizeFinalAfter(finalAfter));

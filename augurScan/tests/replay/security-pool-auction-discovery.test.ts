@@ -20,10 +20,10 @@ test('branch events discover the uniform engine, index its auction event and sam
 			...position,
 			address: engine,
 			logIndex: 1n,
-			topics: [keccak256(stringToHex('RepairAuctionStarted(uint256,uint256,uint256,uint256,uint256,uint256)'))],
+			topics: [keccak256(stringToHex('RepairAuctionStarted(uint256,uint256,uint256,uint256,uint256)'))],
 			data: encodeAbiParameters(
-				Array.from({ length: 6 }, () => ({ type: 'uint256' })),
-				[100n, 200n, 1n, 100n, 200n, 2n],
+				Array.from({ length: 5 }, () => ({ type: 'uint256' })),
+				[200n, 1n, 100n, 200n, 2n],
 			),
 		},
 	]
@@ -67,16 +67,16 @@ test('branch events discover the uniform engine, index its auction event and sam
 		if (indexed === undefined) throw new Error('Engine event was not indexed')
 		const started = projectionsFrom(indexed).flatMap(projection => (projection.type === 'domainEvent' && projection.domain === 'auction' && projection.semanticEventKind === 'RepairAuctionStarted' ? [projection] : []))[0]
 		if (started === undefined) throw new Error('RepairAuctionStarted was not projected')
-		// The stored event data drives the operations catalog status: open from opensAt (100) until closesAt (200).
+		// The stored event data drives the operations catalog status: open from the start until closesAt (200).
 		const stored = jsonRecord(JSON.parse(databaseJsonText(started.data)))
-		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '150', bidCount: 0, settlementCount: 0 })).toBe('Open')
-		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '200', bidCount: 0, settlementCount: 0 })).toBe('Awaiting finalization')
+		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '150' })).toBe('Open')
+		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '200' })).toBe('Awaiting finalization')
 		const snapshot = await sampleEntityStateWithRead({ entityType: 'auction', entityIdentity: indexed.address.toLowerCase(), address: indexed.address }, async (address, abi, name) => {
 			expect(address).toBe(engine)
 			expect(abi.some(item => item.type === 'function' && item.name === name && toFunctionSelector(item).length === 10)).toBe(true)
 			if (name === 'initialized') return true
 			if (name === 'finalized') return false
-			if (name === 'clearing') return [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false]
+			if (name === 'clearing') return [0n, 0n, 0n, 0n, false]
 			return 1n
 		})
 		expect(snapshot.readStatus).toBe('success')

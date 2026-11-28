@@ -84,7 +84,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		await fixture.mint(10n * unit)
 		expect(await fixture.owner().readContract({ ...target, functionName: 'purchaseFee', args: [10n * unit] })).toBe(fee)
 		const streams = await fixture.owner().readContract({ ...capital(), functionName: 'feeStreams' })
-		expect((await fixture.owner().readContract({ abi: streamArtifact.abi, address: streams, functionName: 'fundedOutstanding' }))[0]).toBeGreaterThan(0n)
+		expect(await fixture.owner().readContract({ abi: streamArtifact.abi, address: streams, functionName: 'outstandingEth' })).toBeGreaterThan(0n)
 	})
 
 	test('temporary capacity cannot lower a question fee or leave a discounted stream after retiring', async () => {
@@ -203,7 +203,7 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		expect((await question()).feePrincipalAttoEth).toBe(0n)
 		expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool.questionLedger, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 		const streams = await fixture.owner().readContract({ ...capital(), functionName: 'feeStreams' })
-		expect((await fixture.owner().readContract({ abi: streamArtifact.abi, address: streams, functionName: 'fundedOutstanding' }))[0]).toBeGreaterThan(0n)
+		expect(await fixture.owner().readContract({ abi: streamArtifact.abi, address: streams, functionName: 'outstandingEth' })).toBeGreaterThan(0n)
 	})
 })
 

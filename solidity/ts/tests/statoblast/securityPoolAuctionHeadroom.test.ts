@@ -19,7 +19,7 @@ describe('auction cumulative collateral headroom', () => {
 		const target = { abi: engineArtifact.abi, address: engine }
 		const maximum = (1n << 128n) - 1n
 		const now = (await client.getBlock()).timestamp
-		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'startRepairAuction', args: [now, now + 86400n, maximum, 1n, 2n, 1n, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'startRepairAuction', args: [now + 86400n, maximum, 1n, 2n, 1n] }))
 		expect(await client.readContract({ ...target, functionName: 'maximumAdmissibleBidAttoRepPerLot' })).toBe(2n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [engine, maximum] }))
 		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'submitBid', args: [client.account.address, 1n, 2n] }))

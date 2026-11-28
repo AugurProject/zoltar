@@ -102,7 +102,7 @@ contract SecurityPoolServices {
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.setDemand(capital.demandAttoEth() + cash);
-		(uint256 minted, SecurityPoolSettlement.Snapshot memory snapshot) = root.settlement().mintWithRecoveryRep(address(pool), active.payer, cash, 0, active.maximumRecoveryAttoRep, root.securityPoolTime(universeId));
+		(uint256 minted, SecurityPoolSettlement.Snapshot memory snapshot) = root.settlement().mintWithRecoveryRep(address(pool), active.payer, cash, active.maximumRecoveryAttoRep, root.securityPoolTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
@@ -111,7 +111,7 @@ contract SecurityPoolServices {
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.checkpoint();
-		(uint256 paid, SecurityPoolSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, 0, root.securityPoolTime(universeId));
+		(uint256 paid, SecurityPoolSettlement.Snapshot memory snapshot) = root.settlement().redeem(address(pool), recipient, shares, root.securityPoolTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		_cancelUnusedPremium(pool);
 		return (paid, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
@@ -198,9 +198,6 @@ contract SecurityPoolServices {
 	function _fundPremium(uint248 universeId, uint256 questionId, uint256 amount) private {
 		uint256 units = premiumLedger.fund(universeId, questionId, amount);
 		emit PremiumFunded(universeId, questionId, amount, units);
-	}
-	function questionPremium(uint248 universeId, uint256 questionId) external view returns (uint256 units, uint256 cash) {
-		return premiumLedger.question(universeId, questionId);
 	}
 	function freezePremiumUniverse(uint248 source) external onlyForkController {
 		premiumLedger.freeze(source);

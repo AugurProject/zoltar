@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, WEEK, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -127,7 +126,7 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		const leaves = await e2e.lineageLeaves([game0], YES)
 		const losing = await e2e.lineageLeaves([game0], NO)
 		const loser = losing[0]
-		if (loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, NO, losing, loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
+		if (loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, NO, losing, loser)).rejects.toThrow('Not winning outcome')
 		const supplyA = await e2e.supply(A)
 		const { paid, burn } = await e2e.claimEveryWinner(r6, child.pool, YES, leaves, median(balances), balances[YES])
 		// 70k principal, 30k reward and 20k burn spend the whole 120k that survived the origin's surplus release.

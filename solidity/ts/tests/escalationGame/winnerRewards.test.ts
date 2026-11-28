@@ -60,7 +60,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		assert.strictEqual(resolution, QuestionOutcome.Yes, 'Resolution should be Yes')
 	})
 
-	test('claimDepositForWinning pays the pro-rata reward for a deposit fully below binding capital', async () => {
+	test('withdrawDeposit pays the pro-rata reward for a deposit fully below binding capital', async () => {
 		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const winningDepositorAddress = client.account.address
 		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
@@ -92,7 +92,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		assert.strictEqual(claimLog.args.transferredRep, true, 'direct winning claims should transfer REP to the depositor')
 	})
 
-	test('claimDepositForWinning treats the region between binding capital and the reward cap as the first-come safety boundary', async () => {
+	test('withdrawDeposit treats the region between binding capital and the reward cap as the first-come safety boundary', async () => {
 		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const firstWinningDepositorAddress = client.account.address
 		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
@@ -121,7 +121,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 		assert.strictEqual(claimLog.args.transferredRep, true, 'direct winning claims should transfer REP to the depositor')
 	})
 
-	test('claimDepositForWinning shares the full reward pool across actual winning principal when winning depth stays below the reward cap', async () => {
+	test('withdrawDeposit shares the full reward pool across actual winning principal when winning depth stays below the reward cap', async () => {
 		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const firstWinningDepositorAddress = client.account.address
 		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address

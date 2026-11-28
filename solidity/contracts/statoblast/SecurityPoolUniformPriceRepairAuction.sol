@@ -13,10 +13,6 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
 contract SecurityPoolUniformPriceRepairAuction {
-	enum PriceBoundary {
-		Exclusive,
-		Inclusive
-	}
 	/// @dev The bidder's own address receives any winning lots in the capital
 	/// ledger; the flags share the bidder's slot.
 	struct Bid {
@@ -32,10 +28,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 		uint256 filledLots;
 		uint256 raisedAttoEth;
 		uint256 soldAttoRep;
-		uint256 marginalMinimumAttoRepPerLot;
-		uint256 marginalFillLots;
-		uint256 marginalDemandLots;
-		uint256 fullBeforeLots;
 		bool raiseLimitReached;
 	}
 
@@ -60,8 +52,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 	}
 
 	address public immutable controller;
-	address public feeAllocator;
-	uint256 public opensAt;
 	uint256 public closesAt;
 	uint256 public lotAttoEth;
 	uint256 public targetLots;
@@ -74,21 +64,18 @@ contract SecurityPoolUniformPriceRepairAuction {
 	uint256 public remainingFeeLots;
 	bool public initialized;
 	bool public finalized;
-	bool public raisedWithdrawn;
 	Clearing public clearing;
 	mapping(uint256 => Bid) public bids;
-	mapping(address => uint256) public refundCreditAttoEth;
 	mapping(address => uint256[]) private bidderIds;
 	mapping(uint256 => Node) private nodes;
 	uint96 private root;
 
-	event RepairAuctionStarted(uint256 opensAt, uint256 closesAt, uint256 lotAttoEth, uint256 targetLots, uint256 inventoryAttoRep, uint256 maximumAttoRepPerLot);
+	event RepairAuctionStarted(uint256 closesAt, uint256 lotAttoEth, uint256 targetLots, uint256 inventoryAttoRep, uint256 maximumAttoRepPerLot);
 	event BidSubmitted(uint256 indexed bidId, address indexed bidder, uint256 lots, uint256 minimumAttoRepPerLot);
 	event RepairAuctionFinalized(uint256 attoRepPerLot, uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 	event BidSettled(uint256 indexed bidId, address indexed bidder, uint256 filledLots, uint256 refundAttoEth);
 	event FeesRemoved(uint256 indexed bidId, uint256 attoEth, uint256 attoRep);
 	event RefundWithdrawn(address indexed bidder, address indexed recipient, uint256 amountAttoEth);
-	event RaisedWithdrawn(address indexed recipient, uint256 amountAttoEth);
 
 	IERC20 public immutable collateralToken;
 	constructor(address controller_, IERC20 token) {
@@ -102,29 +89,28 @@ contract SecurityPoolUniformPriceRepairAuction {
 		_;
 	}
 
-	function startRepairAuction(uint256 opensAt_, uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_, address feeAllocator_) external onlyController {
+	/// @notice Bidding opens at once and runs until `closesAt_`.
+	function startRepairAuction(uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_) external onlyController {
 		require(!initialized && !finalized, 'Auction has already started');
-		require(closesAt_ > opensAt_, 'Auction closing time must follow opening time');
+		require(closesAt_ > block.timestamp, 'Auction closing time must follow opening time');
 		require(lotAttoEth_ > 0 && targetLots_ > 0 && targetLots_ <= type(uint128).max / lotAttoEth_, 'Auction ETH target is outside the supported range');
 		require(inventoryAttoRep_ > 0 && inventoryAttoRep_ <= Constants.MAX_ATTO_REP, 'Auction REP inventory is outside the supported range');
-		require(repGrid_ > 0 && feeAllocator_ != address(0), 'Auction grid and fee allocator are required');
+		require(repGrid_ > 0, 'Auction REP grid is required');
 		uint256 maximum = inventoryAttoRep_ - (inventoryAttoRep_ % repGrid_);
 		require(maximum > 0, 'Auction inventory cannot fund one REP grid unit');
 		initialized = true;
-		opensAt = opensAt_;
 		closesAt = closesAt_;
 		lotAttoEth = lotAttoEth_;
 		targetLots = targetLots_;
 		inventoryAttoRep = inventoryAttoRep_;
 		maximumBidAttoRepPerLot = maximum;
 		repGrid = repGrid_;
-		feeAllocator = feeAllocator_;
-		emit RepairAuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
+		emit RepairAuctionStarted(closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
 	}
 
 	function submitBid(address bidder, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {
 		require(initialized && !finalized, 'Auction is not accepting bids');
-		require(block.timestamp >= opensAt && block.timestamp < closesAt, 'Auction bidding window is closed');
+		require(block.timestamp < closesAt, 'Auction bidding window is closed');
 		require(bidder != address(0), 'Auction bidder is required');
 		require(lots > 0 && lots <= type(uint128).max / lotAttoEth, 'Auction bid must fund exact whole ETH lots');
 		require(lots * lotAttoEth <= type(uint128).max - depositedAttoEth, 'Auction deposits exceed the supported range');
@@ -154,6 +140,7 @@ contract SecurityPoolUniformPriceRepairAuction {
 
 	/// @notice Zero capacity cancels safely. Otherwise the winning prefix must
 	/// fit the inventory at every winner's minimum collateral amount per lot.
+	/// The raised collateral goes to the controller in the same call.
 	function finalize(uint256 maximumFilledLots, uint256 floorAttoRepPerLot) external onlyController returns (Clearing memory result) {
 		require(initialized && !finalized, 'Auction cannot be finalized');
 		require(block.timestamp >= closesAt, 'Auction bidding window has not closed');
@@ -162,6 +149,9 @@ contract SecurityPoolUniformPriceRepairAuction {
 		remainingFeeLots = result.filledLots;
 		finalized = true;
 		emit RepairAuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
+		if (result.raisedAttoEth == 0) return result;
+		withdrawnCollateral += result.raisedAttoEth;
+		Collateral.send(collateralToken, controller, result.raisedAttoEth);
 	}
 
 	/// @notice Highest grid-aligned limit that a new bid can enter at this block.
@@ -170,7 +160,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 		if (
 			!initialized ||
 			finalized ||
-			block.timestamp < opensAt ||
 			block.timestamp >= closesAt ||
 			lotAttoEth > type(uint128).max - depositedAttoEth
 		) return 0;
@@ -184,7 +173,7 @@ contract SecurityPoolUniformPriceRepairAuction {
 		return low * repGrid;
 	}
 	function _isBidExcluded(uint256 minimum) private view returns (bool) {
-		return _pricePrefix(minimum, PriceBoundary.Inclusive) >= Math.min(targetLots, inventoryAttoRep / minimum);
+		return _pricePrefix(minimum) >= Math.min(targetLots, inventoryAttoRep / minimum);
 	}
 
 	/// @notice `floorAttoRepPerLot` is the least REP every winning lot must receive,
@@ -199,10 +188,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 		result.filledLots = _fundedLots(maximumFilledLots, floorAttoRepPerLot);
 		if (result.filledLots == 0) return result;
 		uint256 marginal = bids[_lotAt(result.filledLots)].minimumAttoRepPerLot;
-		result.marginalMinimumAttoRepPerLot = marginal;
-		result.fullBeforeLots = _pricePrefix(marginal, PriceBoundary.Exclusive);
-		result.marginalDemandLots = _pricePrefix(marginal, PriceBoundary.Inclusive) - result.fullBeforeLots;
-		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
 		result.raiseLimitReached = result.filledLots == maximumFilledLots;
 		result.attoRepPerLot = Math.max(marginal, floorAttoRepPerLot);
 		result.raisedAttoEth = result.filledLots * lotAttoEth;
@@ -256,42 +241,35 @@ contract SecurityPoolUniformPriceRepairAuction {
 		return _nextUnmaterialized(node.right, end, cutoff);
 	}
 
-	function settleBid(uint256 bidId) external onlyController returns (Fill memory fill) {
-		return _settleBid(bidId);
-	}
-
-	/// @notice Credit `bidId` for its bidder unless someone already did, then pay
-	/// that bidder's whole credit, which may include refunds of its other bids.
-	/// Settlement and the credit reset complete before the single collateral transfer,
-	/// so a failed transfer reverts the new credit and keeps older credit intact.
-	function settleAndWithdrawRefund(uint256 bidId, address bidder, address payable recipient) external onlyController returns (uint256 amountAttoEth) {
+	/// @notice Settle one of `bidder`'s bids and pay its unused collateral to
+	/// `recipient`: the whole bid once better bids exclude it, or its unfilled
+	/// lots after closing. Each bid settles once, so it pays at most once.
+	function refundBid(uint256 bidId, address bidder, address recipient) external onlyController returns (uint256 amountAttoEth) {
 		Bid storage bid = bids[bidId];
 		require(bid.bidder != address(0) && bid.bidder == bidder, 'Auction bid belongs to another bidder');
-		if (!bid.settled) _settleBid(bidId);
-		amountAttoEth = _withdrawRefund(bidder, recipient);
-		require(amountAttoEth != 0, 'Auction has no refund credit for this bidder');
-	}
-
-	function _settleBid(uint256 bidId) private returns (Fill memory fill) {
-		Bid storage bid = bids[bidId];
-		require(bid.bidder != address(0), 'Auction bid does not exist');
 		require(!bid.settled, 'Auction bid has already been settled');
-		if (finalized) fill = previewBid(bidId);
-		else {
-			uint256 refund = earlyRefundAttoEth(bidId);
-			require(refund != 0, 'Bid may still win');
-			fill = Fill({bidder: bid.bidder, filledLots: 0, usedAttoEth: 0, principalAttoRep: 0, refundAttoEth: refund});
+		require(recipient != address(0), 'Auction refund recipient is required');
+		uint256 filledLots;
+		if (finalized) {
+			Fill memory fill = previewBid(bidId);
+			filledLots = fill.filledLots;
+			amountAttoEth = fill.refundAttoEth;
+		} else {
+			amountAttoEth = earlyRefundAttoEth(bidId);
+			require(amountAttoEth != 0, 'Bid may still win');
 		}
+		require(amountAttoEth != 0, 'Auction bid has no refund');
 		bid.settled = true;
-		refundCreditAttoEth[fill.bidder] += fill.refundAttoEth;
-		emit BidSettled(bidId, fill.bidder, fill.filledLots, fill.refundAttoEth);
+		emit BidSettled(bidId, bidder, filledLots, amountAttoEth);
+		emit RefundWithdrawn(bidder, recipient, amountAttoEth);
+		withdrawnCollateral += amountAttoEth;
+		Collateral.send(collateralToken, recipient, amountAttoEth);
 	}
 
 	/// @notice Accounting only: the capital ledger retains custody of these fees.
 	/// Push exact integer budgets before removing ownership, so a late claimant
 	/// keeps old earnings and cannot collect any later earnings after detaching.
-	function allocateAndRemoveFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
-		require(msg.sender == feeAllocator, 'Only the auction fee allocator can detach ownership');
+	function allocateAndRemoveFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external onlyController returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
 		Fill memory fill = previewBid(bidId);
 		require(fill.filledLots > 0 && !bids[bidId].feesRemoved, 'Auction bid has no remaining fee ownership');
 		nodes[root].pendingAttoEth += _amount128(addedAttoEth);
@@ -337,36 +315,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 			}
 		}
 		revert('Auction fee owner is missing');
-	}
-
-	function withdrawRaised(address payable recipient) external onlyController {
-		require(finalized && !raisedWithdrawn, 'Auction proceeds are not withdrawable');
-		require(recipient != address(0), 'Auction proceeds recipient is required');
-		raisedWithdrawn = true;
-		uint256 amount = clearing.raisedAttoEth;
-		emit RaisedWithdrawn(recipient, amount);
-		if (amount == 0) return;
-		withdrawnCollateral += amount;
-		Collateral.send(collateralToken, recipient, amount);
-	}
-
-	function withdrawRefund(address payable recipient) external {
-		require(refundCreditAttoEth[msg.sender] > 0, 'Auction has no refund credit for this bidder');
-		_withdrawRefund(msg.sender, recipient);
-	}
-
-	function withdrawRefundFor(address bidder, address payable recipient) external onlyController {
-		_withdrawRefund(bidder, recipient);
-	}
-
-	function _withdrawRefund(address bidder, address payable recipient) private returns (uint256 amount) {
-		require(recipient != address(0), 'Auction refund recipient is required');
-		amount = refundCreditAttoEth[bidder];
-		if (amount == 0) return 0;
-		refundCreditAttoEth[bidder] = 0;
-		emit RefundWithdrawn(bidder, recipient, amount);
-		withdrawnCollateral += amount;
-		Collateral.send(collateralToken, recipient, amount);
 	}
 
 	function bidderBidCount(address bidder) external view returns (uint256) {
@@ -437,12 +385,13 @@ contract SecurityPoolUniformPriceRepairAuction {
 		node.removedLots += _amount128(weight);
 	}
 
-	function _pricePrefix(uint256 minimumRepPerLot, PriceBoundary boundary) private view returns (uint256 lots) {
+	/// @dev Lots of every bid whose limit is at most `minimumRepPerLot`.
+	function _pricePrefix(uint256 minimumRepPerLot) private view returns (uint256 lots) {
 		uint256 id = root;
 		while (id != 0) {
 			Node storage node = nodes[id];
 			uint256 limit = bids[id].minimumAttoRepPerLot;
-			if (limit < minimumRepPerLot || (boundary == PriceBoundary.Inclusive && limit == minimumRepPerLot)) {
+			if (limit <= minimumRepPerLot) {
 				lots += nodes[node.left].subtreeLots + bids[id].lots;
 				id = node.right;
 			} else id = node.left;

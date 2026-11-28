@@ -14,7 +14,7 @@ test('universe preparation discovers capital and indexes deposits from the same 
 	const { database, indexer, hash, tx, header, position } = discoveredReceiptReplay()
 	const logs: Log[] = [
 		{ ...position, address: securityPool, logIndex: 0n, topics: [keccak256(stringToHex('UniversePrepared(uint248,address)')), toHex(2n, { size: 32 })], data: encodeAbiParameters([{ type: 'address' }], [capital]) },
-		{ ...position, address: capital, logIndex: 1n, topics: [keccak256(stringToHex('PrincipalDeposited(address,address,uint256)')), toHex(BigInt(owner), { size: 32 }), toHex(BigInt(owner), { size: 32 })], data: encodeAbiParameters([{ type: 'uint256' }], [100n]) },
+		{ ...position, address: capital, logIndex: 1n, topics: [keccak256(stringToHex('PrincipalDeposited(address,uint256)')), toHex(BigInt(owner), { size: 32 })], data: encodeAbiParameters([{ type: 'uint256' }], [100n]) },
 	]
 	const mocks = [
 		spyOn(indexer.providers.client, 'getTransaction').mockResolvedValue({ hash: tx, blockHash: hash, blockNumber: 10n, transactionIndex: 0n, from: owner, to: securityPool, gas: 1_000_000n, nonce: 0n, value: 0n, input: '0x' }),

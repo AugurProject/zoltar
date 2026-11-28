@@ -43,22 +43,13 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		'bid: first bid in an empty book',
 		'bid: later losing bid',
 		'bid: last tied bid in the book',
-		'refund failure: credit a bid that may still win',
-		'early refund: permissionless credit',
-		'early refund: bidder withdrawal',
-		'refund: withdrawal with no credit',
-		'early refund: combined credit and withdrawal by the bidder',
-		'early refund: permissionless credit before a combined withdrawal',
-		'early refund: combined withdrawal after someone else credited',
-		'refund failure: combined withdrawal with nothing left',
+		'refund failure: a bid that may still win',
+		'early refund: bidder refunds an excluded bid',
+		'refund failure: a bid already refunded',
 		'close: finalize branch and install the auction cohort',
-		'refund: credit the fully unfilled loser after closing',
-		'refund: credit an unfilled tied bid after closing',
-		'refund: bidder withdrawal after closing',
-		'refund: credit a partially filled bid after closing',
-		'refund failure: credit an already credited bid',
-		'refund: combined credit and withdrawal of the unfilled loser after closing',
-		'refund: combined credit and withdrawal of an unfilled tied bid after closing',
+		'refund: the fully unfilled loser after closing',
+		'refund: an unfilled tied bid after closing',
+		'refund: a partially filled bid after closing',
 		'owner: operation by an account that never bid',
 		'claim: bidder claims its winning bid',
 		'claim: repeated claim of the same bid',
@@ -202,17 +193,10 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		for (let count = 1; count < bookSize; count++) await sendFiller(count, tiedPrice + BigInt(bookSize - count) * grid)
 		const lastFiller = await sendFiller(bookSize, tiedPrice, 'bid: last tied bid in the book')
 		expect(lastFiller.id).toBe(BigInt(bookSize) + 2n)
-		await revertedGasOf('refund failure: credit a bid that may still win', owner, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'settleRefund', args: [winner.id] }))
+		await revertedGasOf('refund failure: a bid that may still win', winner.bidder, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'refundBid', args: [winner.id, winner.bidder.account.address] }))
 		const earlySnapshot = await snapshot()
-		await gasOf('early refund: permissionless credit', owner, () => owner.writeContract({ ...auction, functionName: 'settleRefund', args: [loser.id] }))
-		await gasOf('early refund: bidder withdrawal', other, () => other.writeContract({ ...auction, functionName: 'withdrawRefunds', args: [stranger.account.address] }))
-		await gasOf('refund: withdrawal with no credit', other, () => other.writeContract({ ...auction, functionName: 'withdrawRefunds', args: [stranger.account.address] }))
-		await restore(earlySnapshot)
-		await gasOf('early refund: combined credit and withdrawal by the bidder', other, () => other.writeContract({ ...auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, stranger.account.address] }))
-		await restore(earlySnapshot)
-		await gasOf('early refund: permissionless credit before a combined withdrawal', owner, () => owner.writeContract({ ...auction, functionName: 'settleRefund', args: [loser.id] }))
-		await gasOf('early refund: combined withdrawal after someone else credited', other, () => other.writeContract({ ...auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, stranger.account.address] }))
-		await revertedGasOf('refund failure: combined withdrawal with nothing left', other, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'settleAndWithdrawRefund', args: [loser.id, stranger.account.address] }))
+		await gasOf('early refund: bidder refunds an excluded bid', other, () => other.writeContract({ ...auction, functionName: 'refundBid', args: [loser.id, stranger.account.address] }))
+		await revertedGasOf('refund failure: a bid already refunded', other, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'refundBid', args: [loser.id, stranger.account.address] }))
 		await restore(earlySnapshot)
 		await context.closingQuote()
 		await mock.setTime(context.deadline)
@@ -232,17 +216,12 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		const cohort = await owner.readContract({ ...capital, functionName: 'repairAuctionCohort' })
 		const finalized = await snapshot()
 
-		// Refunds after closing: the full loser, an unfilled tied bid, and an
-		// unfilled bid credited by a keeper before the bidder withdraws.
-		await gasOf('refund: credit the fully unfilled loser after closing', owner, () => owner.writeContract({ ...auction, functionName: 'settleRefund', args: [loser.id] }))
-		await gasOf('refund: credit an unfilled tied bid after closing', owner, () => owner.writeContract({ ...auction, functionName: 'settleRefund', args: [empty.id] }))
-		await gasOf('refund: bidder withdrawal after closing', other, () => other.writeContract({ ...auction, functionName: 'withdrawRefunds', args: [other.account.address] }))
-		await gasOf('refund: credit a partially filled bid after closing', owner, () => owner.writeContract({ ...auction, functionName: 'settleRefund', args: [partial.id] }))
-		await revertedGasOf('refund failure: credit an already credited bid', owner, context.auction, encodeFunctionData({ abi: auctionArtifact.abi, functionName: 'settleRefund', args: [partial.id] }))
-		await restore(finalized)
-		await gasOf('refund: combined credit and withdrawal of the unfilled loser after closing', other, () => other.writeContract({ ...auction, functionName: 'settleAndWithdrawRefund', args: [loser.id, other.account.address] }))
+		// Refunds after closing: the full loser, an unfilled tied bid, and a partially filled bid.
+		await gasOf('refund: the fully unfilled loser after closing', other, () => other.writeContract({ ...auction, functionName: 'refundBid', args: [loser.id, other.account.address] }))
 		const emptyBidder = empty.bidder
-		await gasOf('refund: combined credit and withdrawal of an unfilled tied bid after closing', emptyBidder, () => emptyBidder.writeContract({ ...auction, functionName: 'settleAndWithdrawRefund', args: [empty.id, emptyBidder.account.address] }))
+		await gasOf('refund: an unfilled tied bid after closing', emptyBidder, () => emptyBidder.writeContract({ ...auction, functionName: 'refundBid', args: [empty.id, emptyBidder.account.address] }))
+		const partialBidder = partial.bidder
+		await gasOf('refund: a partially filled bid after closing', partialBidder, () => partialBidder.writeContract({ ...auction, functionName: 'refundBid', args: [partial.id, partialBidder.account.address] }))
 		await restore(finalized)
 
 		// Claims: anyone claims bids explicitly; ordinary owner operations never move lots.
@@ -309,7 +288,7 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		await splitMigrationRep(owner, context.source, 1_000n * unit, [1])
 		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'transfer', args: [keeper.account.address, 600n * unit] }))
 		await approveToken(keeper, context.token, context.capital)
-		await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'depositFor', args: [keeper.account.address, 600n * unit] }))
+		await gasOf('liquidation: keeper deposits principal', keeper, () => keeper.writeContract({ ...capital, functionName: 'deposit', args: [600n * unit] }))
 		await renewDistressedPrice()
 		const distressStart = await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })
 		expect(distressStart).toBeGreaterThan(0n)

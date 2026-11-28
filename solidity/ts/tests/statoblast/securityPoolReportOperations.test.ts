@@ -137,7 +137,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const feed = { abi: feedArtifact.abi, address: await sponsor.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] }) }
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'weth' }), feed.address)
 		await approveToken(sponsor, await sponsor.readContract({ ...feed, functionName: 'reputationToken' }), feed.address)
-		const deposit = { ...capital(), functionName: 'depositFor', args: [sponsor.account.address, 3000n * unit] } as const
+		const deposit = { ...capital(), functionName: 'deposit', args: [3000n * unit] } as const
 		const benign = await sponsor.estimateContractGas({ ...deposit, account: sponsor.account })
 		const index = { abi: indexArtifact.abi, address: await owner.readContract({ ...capital(), functionName: 'commitmentIndex' }) }
 		const positionOf = async (client: typeof owner) => (await owner.readContract({ ...capital(), functionName: 'ownerAccount', args: [client.account.address] })).positionId
@@ -277,7 +277,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 	test('deposits, health targets, commitment changes, withdrawals and earnings share sponsor authorization', async () => {
 		const context = await prepare()
 		const operations = [
-			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'depositFor', args: [context.sponsor.account.address, 5n * unit] }),
+			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'deposit', args: [5n * unit] }),
 			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [15_000n] }),
 			encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setCommitment', args: [100n * unit] }),
 			withdraw(2n * unit, context.sponsor.account.address).data,
@@ -317,7 +317,7 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		const rep = await owner.readContract({ ...capital(), functionName: 'repToken' })
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: rep, functionName: 'transfer', args: [receiver, 3200n * unit] }))
 		await execute(rep, encodeFunctionData({ abi: tokenArtifact.abi, functionName: 'approve', args: [fixture.capitalLedger, 3000n * unit] }))
-		await execute(fixture.capitalLedger, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'depositFor', args: [receiver, 3000n * unit] }))
+		await execute(fixture.capitalLedger, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'deposit', args: [3000n * unit] }))
 		await execute(fixture.capitalLedger, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setCommitment', args: [100n * unit] }))
 		await fixture.base.mockWindow.advanceTime(86_401n)
 		await fixture.refreshPrice()

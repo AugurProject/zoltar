@@ -172,10 +172,8 @@ export interface RichListRecord {
 	}>
 	share_positions?: JsonRecord
 	escalation_positions_truncated?: boolean
-	pending_refunds_truncated?: boolean
 	escalation_positions?: JsonRecord[]
 	escalation_payouts?: JsonRecord
-	pending_refunds?: JsonRecord[]
 	escalation_claims_truncated?: boolean
 	escalation_claims?: JsonRecord[]
 	auction_claims_truncated?: boolean
@@ -518,6 +516,6 @@ export interface DetailContextSnapshot extends ActivityDetailFocusSnapshot {
 	scrollTop: number
 }
 
-export type SecurityPoolData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'pending_refunds' | 'escalation_positions' | 'securityPoolPagination'>
+export type SecurityPoolData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'escalation_positions' | 'securityPoolPagination'>
 
 export type OperationsRoutePosition = { readonly scrollY: number; readonly focusedIndex?: number }

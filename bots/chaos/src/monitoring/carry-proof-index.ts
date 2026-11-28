@@ -1,5 +1,5 @@
 import { getAddress, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakRoots, CARRY_NULLIFIER_DEPTH, computeCarryNullifierRootFromProof, createSparseNullifier, getCarryNullifierPath, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
+import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, buildCarryPeakRoots, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 
 import type { CanonicalUintString } from '../core/units.ts'
@@ -9,8 +9,6 @@ const CARRY_MMR_MAXIMUM_PEAKS = 64
 const MAXIMUM_CARRY_LEAF_COUNT = 1n << BigInt(CARRY_MMR_MAXIMUM_PEAKS)
 
 const MAXIMUM_UINT256_DECIMAL = maxUint256.toString()
-
-const NULLIFIER_PATH_MASK = (1n << BigInt(CARRY_NULLIFIER_DEPTH)) - 1n
 
 const HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/
 
@@ -31,17 +29,6 @@ export interface CarryLeafSlot {
 	hash: Hash
 	originGame: Address
 	leaf: CarryLeaf
-	consumedLocally: boolean
-}
-
-interface SparseNullifierEntry {
-	parentDepositIndex: string
-	/** Decimal encoding of the unique carry MMR leaf position. */
-	path: string
-}
-
-interface SparseNullifierState {
-	consumed: SparseNullifierEntry[]
 }
 
 interface MerkleMountainRangeProof {
@@ -110,12 +97,8 @@ function requireSlots(slots: readonly CarryLeafSlot[], label: string) {
 		requireHash(slot.hash, `${label}[${index.toString()}].hash`)
 		getAddress(slot.originGame)
 		requireLeaf(slot.leaf, `${label}[${index.toString()}].leaf`)
-		const expectedHash = hashCarryLeaf(slot.leaf)
-		if (slot.consumedLocally) {
-			if (slot.hash !== zeroHash) throw new Error(`${label}[${index.toString()}] locally consumed slot is not the literal zero hash`)
-		} else if (slot.hash.toLowerCase() !== expectedHash.toLowerCase()) {
-			throw new Error(`${label}[${index.toString()}] hash does not match its carry leaf`)
-		}
+		// Carry is append-only: consumed leaves keep their hash in every later snapshot.
+		if (slot.hash.toLowerCase() !== hashCarryLeaf(slot.leaf).toLowerCase()) throw new Error(`${label}[${index.toString()}] hash does not match its carry leaf`)
 	}
 }
 
@@ -145,64 +128,4 @@ export function createMerkleMountainRangeProof(hashes: readonly Hash[], globalLe
 		merkleMountainRangePeakIndex: proof.merkleMountainRangePeakIndex.toString(),
 		merkleMountainRangeSiblings: proof.merkleMountainRangeSiblings,
 	}
-}
-
-function nullifierLeafIndex(leafIndex: string) {
-	return unsignedInteger(leafIndex, 'Nullifier leafIndex')
-}
-
-export function nullifierPath(leafIndex: string) {
-	return getCarryNullifierPath(nullifierLeafIndex(leafIndex))
-}
-
-function assertNoNullifierPathCollisions(entries: readonly SparseNullifierEntry[]) {
-	const ownerByPath = new Map<string, string>()
-	for (const entry of entries) {
-		unsignedInteger(entry.parentDepositIndex, 'Nullifier entry parentDepositIndex')
-		const path = unsignedInteger(entry.path, 'Nullifier entry path')
-		if (path > NULLIFIER_PATH_MASK) throw new Error('Nullifier entry path exceeds 64 bits')
-		const previous = ownerByPath.get(entry.path)
-		if (previous !== undefined && previous !== entry.parentDepositIndex) {
-			throw new Error(`Nullifier path collision between parent deposits ${previous} and ${entry.parentDepositIndex}`)
-		}
-		ownerByPath.set(entry.path, entry.parentDepositIndex)
-	}
-}
-
-function validateSparseNullifierState(state: SparseNullifierState) {
-	assertNoNullifierPathCollisions(state.consumed)
-	const parents = new Set<string>()
-	let previous: bigint | undefined
-	for (const entry of state.consumed) {
-		const parent = unsignedInteger(entry.parentDepositIndex, 'Nullifier entry parentDepositIndex')
-		if (parents.has(entry.parentDepositIndex)) throw new Error(`Nullifier parent deposit ${entry.parentDepositIndex} is duplicated`)
-		parents.add(entry.parentDepositIndex)
-		if (previous !== undefined && parent <= previous) throw new Error('Nullifier entries are not in canonical parent-deposit order')
-		previous = parent
-	}
-}
-
-function sparseNullifier(state: SparseNullifierState) {
-	validateSparseNullifierState(state)
-	return createSparseNullifier(state.consumed.map(entry => BigInt(entry.path)))
-}
-
-export function sparseNullifierRoot(state: SparseNullifierState): Hash {
-	return sparseNullifier(state).getRoot()
-}
-
-export function createSparseNullifierProof(state: SparseNullifierState, leafIndex: string): Hash[] {
-	return sparseNullifier(state).getProof(nullifierLeafIndex(leafIndex))
-}
-
-export function computeNullifierRootFromProof(leafIndex: string, siblings: readonly Hash[], leafValue: Hash): Hash {
-	if (siblings.length !== CARRY_NULLIFIER_DEPTH) throw new Error(`Nullifier proof has ${siblings.length.toString()} siblings instead of ${CARRY_NULLIFIER_DEPTH.toString()}`)
-	requireHash(leafValue, 'Nullifier leaf value')
-	const path = nullifierLeafIndex(leafIndex)
-	for (let depth = 0; depth < CARRY_NULLIFIER_DEPTH; depth += 1) {
-		const sibling = siblings[depth]
-		if (sibling === undefined) throw new Error(`Nullifier sibling ${depth.toString()} is missing`)
-		requireHash(sibling, `Nullifier sibling ${depth.toString()}`)
-	}
-	return computeCarryNullifierRootFromProof(path, siblings, leafValue)
 }

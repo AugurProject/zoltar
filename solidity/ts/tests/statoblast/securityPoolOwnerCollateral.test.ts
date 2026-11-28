@@ -25,7 +25,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 	let token: Address
 	const account = (client: WriteClient) => alice.readContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'ownerAccount', args: [client.account.address] })
 	const position = (id: bigint) => alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [id] })
-	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'depositFor', args: [client.account.address, amount] }))
+	const deposit = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'deposit', args: [amount] }))
 	const withdraw = (client: WriteClient, amount: bigint) => writeContractAndWait(client, () => client.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'withdrawPrincipal', args: [amount, client.account.address] }))
 	const price = async (amount: bigint, duration = 100_000) => {
 		const now = (await alice.getBlock()).timestamp
@@ -164,14 +164,13 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(source.rep + receiver.rep).toBe(305n * E)
 	})
 
-	test('owner authorization prevents a one-attoREP donation from griefing exact takeover collateral consent', async () => {
+	test('deposits credit only their caller, so a one-attoREP donation cannot grief exact takeover collateral consent', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(keeper, 200n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price(2n * E)
 		await getAnvilWindowEthereum().advanceTime(3601n)
-		await expect(writeContractAndWait(bob, () => bob.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'depositFor', args: [keeper.account.address, 1n] }))).rejects.toThrow('Invalid capital deposit')
 		expect((await account(keeper)).freeAttoRep).toBe(200n * E)
 		expect((await account(keeper)).positionId).toBe(0n)
 		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'takeOver', args: [id, 50n * E, 0n, 200n * E - 1n] }))).rejects.toThrow('Receiver consent exceeded')
@@ -180,15 +179,12 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect((await position((await account(keeper)).positionId)).commitment).toBe(50n * E)
 	})
 
-	test('owner authorization rejects third-party deposits and liquidation blocks partial top-ups until oracle recovery', async () => {
+	test('liquidation blocks partial top-ups until oracle recovery', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price((3n * E) / 2n)
 		expect(await healthy()).toBe(0n)
-		await expect(writeContractAndWait(bob, () => bob.writeContract({ abi: ledgerArtifact.abi, address: ledger, functionName: 'depositFor', args: [alice.account.address, 1n] }))).rejects.toThrow('Invalid capital deposit')
-		expect((await position(id)).rep).toBe(105n * E)
-		expect((await account(alice)).freeAttoRep).toBe(0n)
 		await expect(deposit(alice, 52n * E)).rejects.toThrow('Deposit must fully rescue the liquidating position')
 		expect((await position(id)).rep).toBe(105n * E)
 		expect(await healthy()).toBe(0n)

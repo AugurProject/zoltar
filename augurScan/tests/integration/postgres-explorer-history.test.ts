@@ -125,12 +125,12 @@ postgresTest('links each accepted candidate and its canonical price to that repo
 	})
 })
 
-postgresTest('requires indexed start evidence to report that an auction is scheduled', async () => {
+postgresTest('requires indexed start evidence to report that an auction is open', async () => {
 	await withExplorerTables(['collateral_repair_auction_events'], async connection => {
 		const entries = [
 			[auction, 'BidSubmitted', { bidId: '1' }],
 			[oracle, 'RefundWithdrawn', { amount: '1' }],
-			[game, 'RepairAuctionStarted', { opensAt: '1767229200', closesAt: '1767232800' }],
+			[game, 'RepairAuctionStarted', { closesAt: '1767232800' }],
 		] as const
 		for (const [logIndex, [address, name, data]] of entries.entries()) {
 			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical)
@@ -141,7 +141,7 @@ postgresTest('requires indexed start evidence to report that an auction is sched
 		expect(await catalog.json()).toMatchObject({
 			data: {
 				items: [
-					{ auction_address: game, status: 'Scheduled' },
+					{ auction_address: game, status: 'Open' },
 					{ auction_address: oracle, status: 'Awaiting indexed evidence' },
 					{ auction_address: auction, status: 'Awaiting indexed evidence', bid_count: 1 },
 				],

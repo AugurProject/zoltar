@@ -313,10 +313,8 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	Array.isArray(value['pool_associations']) &&
 	value['pool_associations'].every(isPoolAssociationValue) &&
 	(value['escalation_positions_truncated'] === undefined || typeof value['escalation_positions_truncated'] === 'boolean') &&
-	(value['pending_refunds_truncated'] === undefined || typeof value['pending_refunds_truncated'] === 'boolean') &&
 	(value['share_positions'] === undefined || isJsonRecord(value['share_positions'])) &&
 	(value['trading_pnl'] === undefined || isJsonRecord(value['trading_pnl'])) &&
-	(value['pending_refunds'] === undefined || (Array.isArray(value['pending_refunds']) && value['pending_refunds'].every(isJsonRecord))) &&
 	(value['escalation_payouts'] === undefined || isJsonRecord(value['escalation_payouts'])) &&
 	(value['escalation_positions'] === undefined || (Array.isArray(value['escalation_positions']) && value['escalation_positions'].every(isJsonRecord))) &&
 	(value['auction_claims_truncated'] === undefined || typeof value['auction_claims_truncated'] === 'boolean') &&

@@ -12,7 +12,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'OrdinarySettlementInitialized',
 		parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
+		sourcePath: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	},
 	{
 		name: 'Transfer',
@@ -50,11 +50,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
-		name: 'ChildReputationTokenInitialized',
-		parameters: 'uint248 indexed universeId,ReputationToken indexed reputationToken,uint256 indexed repNumber',
-		sourcePath: 'solidity/contracts/Zoltar.sol',
-	},
-	{
 		name: 'QuestionLedgerRegistered',
 		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,IQuestionLedger questionLedger',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
@@ -70,18 +65,8 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
-		name: 'TheoreticalSupplySet',
-		parameters: 'uint256 totalTheoreticalSupplyAttoRep',
-		sourcePath: 'solidity/contracts/ReputationToken.sol',
-	},
-	{
 		name: 'ReputationTokenInitialized',
 		parameters: 'uint248 indexed universeId,uint256 indexed repNumber,string name,string symbol,uint256 totalTheoreticalSupplyAttoRep',
-		sourcePath: 'solidity/contracts/ReputationToken.sol',
-	},
-	{
-		name: 'Mint',
-		parameters: 'address indexed account,uint256 valueAttoRep',
 		sourcePath: 'solidity/contracts/ReputationToken.sol',
 	},
 	{
@@ -115,20 +100,15 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	},
 ]
-export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
-	{
-		name: 'OrdinarySettlementInitialized',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol',
-	},
-]
+export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = []
 export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArguments: string; name: string; signature: string; signatureConstant: string; sourcePath: string }> = [
 	{
-		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
+		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, carryRoot',
 		indexedArguments: 'parentDepositIndex, sourceNodeId, depositor',
 		name: 'CarryDepositConsumed',
-		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)',
+		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)',
 		signatureConstant: 'CARRY_DEPOSIT_CONSUMED_SIGNATURE',
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = '6b78ba61089a422f04c2e340c9a1b75037927c5f79cba99387fdbabc8851adc7'
+export const referencedEventAbiFingerprint = '19c2621340395708ec2a76ef18f2a9bd5d7df8b8c4eb5e31af988042c341115e'

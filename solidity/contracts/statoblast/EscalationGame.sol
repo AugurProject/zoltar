@@ -44,8 +44,8 @@ contract EscalationGame is EscalationGameSettlement {
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep) {
 		// Keep one reason for this read-only quote path so the size-constrained game
 		// can retain the state-changing paths' more specific failure reasons.
-		BinaryOutcomes.BinaryOutcome provisional = getQuestionResolution();
-		require((!forkContinuation || (forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None)) && _getUniverseForkTime() == 0 && outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(provisional), 'Invalid deposit preview');
+		// Deposits close once the curve passes the median and a provisional leader exists.
+		require((!forkContinuation || (forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None)) && _getUniverseForkTime() == 0 && outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Invalid deposit preview');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
 		require(currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');

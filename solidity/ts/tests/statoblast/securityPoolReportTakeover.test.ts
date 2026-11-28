@@ -142,7 +142,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		const sponsor = createWriteClient(context.mock, TEST_ADDRESSES[2])
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: tokenArtifact.abi, address: context.token, functionName: 'transfer', args: [sponsor.account.address, 150n * unit] }))
 		await approveToken(sponsor, context.token, context.capital)
-		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...ledger, functionName: 'depositFor', args: [sponsor.account.address, 60n * unit] }))
+		await writeContractAndWait(sponsor, () => sponsor.writeContract({ ...ledger, functionName: 'deposit', args: [60n * unit] }))
 		await approveToken(sponsor, context.token, context.feed)
 		const weth = await sponsor.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'weth' })
 		await wrapWeth(sponsor, 10n * unit)
@@ -167,7 +167,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		const id = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'pendingReportId' })
 		await context.mock.advanceTime(481n)
 		await openOracleSettle(context.other, id)
-		expect((await context.owner.readContract({ ...ledger, functionName: 'repairAuctionPositions', args: [[winner.id]] }))[0]?.materialized).toBe(!failure)
+		expect((await context.owner.readContract({ ...ledger, functionName: 'repairAuctionPositions', args: [[winner.id]] }))[0]?.claimed).toBe(!failure)
 		expect((await context.owner.readContract({ ...ledger, functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(failure ? 0n : 3n * unit)
 	})
 	test('a starved takeover callback remains recoverable with sponsor priority', async () => {

@@ -6,8 +6,7 @@ type SecurityPoolFactoryAddressInputs = {
 	openOracle: Address
 	sharedPoolPriceFeedFactory: Address
 	questionForker: Address
-	questionLedgerOperationsDelegate: Address
-	questionLedgerEventEmitter: Address
+	questionLedgerDelegate: Address
 	securityPoolCapitalLedgerDeployer: Address
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
@@ -33,8 +32,7 @@ type InfraContractAddressConfig = {
 	sharedPoolPriceFeedFactoryBytecode: () => Hex
 	sharedPoolPriceFeedDeploymentWorkerBytecode: Hex
 	proxyDeployerAddress: Address
-	questionLedgerOperationsDelegateBytecode: Hex
-	questionLedgerEventEmitterBytecode: Hex
+	questionLedgerDelegateBytecode: Hex
 	securityPoolCapitalLedgerDeployerBytecode: Hex
 	securityPoolCommitmentIndexDeployerBytecode: Hex
 	securityPoolCapitalFeeStreamsDeployerBytecode: Hex
@@ -59,8 +57,7 @@ type InfraContractAddresses = {
 	sharedPoolPriceFeedDeploymentWorker: Address
 	securityPoolFactory: Address
 	questionForker: Address
-	questionLedgerOperationsDelegate: Address
-	questionLedgerEventEmitter: Address
+	questionLedgerDelegate: Address
 	securityPoolCapitalLedgerDeployer: Address
 	securityPoolCommitmentIndexDeployer: Address
 	securityPoolCapitalFeeStreamsDeployer: Address
@@ -98,8 +95,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			escalationGameDepositDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameDepositDelegateBytecode),
 		}
 		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameDepositDelegate))
-		const questionLedgerEventEmitter = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.questionLedgerEventEmitterBytecode)
-		const questionLedgerOperationsDelegate = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.questionLedgerOperationsDelegateBytecode)
+		const questionLedgerDelegate = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.questionLedgerDelegateBytecode)
 		const escalationGameProofVerifier = getCreateAddress({
 			from: escalationGameFactory,
 			nonce: 1n,
@@ -109,8 +105,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			...addresses,
 			escalationGameFactory,
 			escalationGameProofVerifier,
-			questionLedgerOperationsDelegate,
-			questionLedgerEventEmitter,
+			questionLedgerDelegate,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,
 				config.zeroSalt,
@@ -119,8 +114,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					openOracle: addresses.openOracle,
 					sharedPoolPriceFeedFactory: addresses.sharedPoolPriceFeedFactory,
 					questionForker: addresses.questionForker,
-					questionLedgerOperationsDelegate,
-					questionLedgerEventEmitter,
+					questionLedgerDelegate,
 					securityPoolCapitalLedgerDeployer: addresses.securityPoolCapitalLedgerDeployer,
 					securityPoolCommitmentIndexDeployer: addresses.securityPoolCommitmentIndexDeployer,
 					securityPoolCapitalFeeStreamsDeployer: addresses.securityPoolCapitalFeeStreamsDeployer,

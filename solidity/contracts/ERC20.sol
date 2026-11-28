@@ -5,7 +5,6 @@ pragma solidity 0.8.35;
 
 import { IERC20 } from './IERC20.sol';
 import { IERC20Metadata } from './IERC20Metadata.sol';
-import { Context } from './Context.sol';
 
 /**
  * @dev Implementation of the {IERC20} interface.
@@ -25,7 +24,7 @@ import { Context } from './Context.sol';
  * conventional and does not conflict with the expectations of ERC-20
  * applications.
  */
-abstract contract ERC20 is Context, IERC20, IERC20Metadata {
+abstract contract ERC20 is IERC20, IERC20Metadata {
 	mapping(address account => uint256) internal _balances;
 
 	mapping(address account => mapping(address spender => uint256)) internal _allowances;
@@ -101,7 +100,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata {
 	 * - the caller must have a balance of at least `value`.
 	 */
 	function transfer(address to, uint256 value) public virtual returns (bool) {
-		address owner = _msgSender();
+		address owner = msg.sender;
 		_transfer(owner, to, value);
 		return true;
 	}
@@ -124,7 +123,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata {
 	 * - `spender` cannot be the zero address.
 	 */
 	function approve(address spender, uint256 value) public virtual returns (bool) {
-		address owner = _msgSender();
+		address owner = msg.sender;
 		_approve(owner, spender, value);
 		return true;
 	}
@@ -146,7 +145,7 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata {
 	 * `value`.
 	 */
 	function transferFrom(address from, address to, uint256 value) public virtual returns (bool) {
-		address spender = _msgSender();
+		address spender = msg.sender;
 		_spendAllowance(from, spender, value);
 		_transfer(from, to, value);
 		return true;

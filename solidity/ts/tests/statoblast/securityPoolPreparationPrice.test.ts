@@ -6,6 +6,7 @@ import {
 	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolServices_SecurityPoolServices as servicesArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
@@ -103,7 +104,7 @@ describe('Statoblast: child security pool price preparation', () => {
 		await openOracleSettle(context.owner, report)
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'acceptedPrice' })).toBe(unit)
-		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'feesEnabled', args: [context.child] })).toBe(false)
+		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' }), functionName: 'feesEnabled', args: [context.child] })).toBe(false)
 		expect((await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'clocks', args: [context.child] }))[3]).toBe(false)
 		await expect(context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [fixture.base.questionId, context.child] })).rejects.toThrow('Question pool unavailable')
 		const [escrow] = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'reportCandidates', args: [report] })
@@ -138,7 +139,7 @@ describe('Statoblast: child security pool price preparation', () => {
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'acceptedPrice' })).toBe(unit)
 		expect(await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'priceValidUntil' })).toBe(expiry)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: forkArtifact.abi, address: context.forks, functionName: 'finalizeBranch', args: [context.child] }))
-		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'feesEnabled', args: [context.child] })).toBe(false)
+		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' }), functionName: 'feesEnabled', args: [context.child] })).toBe(false)
 	})
 
 	test('a still-fresh preparation quote enables holding fees when the branch actually activates', async () => {
@@ -158,7 +159,7 @@ describe('Statoblast: child security pool price preparation', () => {
 		expect(bookId).not.toBe(0n)
 		const cash = async () => (await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] }))[0]
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'isPriceValid' })).toBe(true)
-		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'feesEnabled', args: [context.child] })).toBe(true)
+		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' }), functionName: 'feesEnabled', args: [context.child] })).toBe(true)
 		expect(await cash()).toBe(before)
 		await fixture.base.mockWindow.advanceTime(100n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'checkpoint' }))
@@ -186,7 +187,7 @@ describe('Statoblast: child security pool price preparation', () => {
 		await forkUniverse(context.owner, context.child, fixture.base.questionId)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: forkArtifact.abi, address: context.forks, functionName: 'finalizeBranch', args: [context.child] }))
 		expect((await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'clocks', args: [context.child] }))[3]).toBe(true)
-		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'feesEnabled', args: [context.child] })).toBe(false)
+		expect(await context.owner.readContract({ abi: servicesArtifact.abi, address: await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' }), functionName: 'feesEnabled', args: [context.child] })).toBe(false)
 		await expect(context.request()).rejects.toThrow('Security pool reporting window closed')
 	})
 

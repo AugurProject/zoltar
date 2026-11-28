@@ -922,14 +922,15 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 				const fundedRep = streams.reduce((sum, stream) => sum + stream.rep, 0n)
 				const future = releasedThrough + BigInt(random.int(Number(target.duration) * 2 + 2))
 				const [futureEth, futureRep] = integral(future)
-				const [paidEth, paidRep, outstanding, through, quote] = await Promise.all([
+				const [paidEth, paidRep, outstandingEth, outstandingRep, through, quote] = await Promise.all([
 					client().readContract({ abi, address: target.address, functionName: 'releasedEth' }),
 					client().readContract({ abi, address: target.address, functionName: 'releasedRep' }),
-					client().readContract({ abi: streamsArtifact.abi, address: target.streams, functionName: 'fundedOutstanding' }),
+					client().readContract({ abi: streamsArtifact.abi, address: target.streams, functionName: 'outstandingEth' }),
+					client().readContract({ abi: streamsArtifact.abi, address: target.streams, functionName: 'outstandingRep' }),
 					client().readContract({ abi: streamsArtifact.abi, address: target.streams, functionName: 'releasedThrough' }),
 					client().readContract({ abi: streamsArtifact.abi, address: target.streams, functionName: 'preview', args: [Number(future)] }),
 				])
-				expect(`${stringify({ paidEth, paidRep, outstanding, through: BigInt(through), quote })}\n${context}`).toBe(
+				expect(`${stringify({ paidEth, paidRep, outstanding: [outstandingEth, outstandingRep], through: BigInt(through), quote })}\n${context}`).toBe(
 					`${stringify({ paidEth: releasedEth, paidRep: releasedRep, outstanding: [fundedEth - releasedEth, fundedRep - releasedRep], through: releasedThrough, quote: [futureEth - releasedEth, futureRep - releasedRep] })}\n${context}`,
 				)
 			}

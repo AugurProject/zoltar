@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { CheckedCast } from '../CheckedCast.sol';
 
-import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
+import { CreationCodeDeployer } from './CreationCodeStorage.sol';
 
 import { Zoltar } from '../Zoltar.sol';
 import { Collateral } from '../Collateral.sol';
@@ -86,8 +86,6 @@ contract SecurityPoolForkCoordinator {
 		bool migrationPrepared;
 	}
 	struct Branch {
-		SecurityPoolRepairAuction repairAuction;
-		uint64 fixedRoot;
 		uint248 parent;
 		uint256 outcome;
 		uint256 chosenBacking;
@@ -100,44 +98,19 @@ contract SecurityPoolForkCoordinator {
 		bool prepared;
 		bool started;
 		bool ready;
+		SecurityPoolRepairAuction repairAuction;
+		uint64 fixedRoot;
 	}
+	/// @dev Capital ledgers authenticate their branch's auction through this getter.
 	function repairAuctions(uint248 universeId) external view returns (SecurityPoolRepairAuction) {
-		return branchStates[universeId].repairAuction;
-	}
-	function branches(uint248 universeId)
-		external
-		view
-		returns (
-			uint248 parent,
-			uint256 outcome,
-			uint256 chosenBacking,
-			uint256 chosenCommitment,
-			uint256 parentCash,
-			uint256 recoveryAttoRep,
-			bool prepared,
-			bool started,
-			bool ready
-		)
-	{
-		Branch storage branch = branchStates[universeId];
-		return (
-			branch.parent,
-			branch.outcome,
-			branch.chosenBacking,
-			branch.chosenCommitment,
-			branch.parentCash,
-			branch.recoveryAttoRep,
-			branch.prepared,
-			branch.started,
-			branch.ready
-		);
+		return branches[universeId].repairAuction;
 	}
 	struct Choice {
 		uint256 outcome;
 		bool recorded;
 	}
 	mapping(uint248 => Fork) public forks;
-	mapping(uint248 => Branch) private branchStates;
+	mapping(uint248 => Branch) public branches;
 	mapping(uint248 => mapping(address => Choice)) public choices;
 	mapping(uint248 => mapping(uint256 => uint256)) public recoveredQuestionShares;
 	SecurityPoolQuestionMap.Store private fixedTree;
@@ -165,7 +138,7 @@ contract SecurityPoolForkCoordinator {
 		clocks[origin] = UniverseClock({securityPoolTimeAnchor: 0, wallAnchor: 0, registered: true, ready: false});
 	}
 	function activateOrigin(uint248 origin) external {
-		require(msg.sender == address(securityPool) && clocks[origin].registered && !branchStates[origin].prepared, 'Origin activation unavailable');
+		require(msg.sender == address(securityPool) && clocks[origin].registered && !branches[origin].prepared, 'Origin activation unavailable');
 		clocks[origin].ready = true;
 	}
 	function isReady(uint248 universeId) external view returns (bool) {
@@ -177,13 +150,13 @@ contract SecurityPoolForkCoordinator {
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool) {
 		if (zoltar.getForkTime(universeId) != 0) return false;
 		if (clocks[universeId].ready) return true;
-		Branch storage branch = branchStates[universeId];
+		Branch storage branch = branches[universeId];
 		return branch.started && block.timestamp < zoltar.getForkRecapitalizationDeadline(branch.parent);
 	}
 	/// @notice Reports reserve the maximum winning liability before bids begin.
 	/// These budgets remain fixed until activation, including a delayed closing.
 	function repairAuctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep) {
-		Branch storage branch = branchStates[universeId];
+		Branch storage branch = branches[universeId];
 		if (!branch.started || branch.ready) return (0, 0);
 		SecurityPoolRepairAuction repairAuction = branch.repairAuction;
 		if (address(repairAuction) == address(0)) return (branch.chosenCommitment, 0);
@@ -227,7 +200,7 @@ contract SecurityPoolForkCoordinator {
 	}
 
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256) {
-		uint256 id = fixedTree.get(branchStates[universeId].fixedRoot, questionId);
+		uint256 id = fixedTree.get(branches[universeId].fixedRoot, questionId);
 		return id == 0 ? (false, uint256(0)) : (true, id - 1);
 	}
 
@@ -241,13 +214,13 @@ contract SecurityPoolForkCoordinator {
 		require(clocks[universeId].ready, 'Prepare source branch first');
 		SecurityPoolCapitalLedger capital = securityPool.capitalLedger(universeId);
 		capital.freeze();
-		(fork.cash, fork.units, ) = securityPool.settlement().sealUniverse(universeId, securityPool.forkSecurityPoolTime(universeId));
+		(fork.cash, fork.units) = securityPool.settlement().sealUniverse(universeId, securityPool.forkSecurityPoolTime(universeId));
 		capital.synchronizeDemand(fork.cash);
 		ISecurityPoolForkServices(securityPool.services()).freezePremiumUniverse(universeId);
 		securityPool.reporters().freezeFork(universeId);
 		fork.backing = capital.frozenBackingAttoRep();
 		fork.commitment = capital.frozenCommitmentAttoEth();
-		fork.recoveryAttoRep = securityPool.settlement().availableForkRecoveryAttoRep(universeId);
+		(, , , fork.recoveryAttoRep) = securityPool.settlement().universes(universeId);
 		fork.frozen = true;
 		// Capital.freeze checkpoints every pre-fork earned fee before weights freeze.
 		emit ForkFrozen(universeId, fork.backing, fork.cash, fork.units, fork.recoveryAttoRep);
@@ -264,7 +237,7 @@ contract SecurityPoolForkCoordinator {
 		uint256 commitment = position.commitment;
 		require(rep != 0, 'No pledged fork principal');
 		Fork storage fork = forks[source];
-		Branch storage branch = branchStates[child];
+		Branch storage branch = branches[child];
 		uint256 previousCash = branch.parentCash;
 		branch.chosenBacking += rep;
 		branch.chosenCommitment += commitment;
@@ -281,7 +254,7 @@ contract SecurityPoolForkCoordinator {
 
 	function _prepare(uint248 parent, uint256 outcome) private returns (uint248 child) {
 		child = zoltar.getChildUniverseId(parent, outcome);
-		Branch storage branch = branchStates[child];
+		Branch storage branch = branches[child];
 		if (branch.prepared) return child;
 		uint256 anchor = zoltar.getForkRecapitalizationDeadline(parent);
 		require(anchor <= type(uint48).max, 'Fork clock exhausted');
@@ -290,7 +263,7 @@ contract SecurityPoolForkCoordinator {
 		branch.parent = parent;
 		branch.outcome = outcome;
 		branch.prepared = true;
-		uint64 root = branchStates[parent].fixedRoot;
+		uint64 root = branches[parent].fixedRoot;
 		(, uint256 questionId, , , ) = zoltar.universes(parent);
 		// A later fork cannot overwrite a question outcome already fixed in an ancestor.
 		if (fixedTree.get(root, questionId) == 0) {
@@ -320,7 +293,7 @@ contract SecurityPoolForkCoordinator {
 		_start(child);
 	}
 	function _start(uint248 child) private {
-		Branch storage branch = branchStates[child];
+		Branch storage branch = branches[child];
 		if (branch.started) return;
 		require(block.timestamp >= zoltar.getForkChoiceDeadline(branch.parent), 'Fork choices still open');
 		Fork storage fork = forks[branch.parent];
@@ -337,7 +310,7 @@ contract SecurityPoolForkCoordinator {
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
 		if (branch.chosenBacking != 0) token.safeTransfer(address(childCapital), branch.chosenBacking);
 		(, uint256 forkQuestionId, , , ) = zoltar.universes(branch.parent);
-		securityPool.reporters().createChild(branch.parent, branch.outcome, fixedTree.get(branchStates[branch.parent].fixedRoot, forkQuestionId) != 0);
+		securityPool.reporters().createChild(branch.parent, branch.outcome, fixedTree.get(branches[branch.parent].fixedRoot, forkQuestionId) != 0);
 		branch.recoveryAttoRep = migratingPrincipalAttoRep - branch.chosenBacking;
 		if (fork.units == 0 && branch.recoveryAttoRep != 0) {
 			zoltar.burnRep(child, branch.recoveryAttoRep);
@@ -382,7 +355,7 @@ contract SecurityPoolForkCoordinator {
 		_finalize(child);
 	}
 	function _finalize(uint248 child) private {
-		Branch storage branch = branchStates[child];
+		Branch storage branch = branches[child];
 		require(branch.prepared, 'Fork branch unknown');
 		if (branch.ready) return;
 		_start(child);
@@ -428,20 +401,23 @@ contract SecurityPoolForkCoordinator {
 		uint256 nativeForkTime = zoltar.getForkTime(child);
 		settlement.setFeeClock(child, CheckedCast.toUint48(nativeForkTime == 0 ? block.timestamp : nativeForkTime));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
-		if (fixedTree.get(branchStates[branch.parent].fixedRoot, forkQuestion) == 0)
+		if (fixedTree.get(branches[branch.parent].fixedRoot, forkQuestion) == 0)
 			settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].securityPoolTimeAnchor + Constants.FORK_RESPONSE_DELAY);
 	}
 
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.
+	/// @dev The origin is never a branch; it is ready once security pool setup completes.
 	function ensureReady(uint248 child) external nonReentrant {
-		if (child == securityPool.originUniverseId()) return;
-		if (!branchStates[child].prepared) {
-			(, , uint256 outcome, , uint248 parent) = zoltar.universes(child);
-			require(address(zoltar.getRepToken(child)) != address(0), 'Native child not deployed');
-			_freeze(parent);
-			require(_prepare(parent, outcome) == child, 'Wrong native child');
+		if (child != securityPool.originUniverseId()) {
+			if (!branches[child].prepared) {
+				(, , uint256 outcome, , uint248 parent) = zoltar.universes(child);
+				require(address(zoltar.getRepToken(child)) != address(0), 'Native child not deployed');
+				_freeze(parent);
+				require(_prepare(parent, outcome) == child, 'Wrong native child');
+			}
+			_finalize(child);
 		}
-		_finalize(child);
+		require(clocks[child].ready, 'Child settlement not ready');
 	}
 
 	/// @notice Unassigned source cash requires complete sets, independently of
@@ -498,8 +474,8 @@ contract SecurityPoolForkCoordinator {
 	}
 }
 
-contract SecurityPoolForkCoordinatorDeployer is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolForkCoordinator).creationCode) {}
+contract SecurityPoolForkCoordinatorDeployer is CreationCodeDeployer {
+	constructor() CreationCodeDeployer(type(SecurityPoolForkCoordinator).creationCode) {}
 	function create(address authority, Zoltar zoltar) external returns (address) {
 		return _deploy(abi.encode(authority, zoltar));
 	}

@@ -3,7 +3,12 @@ pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OraclePriceTypes.sol';
+import {
+	OPEN_ORACLE_PERCENTAGE_PRECISION,
+	FEED_SETTLEMENT_CALLBACK_GAS,
+	REQUEST_BOUNTY_OFFSET_ATTO_ETH,
+	settlementGasUnits
+} from './OraclePriceTypes.sol';
 
 library OraclePriceMath {
 	uint256 internal constant DISPUTE_GAS_UNITS = 300_000;
@@ -33,9 +38,9 @@ library OraclePriceMath {
 		uint256 numerator = REPORT_SECURITY_MULTIPLIER_BPS * (OPEN_ORACLE_PERCENTAGE_PRECISION + uncertainty);
 		uint256 reportMaximum = Math.mulDiv(maximumReport, denominator, numerator) / DISPUTE_GAS_UNITS;
 		require(settlementFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
-		uint256 callbackGas = 4_000_000;
-		uint256 paddedGas = Math.ceilDiv((callbackGas + callbackGas / 63 + 310_000) * 12_000, 10_000) + 20_000;
-		uint256 maximumAllowance = (uint256(type(uint96).max) - 101) / paddedGas;
+		uint256 maximumAllowance =
+			(uint256(type(uint96).max) - REQUEST_BOUNTY_OFFSET_ATTO_ETH) /
+				settlementGasUnits(FEED_SETTLEMENT_CALLBACK_GAS);
 		uint256 bountyMaximum =
 			Math.mulDiv(maximumAllowance + 1, 10_000, settlementFeeMultiplierBps, Math.Rounding.Ceil) - 1;
 		return Math.min(reportMaximum, bountyMaximum);

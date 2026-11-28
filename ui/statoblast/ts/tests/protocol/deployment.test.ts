@@ -29,7 +29,7 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'questionLedgerEventEmitter', 'questionLedgerOperationsDelegate'])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'questionLedgerDelegate'])
 	})
 
 	test('uses plain labels for the universe deployment steps', () => {

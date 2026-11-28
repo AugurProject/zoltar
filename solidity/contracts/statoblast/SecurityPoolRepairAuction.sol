@@ -9,7 +9,7 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolUniformPriceRepairAuction } from './SecurityPoolUniformPriceRepairAuction.sol';
-import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
+import { CreationCodeDeployer } from './CreationCodeStorage.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
@@ -111,7 +111,7 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
 		require(minimumCollateralAttoRepPerLot != 0 && minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
 		require(_fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote does not cover final lots');
-		engine.startRepairAuction(block.timestamp, closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid, address(this));
+		engine.startRepairAuction(closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid);
 		opened = true;
 		emit RepairAuctionOpened(openingConservativePrice, minimumCollateralAttoRepPerLot, engine.maximumBidAttoRepPerLot());
 	}
@@ -157,8 +157,8 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 			if (eligible)
 				floorAttoRepPerLot =
 					Math.ceilDiv(capital.commitmentIndex().requiredRep(lotAttoEth, feed.conservativePrice(), capital.securityMultiplierBps(), 10_000), repGrid) * repGrid;
+			// The engine pays the raised collateral here as it finalizes.
 			result = engine.finalize(eligible ? targetLots : 0, floorAttoRepPerLot);
-			engine.withdrawRaised(payable(address(this)));
 			// Equal lots round up, so a full fill can exceed the deficit: by less
 			// than one raw collateral unit per lot once the deficit spans at least one minimum
 			// commitment, and otherwise by up to the minimum lot. The child book
@@ -188,36 +188,18 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 		SecurityPoolUniformPriceRepairAuction.Fill memory fill = engine.previewBid(bidId);
 		return BidPosition(fill.bidder, fill.filledLots);
 	}
-	function bidderBidCount(address bidder) external view returns (uint256) {
-		return engine.bidderBidCount(bidder);
-	}
-	function bidderBidId(address bidder, uint256 index) external view returns (uint256) {
-		return engine.bidderBidId(bidder, index);
-	}
 	function claimAndRemoveFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external onlyCapital returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
 		return engine.allocateAndRemoveFees(bidId, addedAttoEth, addedAttoRep);
 	}
 	function previewBidFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external view returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
 		return engine.previewBidFees(bidId, addedAttoEth, addedAttoRep);
 	}
-	/// @notice Anyone may credit refunds, including a provably losing bid before
-	/// closing. Only its bidder may withdraw the freely usable collateral.
+	/// @notice The bidder takes back one bid's unused collateral: the whole bid once
+	/// better bids exclude it before closing, or its unfilled lots after closing.
 	/// Refunds and position materialization are independent and never scan bids.
-	function settleRefund(uint256 bidId) external nonReentrant {
+	function refundBid(uint256 bidId, address recipient) external nonReentrant returns (uint256 amountAttoEth) {
 		require(opened, 'Collateral repair auction has not opened');
-		engine.settleBid(bidId);
-	}
-	function withdrawRefunds(address payable recipient) external nonReentrant {
-		require(recipient != address(0), 'Collateral repair auction refund recipient missing');
-		engine.withdrawRefundFor(msg.sender, recipient);
-	}
-	/// @notice One transaction for the bidder: credit its own eligible bid, or skip
-	/// a credit someone already made, then withdraw its whole refund credit. The
-	/// withdrawal includes credits from the bidder's other bids in this auction.
-	function settleAndWithdrawRefund(uint256 bidId, address payable recipient) external nonReentrant returns (uint256 amountAttoEth) {
-		require(opened, 'Collateral repair auction has not opened');
-		require(recipient != address(0), 'Collateral repair auction refund recipient missing');
-		return engine.settleAndWithdrawRefund(bidId, msg.sender, recipient);
+		return engine.refundBid(bidId, msg.sender, recipient);
 	}
 
 	function _fundedQuote(ICollateralRepairAuctionPriceFeed feed, uint256 atTime, bool requireFresh) private view returns (bool) {
@@ -241,8 +223,8 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	}
 }
 
-contract SecurityPoolRepairAuctionDeployer is SecurityPoolCreationCodeDeployer {
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolRepairAuction).creationCode) {}
+contract SecurityPoolRepairAuctionDeployer is CreationCodeDeployer {
+	constructor() CreationCodeDeployer(type(SecurityPoolRepairAuction).creationCode) {}
 	function create(address authority, address securityPool, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address) {
 		return _deploy(abi.encode(authority, securityPool, child, close, inventory, shortfall));
 	}

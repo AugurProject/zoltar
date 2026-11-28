@@ -1,13 +1,12 @@
-import { zeroHash, type Hash } from '@zoltar/bot-shared/ethereum'
+import type { Hash } from '@zoltar/bot-shared/ethereum'
 import { hashCarryParent } from '@zoltar/core-shared/evm/carryProof'
-import { computeNullifierRootFromProof, type createMerkleMountainRangeProof, nullifierPath, sparseNullifierRoot } from '../../src/monitoring/carry-proof-index.ts'
+import type { createMerkleMountainRangeProof } from '../../src/monitoring/carry-proof-index.ts'
 
 // Reference verifiers mirroring the Solidity fork-carry proof checks. The bot only
 // creates proofs, so the tests keep an independent verifier as their oracle. Only the
 // keccak256(left || right) parent hash comes from the shared carry-proof module.
 
 type MerkleMountainRangeProof = ReturnType<typeof createMerkleMountainRangeProof>
-type SparseNullifierState = Parameters<typeof sparseNullifierRoot>[0]
 
 const CARRY_MMR_MAXIMUM_PEAKS = 64
 const MAXIMUM_CARRY_LEAF_COUNT = 1n << BigInt(CARRY_MMR_MAXIMUM_PEAKS)
@@ -77,31 +76,4 @@ export function verifyMerkleMountainRangeProof(leafHash: Hash, leafCount: string
 	const actualRoot = computeMerkleMountainRangeRootFromProof(leafHash, leafCount, proof)
 	if (actualRoot.toLowerCase() !== expectedRoot.toLowerCase()) throw new Error(`Carry proof root ${actualRoot} does not match ${expectedRoot}`)
 	return actualRoot
-}
-
-export function emptySparseNullifierState(): SparseNullifierState {
-	return { consumed: [] }
-}
-
-export function verifySparseNullifierAbsence(state: SparseNullifierState, parentDepositIndex: string, siblings: readonly Hash[]) {
-	const rootFromProof = computeNullifierRootFromProof(parentDepositIndex, siblings, zeroHash)
-	const expectedRoot = sparseNullifierRoot(state)
-	if (rootFromProof.toLowerCase() !== expectedRoot.toLowerCase()) throw new Error(`Nullifier proof root ${rootFromProof} does not match ${expectedRoot}`)
-	return rootFromProof
-}
-
-export function consumeSparseNullifier(state: SparseNullifierState, parentDepositIndex: string, leafIndex = parentDepositIndex): SparseNullifierState {
-	if (state.consumed.some(entry => entry.parentDepositIndex === parentDepositIndex)) throw new Error(`Parent deposit ${parentDepositIndex} is already nullified`)
-	const entry = { parentDepositIndex, path: nullifierPath(leafIndex).toString() }
-	const consumed = [...state.consumed.map(value => ({ ...value })), entry].sort((left, right) => {
-		const leftParent = BigInt(left.parentDepositIndex)
-		const rightParent = BigInt(right.parentDepositIndex)
-		if (leftParent < rightParent) return -1
-		if (leftParent > rightParent) return 1
-		return 0
-	})
-	const next = { consumed }
-	// The production root computation validates path ownership and collisions.
-	sparseNullifierRoot(next)
-	return next
 }

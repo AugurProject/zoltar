@@ -128,7 +128,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		eth: await getETHBalance(client, questionLedger),
 		capitalRep: await getERC20Balance(client, await getRepToken(client, questionLedger), securityPool.capitalLedger),
 		capital: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'totals' }),
-		owner: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'storedOwnerAccount', args: [client.account.address] }),
+		owner: await client.readContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'ownerAccount', args: [client.account.address] }),
 	})
 
 	test('factory initialization and security pool custody binding reject attackers without changing capital', async () => {
@@ -155,7 +155,6 @@ describe('Statoblast: privileged authorization matrix', () => {
 			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
 			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
 			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
-			{ name: 'setShareTokenSupplyAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setShareTokenSupplyAttoShares', args: [1n] }) },
 			{ name: 'authorizeChildQuestionLedger', data: encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildQuestionLedger', args: [zeroAddress] }) },
 		]
 		const before = await readSnapshot()
@@ -258,7 +257,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 				data: encodeFunctionData({
 					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
 					functionName: 'creditExternalClaimOwners',
-					args: [zeroAddress, attacker.account.address, 0n, 1n, 0n],
+					args: [attacker.account.address, 1n, 0n],
 				}),
 			},
 		]

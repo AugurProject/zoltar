@@ -26,11 +26,10 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	using SafeERC20Ops for IERC20;
 	struct EnterResult {
 		uint256 ethSpent;
+		// Minted complete sets: the opposite shares swapped and the INVALID shares kept.
 		uint256 completeSetShares;
-		uint256 oppositeSharesSwapped;
 		uint256 additionalLongShares;
 		uint256 totalLongShares;
-		uint256 invalidInsurance;
 		uint256 feeAmount;
 		uint256 conditionalYesBpsBefore;
 		uint256 conditionalYesBpsAfter;
@@ -43,7 +42,6 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint256 noUsed;
 		uint256 yesReturned;
 		uint256 noReturned;
-		uint256 invalidInsurance;
 		uint256 liquidity;
 	}
 
@@ -186,7 +184,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		(uint256 yesAfter, uint256 noAfter) = pair.getReserves();
 		_endShareOperation(startInvalid, startYes, startNo);
 		_refundBudget(spent, funding);
-		result = EnterResult({ethSpent: spent, completeSetShares: mintedInvalid, oppositeSharesSwapped: mintedInvalid, additionalLongShares: additionalLong, totalLongShares: totalLong, invalidInsurance: mintedInvalid, feeAmount: feeAmount, conditionalYesBpsBefore: TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), conditionalYesBpsAfter: TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter)});
+		result = EnterResult({ethSpent: spent, completeSetShares: mintedInvalid, additionalLongShares: additionalLong, totalLongShares: totalLong, feeAmount: feeAmount, conditionalYesBpsBefore: TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), conditionalYesBpsAfter: TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter)});
 	}
 
 	/// @notice Seeds the pair at `conditionalYesBpsValue`. If anyone already initialized it, the same call adds
@@ -407,7 +405,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		_transferShares(pool, request.recipient, mintedInvalid, yesReturned, noReturned);
 		_endShareOperation(startInvalid, startYes, startNo);
 		_refundBudget(spent, funding);
-		result = LiquidityResult({pair: pair, completeSetShares: mintedInvalid, yesUsed: yesUsed, noUsed: noUsed, yesReturned: yesReturned, noReturned: noReturned, invalidInsurance: mintedInvalid, liquidity: liquidity});
+		result = LiquidityResult({pair: pair, completeSetShares: mintedInvalid, yesUsed: yesUsed, noUsed: noUsed, yesReturned: yesReturned, noReturned: noReturned, liquidity: liquidity});
 	}
 
 	function _mintCompleteSets(IQuestionLedger pool, uint256 cash, Funding memory funding) private returns (uint256 spent) {
@@ -440,8 +438,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _validatePair(ITwoWayConstantProductPair pair) private view {
+		// The factory registers exactly one pair per canonical question ledger.
 		require(factory.isPair(address(pair)), 'Unrecognized pair');
-		require(address(factory.getPair(pair.questionLedger())) == address(pair), 'Noncanonical pair');
 	}
 
 	function _isDirectionalOutcome(BinaryOutcomes.BinaryOutcome outcome) private pure returns (bool longYes) {

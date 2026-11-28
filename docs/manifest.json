@@ -198,10 +198,10 @@
 		{
 			"path": "reference/merkle-mountain-range.html",
 			"title": "Merkle Mountain Range carry proofs",
-			"summary": "Carry-proof encoding, peak bagging, proof shape, nullifier tree, and bounds.",
+			"summary": "Carry-proof encoding, peak bagging, proof shape, replay protection, and bounds.",
 			"section": "reference",
 			"topic": "Mechanisms",
-			"keywords": ["MMR", "carry proof", "hashing", "nullifier"]
+			"keywords": ["MMR", "carry proof", "hashing", "replay protection"]
 		},
 		{
 			"path": "explanation/statoblast.html",

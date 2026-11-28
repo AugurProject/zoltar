@@ -87,7 +87,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		// Exercise the largest fixed-width carry representation, independent of the
 		// number of historical questions, deposits and prior native forks.
 		for (const outcome of outcomes) {
-			const outcomeSlot = 8n + 76n * BigInt(outcome)
+			const outcomeSlot = 8n + 74n * BigInt(outcome)
 			stateDiff[formatStorageSlot(outcomeSlot + 4n)] = leafCount
 			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 5n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
 		}
@@ -238,7 +238,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
 		const startHash = await writeContractAndWait(other(), () => other().writeContract({ ...coordinator, functionName: 'startBranch', args: [source, BigInt(QuestionOutcome.No)], gas: 4_000_000n }))
 		expect(await nativeToken(no)).toBe(getRepTokenAddress(no))
-		expect((await owner().readContract({ ...coordinator, functionName: 'branches', args: [no] })).slice(6)).toEqual([true, true, false])
+		expect((await owner().readContract({ ...coordinator, functionName: 'branches', args: [no] })).slice(6, 9)).toEqual([true, true, false])
 		if (process.env['REPORT_BOUNDED_FORK_GAS'] === '1') console.log('Fresh branch entrypoint gas', { choose: (await owner().getTransactionReceipt({ hash: choiceHash })).gasUsed, startBranch: (await owner().getTransactionReceipt({ hash: startHash })).gasUsed })
 	})
 })

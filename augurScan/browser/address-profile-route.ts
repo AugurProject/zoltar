@@ -45,7 +45,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		const snapshotIdentity = operationsSnapshotIdentity(first)
 		const collections = mapSecurityPoolKinds(kind => securityPoolItems(first.data, kind))
 		const pages = mapSecurityPoolKinds(kind => securityPoolPage(first.data, kind))
-		for (const kind of ['lp', 'forks', 'reports', 'refunds', 'positions'] as const) {
+		for (const kind of ['lp', 'forks', 'reports', 'positions'] as const) {
 			while (collections[kind].length < targets[kind] && pages[kind]['hasMore'] === true && typeof pages[kind]['nextCursor'] === 'string') {
 				const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
 				query.set(SECURITY_POOL_KIND_LABELS[kind].cursorParameter, pages[kind]['nextCursor'])
@@ -60,7 +60,6 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 			...first,
 			data: {
 				...first.data,
-				pending_refunds: collections.refunds,
 				escalation_positions: collections.positions,
 				lp_positions: collections.lp,
 				fork_participation: collections.forks,

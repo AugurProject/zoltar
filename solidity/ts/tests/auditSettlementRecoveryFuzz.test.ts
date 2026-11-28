@@ -94,7 +94,7 @@ describe('audit: settlement book recovery REP property test', () => {
 		const now = async (bookId: bigint) => Number((await client.readContract({ ...target(), functionName: 'totals', args: [bookId] }))[3])
 		const bookState = async (bookId: bigint) => {
 			const value = await client.readContract({ ...target(), functionName: 'books', args: [bookId] })
-			return { cash: value[0], units: value[1], recovery: value[15] }
+			return { cash: value[0], units: value[1], recovery: value[14] }
 		}
 		const questionState = async (bookId: bigint, questionId: bigint) => {
 			const [state, frozenBookId] = await client.readContract({ ...target(), functionName: 'scaledQuestion', args: [bookId, questionId] })
@@ -102,7 +102,7 @@ describe('audit: settlement book recovery REP property test', () => {
 		}
 		const frozenSource = async (frozenBookId: bigint) => (await client.readContract({ ...target(), functionName: 'frozenBooks', args: [frozenBookId] }))[2]
 
-		const mintAt = (bookId: bigint, questionId: bigint, cash: bigint, timestamp: number) => send(() => client.writeContract({ ...target(), functionName: 'mint', args: [bookId, questionId, cash, 0n, timestamp] }))
+		const mintAt = (bookId: bigint, questionId: bigint, cash: bigint, timestamp: number) => send(() => client.writeContract({ ...target(), functionName: 'mintWithRecoveryRep', args: [bookId, questionId, cash, 0n, timestamp] }))
 		const replaceFeeStream = (bookId: bigint, questionId: bigint, rate: bigint, endsAt: number, timestamp: number) => send(() => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [bookId, questionId, rate, endsAt, timestamp] }))
 		const tryMint = async (bookId: bigint) => {
 			const book = await bookState(bookId)
@@ -146,7 +146,7 @@ describe('audit: settlement book recovery REP property test', () => {
 			const timestamp = await now(bookId)
 			const quote = await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [bookId, questionId, shares] }).catch(error => fail(`quoteRecoveryRep reverted b${bookId} q${questionId} ${shares}: ${String(error)}`))
 			note(`redeem b${bookId} q${questionId} ${shares}/${before.supply} units ${before.units} frozen ${before.frozenBookId} quote ${quote}`)
-			await send(() => client.writeContract({ ...target(), functionName: 'redeem', args: [bookId, questionId, shares, 0n, timestamp] })).catch(error => fail(`REDEEM REVERTED b${bookId} q${questionId} ${shares}/${before.supply}: ${String(error)}`))
+			await send(() => client.writeContract({ ...target(), functionName: 'redeem', args: [bookId, questionId, shares, timestamp] })).catch(error => fail(`REDEEM REVERTED b${bookId} q${questionId} ${shares}/${before.supply}: ${String(error)}`))
 			const entitlements = bookOf(entitlement, bookId)
 			const owed = entitlements.get(questionId) ?? fraction(0n)
 			roundings.set(bookId, (roundings.get(bookId) ?? 0n) + 1n)

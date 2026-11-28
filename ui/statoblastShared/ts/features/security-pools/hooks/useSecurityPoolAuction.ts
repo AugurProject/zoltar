@@ -6,10 +6,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolAuctionBidRequest,
 	buildSecurityPoolAuctionOpenRequest,
-	buildSecurityPoolAuctionRefundClaimRequest,
-	buildSecurityPoolAuctionRefundCreditRequest,
-	buildSecurityPoolAuctionRefundWithdrawRequest,
-	quoteSecurityPoolAuctionRefundClaim,
+	buildSecurityPoolAuctionRefundRequest,
+	quoteSecurityPoolAuctionRefund,
 	buildSecurityPoolAuctionMaterializeRequest,
 	buildSecurityPoolAuctionClaimAllRequest,
 	MAX_REPAIR_AUCTION_CLAIM_BATCH,
@@ -108,32 +106,15 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions }: S
 		}
 	}
 	if (bidReason === undefined && snapshot !== undefined && quote !== undefined && snapshot.collateralAllowance < quote.bidAttoEth) bidReason = collateralCopy.approvalRequired
-	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
 	const refundReason = (bid: SecurityPoolAuctionBid) => {
-		const reason = auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
-		if (reason !== undefined || snapshot === undefined) return reason ?? copy.loading
-		try {
-			buildSecurityPoolAuctionRefundCreditRequest(snapshot, bid.id)
-			return undefined
-		} catch (error) {
-			return getErrorMessage(error, copy.quoteError)
-		}
-	}
-	const claimQuote = (selected: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>, bid: SecurityPoolAuctionBid) => quoteSecurityPoolAuctionRefundClaim(selected, bid.id)
-	const claimReason = (bid: SecurityPoolAuctionBid) => {
 		if (auctionReason !== undefined || snapshot === undefined) return auctionReason ?? copy.loading
 		try {
-			claimQuote(snapshot, bid)
+			quoteSecurityPoolAuctionRefund(snapshot, bid.id)
 			return undefined
 		} catch (error) {
 			// The quote's own sentence is the complete reason; no generic prefix.
 			return error instanceof Error ? error.message : copy.quoteError
 		}
-	}
-	// An already credited bid only withdraws, so its review is titled as the withdrawal it performs.
-	const claimTitle = (bid: SecurityPoolAuctionBid) => {
-		if (snapshot === undefined || claimReason(bid) !== undefined) return copy.claim
-		return claimQuote(snapshot, bid).settles ? copy.claim : copy.withdraw
 	}
 	// Each bid is claimed on its own; the claim-all action covers every page in one transaction.
 	const bidClaimReason = (bid: SecurityPoolAuctionBid) => auctionReason ?? (snapshot === undefined ? copy.loading : securityPoolAuctionClaimReason(snapshot, bid.id))
@@ -235,9 +216,7 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions }: S
 		openReason,
 		fundingReason,
 		bidReason,
-		withdrawalReason,
 		refundReason,
-		claimReason,
 		bidClaimReason,
 		claimAllReason,
 		claimableBidIds,
@@ -271,35 +250,18 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions }: S
 					return [reviewBalance(collateralCopy.walletBalance(symbol), latest.walletCollateral, latest.walletCollateral - fresh.bidAttoEth, decimals, symbol), reviewBalance(copy.lotCount, 0n, fresh.lots, 0)]
 				},
 			),
-		credit: (bid: SecurityPoolAuctionBid) =>
+		refund: (bid: SecurityPoolAuctionBid) =>
 			run(
-				`creditSecurityPoolAuction${bid.id}`,
-				copy.credit,
+				`refundSecurityPoolAuction${bid.id}`,
+				copy.refund,
 				refundReason(bid),
-				selected => buildSecurityPoolAuctionRefundCreditRequest(selected, bid.id),
-				latest => {
-					buildSecurityPoolAuctionRefundCreditRequest(latest, bid.id)
-					const auction = latest.auction
-					const selected = auction?.bids.find(item => item.id === bid.id)
-					if (auction === undefined || selected === undefined) throw new Error(copy.contextChanged)
-					const refund = auction.finalized ? (selected.fill?.refundAttoEth ?? 0n) : selected.earlyRefundAttoEth
-					return refund === 0n ? [] : [reviewBalance(copy.refundEth, auction.refundAttoEth, auction.refundAttoEth + refund, latest.collateral.decimals, latest.collateral.symbol)]
-				},
-			),
-		claim: (bid: SecurityPoolAuctionBid) =>
-			run(
-				`claimSecurityPoolAuction${bid.id}`,
-				claimTitle(bid),
-				claimReason(bid),
-				selected => ({ ...buildSecurityPoolAuctionRefundClaimRequest(selected, bid.id, selected.bidder), reviewDescription: copy.claimReview(claimQuote(selected, bid), selected.collateral.decimals, selected.collateral.symbol) }),
+				selected => ({ ...buildSecurityPoolAuctionRefundRequest(selected, bid.id, selected.bidder), reviewDescription: copy.refundReview(quoteSecurityPoolAuctionRefund(selected, bid.id), selected.collateral.decimals, selected.collateral.symbol) }),
 				latest => {
 					if (snapshot === undefined) throw new Error(copy.loading)
-					// A credit someone else made in the meantime is skipped on chain; the
-					// disclosed total must still match what the bidder reviewed.
-					const fresh = claimQuote(latest, bid)
-					if (fresh.totalAttoEth !== claimQuote(snapshot, bid).totalAttoEth) throw new Error(copy.refundChanged)
-					buildSecurityPoolAuctionRefundClaimRequest(latest, bid.id, latest.bidder)
-					return [reviewBalance(collateralCopy.walletBalance(latest.collateral.symbol), latest.walletCollateral, latest.walletCollateral + fresh.totalAttoEth, latest.collateral.decimals, latest.collateral.symbol)]
+					const fresh = quoteSecurityPoolAuctionRefund(latest, bid.id)
+					if (fresh !== quoteSecurityPoolAuctionRefund(snapshot, bid.id)) throw new Error(copy.refundChanged)
+					buildSecurityPoolAuctionRefundRequest(latest, bid.id, latest.bidder)
+					return [reviewBalance(collateralCopy.walletBalance(latest.collateral.symbol), latest.walletCollateral, latest.walletCollateral + fresh, latest.collateral.decimals, latest.collateral.symbol)]
 				},
 			),
 		claimBid: (bid: SecurityPoolAuctionBid) =>
@@ -321,19 +283,6 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions }: S
 				latest => {
 					// Bids someone else claimed meanwhile are skipped on chain, so the reviewed list stays safe to send.
 					buildSecurityPoolAuctionClaimAllRequest(latest, latest.claimableBidIds)
-				},
-			),
-		withdraw: () =>
-			run(
-				'withdrawSecurityPoolAuction',
-				copy.withdraw,
-				withdrawalReason,
-				selected => buildSecurityPoolAuctionRefundWithdrawRequest(selected, selected.bidder),
-				latest => {
-					buildSecurityPoolAuctionRefundWithdrawRequest(latest, latest.bidder)
-					const refund = latest.auction?.refundAttoEth ?? 0n
-					const { decimals, symbol } = latest.collateral
-					return [reviewBalance(copy.refundEth, refund, 0n, decimals, symbol), reviewBalance(collateralCopy.walletBalance(symbol), latest.walletCollateral, latest.walletCollateral + refund, decimals, symbol)]
 				},
 			),
 	}

@@ -18,18 +18,16 @@ describe('Escalation game: bounded carry readiness', () => {
 		await fixture.startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
 		const peaks = [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()] as const
 		const zeros = [0n, 0n, 0n] as const
-		const roots = [zeroHash(), zeroHash(), zeroHash()] as const
 		const count = () => client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'forkCarrySnapshotOutcomesInitialized' })
 		const funded = () => client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'isForkCarryFundingComplete' })
-		const advance = () => writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshot', args: [peaks, zeros, zeros, roots] }))
-		await expect(client.simulateContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'initializeForkCarryOutcome', args: [zeroAddress, zeroHash(), zeroPeakArray(), 0n, 0n, 0n, zeroHash()] })).rejects.toThrow('Only pool')
+		const advance = () => writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshot', args: [peaks, zeros, zeros] }))
+		await expect(client.simulateContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'initializeForkCarryOutcome', args: [zeroAddress, zeroHash(), zeroPeakArray(), 0n, 0n, 0n] })).rejects.toThrow('Only pool')
 		for (let stage = 0; stage < 3; stage++) {
 			expect(await count()).toBe(BigInt(stage))
 			expect(await funded()).toBe(false)
 			await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testQuestionLedgerAddress, functionName: 'resumeEscalationGameFromFork' })).rejects.toThrow('Fork snapshot incomplete')
 			await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testQuestionLedgerAddress, functionName: 'recordDeposit', args: [client.account.address, QuestionOutcome.Yes, reportBond, reportBond] })).rejects.toThrow('Fork snapshot incomplete')
-			if (stage > 0)
-				await expect(client.simulateContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, zeros, [reportBond, 0n, 0n], roots] })).rejects.toThrow('Snapshot changed')
+			if (stage > 0) await expect(client.simulateContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, zeros, [reportBond, 0n, 0n]] })).rejects.toThrow('Snapshot changed')
 			const hash = await advance()
 			expect((await client.waitForTransactionReceipt({ hash })).gasUsed).toBeLessThan(16_777_216n)
 		}
@@ -44,21 +42,21 @@ describe('Escalation game: bounded carry readiness', () => {
 	test('snapshot completeness never substitutes for backing and the harness funds a staged snapshot only once', async () => {
 		const child = await fixture.deployEscalationGameWithProofPool()
 		const { client, reportBond, nonDecisionThresholdAttoRep } = fixture
-		await fixture.startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		await fixture.startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n, QuestionOutcome.None, reportBond)
 		const peaks = [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()] as const
 		const zeros = [0n, 0n, 0n] as const
 		const totals = [0n, reportBond, 0n] as const
-		const roots = [zeroHash(), zeroHash(), zeroHash()] as const
-		for (let stage = 0; stage < 3; stage++)
-			await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, totals, zeros, roots] }))
+		for (let stage = 0; stage < 3; stage++) await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: child.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, zeros, totals, zeros] }))
 		expect(await client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'forkCarrySnapshotInitialized' })).toBe(true)
 		expect(await client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'isForkCarryFundingComplete' })).toBe(false)
 		await expect(client.simulateContract({ abi: poolArtifact.abi, address: child.testQuestionLedgerAddress, functionName: 'resumeEscalationGameFromFork' })).rejects.toThrow('Fork carry underfunded')
 		await fixture.fundEscalationGame(child.escalationGameAddress, reportBond)
 		expect(await client.readContract({ abi: gameArtifact.abi, address: child.escalationGameAddress, functionName: 'isForkCarryFundingComplete' })).toBe(true)
 		const fundedChild = await fixture.deployEscalationGameWithProofPool()
-		await fixture.startEscalationFromFork(fundedChild.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
-		for (let stage = 0; stage < 3; stage++) await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotAbi, address: fundedChild.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshot', args: [peaks, zeros, totals, roots] }))
-		expect(await getERC20Balance(client, getRepTokenAddress(0n), fundedChild.escalationGameAddress)).toBe(reportBond)
+		await fixture.startEscalationFromFork(fundedChild.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n, QuestionOutcome.None, reportBond)
+		for (let stage = 0; stage < 3; stage++) await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotAbi, address: fundedChild.testQuestionLedgerAddress, functionName: 'initializeForkCarrySnapshot', args: [peaks, zeros, totals] }))
+		expect(await client.readContract({ abi: gameArtifact.abi, address: fundedChild.escalationGameAddress, functionName: 'getDisputeBackingAttoRep' })).toBe(reportBond)
+		expect(await client.readContract({ abi: gameArtifact.abi, address: fundedChild.escalationGameAddress, functionName: 'isForkCarryFundingComplete' })).toBe(true)
+		expect(await getERC20Balance(client, getRepTokenAddress(0n), fundedChild.testQuestionLedgerAddress)).toBe(reportBond)
 	})
 })

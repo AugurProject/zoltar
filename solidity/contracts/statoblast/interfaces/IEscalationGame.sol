@@ -5,12 +5,7 @@ import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 enum CarryConsumptionReason {
 	WinningClaim,
-	LosingSettlement,
-	// The remaining members are unused. Their positions are kept: indexers decode
-	// reasons by index, and removing the last one enlarges EscalationGame.
-	Export,
-	DirectParentClaim,
-	ForkedEscrowClaim
+	LosingSettlement
 }
 
 interface IEscalationGameEvents {
@@ -22,6 +17,10 @@ interface IEscalationGameEvents {
 	event NonDecisionReached(uint256 nonDecisionTimestamp);
 	/// @notice A continuation inherited two or more threshold-full outcomes without fabricating a local timestamp.
 	event InheritedThresholdTie(address indexed sourceGame);
+	/// @notice A paused fork continuation resumed; `resumedAt` uses Unix seconds.
+	event ForkContinuationResumed(uint256 resumedAt);
+	/// @notice An ordinary game fixed its winning outcome, principal, and reserved winner payout in attoREP.
+	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	/// @notice Accepted REP and resulting escrow totals, all in attoREP. `depositIndex` is the local
 	/// per-outcome array index; `LocalDepositAppended.parentDepositIndex` is the stable continuation identity.
 	/// `cumulativeRepAmountAttoRep` is the resulting outcome total.
@@ -30,11 +29,11 @@ interface IEscalationGameEvents {
 	event LocalDepositAppended(uint256 indexed nodeId, BinaryOutcomes.BinaryOutcome indexed outcome, address indexed depositor, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeRepAmountAttoRep);
 	/// @notice Compact commitment to the exact carry state installed from `sourceGame`. Counts are leaf counts;
 	/// unresolved totals and resolution balances use attoREP. Roots commit to the exact child values.
-	event ForkCarryCheckpoint(address indexed sourceGame, bytes32 indexed snapshotId, bytes32[3] carryRoots, bytes32[3] nullifierRoots, uint256[3] leafCounts, uint256[3] unresolvedTotalsAttoRep, uint256[3] resolutionBalancesAttoRep);
+	event ForkCarryCheckpoint(address indexed sourceGame, bytes32 indexed snapshotId, bytes32[3] carryRoots, uint256[3] leafCounts, uint256[3] unresolvedTotalsAttoRep, uint256[3] resolutionBalancesAttoRep);
 	/// @notice Resulting commitment state after one local or inherited deposit is consumed. `parentDepositIndex`
 	/// and `sourceNodeId` are stable source identities; REP values use attoREP. The reason distinguishes
 	/// winning claims from losing settlement.
-	event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, CarryConsumptionReason reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot);
+	event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, CarryConsumptionReason reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingCarryRoot);
 }
 
 interface IEscalationGameAuthorization {

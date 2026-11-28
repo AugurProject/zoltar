@@ -47,7 +47,6 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	/// Custody preserves its remaining deadline; materialization must never restart it.
 	function _fixedQuestionEndDate() private view returns (uint256) {
 		address authority = EscalationGameRepCustody.securityPool(address(questionLedger));
-		if (authority == address(0)) return forkResumedAt + ACTIVATION_DELAY;
 		ISecurityPoolReporterHost securityPool = ISecurityPoolReporterHost(authority);
 		uint248 universe = questionLedger.universeId();
 		uint48 finalAfter = EscalationGameRepCustody.fixedQuestionFinalAfter(authority, universe, questionLedger.questionId());
@@ -111,13 +110,6 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return outcome;
 	}
 
-	/// @notice Canonical central custody permits consumption only after finality.
-	/// Live fork exports therefore contain no spent deposits; standalone games
-	/// retain their independently supported mutable carry lifecycle.
-	function appendOnlyCarry() public view returns (bool) {
-		return EscalationGameRepCustody.securityPool(address(questionLedger)) != address(0);
-	}
-
 	function getFinalQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome) {
 		uint256 endDate = getEscalationGameEndDate();
 		if (block.timestamp <= endDate) return BinaryOutcomes.BinaryOutcome.None;
@@ -167,25 +159,16 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 			proofVerifier.computeAcceptedDepositAmount(outcomeIndex, requestedAmountAttoRep, currentBalanceAttoRep, roomAttoRep, startBondAttoRep, nonDecisionThresholdAttoRep, [invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep]);
 	}
 
+	/// @dev Ordinary claims partition one cumulative payout curve. Continuation claims, local or
+	/// carried, pay the authenticated leaf's principal and reward coordinates directly.
 	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
-		if (ordinarySettlementInitialized)
-			return
-				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, getBindingCapitalAttoRep(), outcomeState[outcomeIndex].balanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
-		return
-			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
-	}
-
-	function _computeAllocatedWinningWithdrawal(uint8 outcomeIndex, uint256 principalAttoRep, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) private view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
 		uint256 bindingCapitalAttoRep = getBindingCapitalAttoRep();
 		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
+		if (ordinarySettlementInitialized)
+			return
+				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 		return
-			proofVerifier.computeAllocatedWinningWithdrawal(principalAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
-	}
-
-	function _computeCarriedWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
-		// Live reporter custody preserves the authenticated leaf's principal and reward coordinates.
-		return
-			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
+			proofVerifier.computeAllocatedWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, bindingCapitalAttoRep, winningOutcomeBalanceAttoRep, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 	}
 
 	function _getOutcomeBalances()

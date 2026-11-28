@@ -253,7 +253,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const activeAuctionRows: HTMLElement[] = []
 	for (const [index, item] of auctions.entries()) {
 		const row = auctionRows[index]
-		if (['Open', 'Awaiting finalization', 'Bid settlements outstanding'].includes(String(item['status'] ?? '')) && row !== undefined) activeAuctionRows.push(row)
+		if (['Open', 'Awaiting finalization'].includes(String(item['status'] ?? '')) && row !== undefined) activeAuctionRows.push(row)
 	}
 	const riskPoolPanel = operationsPanel('Pool risk evidence', poolRiskRows, 'No pool accounting snapshots match this view.', {
 		label: `${operationCounted(pools.length, 'pool')} shown · ${operationCounted(riskPagination['poolTotal'], 'pool')} total`,

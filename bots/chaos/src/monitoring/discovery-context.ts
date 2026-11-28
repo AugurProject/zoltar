@@ -1,7 +1,7 @@
 import type { DiscoveryIssue } from '../operations/types.ts'
 import type { ImmutableTopologyData } from './topology-schema.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
-import type { AuctionBidSnapshot, AuctionRefundSnapshot, EcosystemDeployments, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
+import type { AuctionBidSnapshot, EcosystemDeployments, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 import type { ChaosReadClient } from './discovery-client.ts'
 import { type CanonicalImmutableTopologyCache, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES } from './topology-schema.ts'
 import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
@@ -35,7 +35,6 @@ export interface EcosystemDiscoveryContext {
 	limits?: Partial<DiscoveryLimits>
 	indexedReports?: readonly OracleGameSnapshot[]
 	indexedAuctionBids?: Readonly<Record<string, readonly AuctionBidSnapshot[]>>
-	indexedAuctionRefunds?: Readonly<Record<string, Readonly<AuctionRefundSnapshot>>>
 	indexedEscalationDeposits?: readonly EscalationDepositSnapshot[]
 	indexedMigrationRepSplits?: readonly MigrationRepSplitProgressSnapshot[]
 	tokenSymbols?: Readonly<Record<string, string>>

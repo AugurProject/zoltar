@@ -12,7 +12,6 @@ export function auctionFixture(): AuctionSnapshot {
 		securityPool: address(501),
 		universeId: '2',
 		forkController: address(602),
-		startTime: '1',
 		endTime: '2100000000',
 		opened: true,
 		finalized: false,
@@ -21,11 +20,11 @@ export function auctionFixture(): AuctionSnapshot {
 		unroundedCollateralAttoRepPerLot: 10n.toString(),
 		maximumBidAttoRepPerLot: 900n.toString(),
 		maximumAdmissibleBidAttoRepPerLot: 900n.toString(),
-		pendingEthRefund: '0',
 		bids: [{ bidId: '1', lots: '2', minimumAttoRepPerLot: 15n.toString(), settled: false }],
 		refundableBidIds: ['1'],
 		capital: address(603),
 		claimableBidIds: [],
+		unclaimedBidIds: [],
 	}
 }
 

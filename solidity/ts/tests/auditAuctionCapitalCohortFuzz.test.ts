@@ -154,8 +154,9 @@ describe('audit fuzz: capital auction cohort owned by bidders', () => {
 					for (const [slot, bid] of bidsOf(holder).entries()) {
 						const position = views[slot]
 						if (position === undefined) throw new Error(`${label}: bid ${bid.id} view missing`)
-						if (getAddress(position.bidder) !== holder.address || position.claimed !== bid.claimed || position.materialized !== bid.claimed) throw new Error(`${label}: bid ${bid.id} bidder or claim flags wrong: ${context()}`)
-						if (position.materialized !== (position.positionId !== 0n) || (bid.claimed && position.positionId !== account.positionId && !holder.takenOver)) throw new Error(`${label}: bid ${bid.id} position ${position.positionId} is not its bidder's ${account.positionId}: ${context()}`)
+						if (getAddress(position.bidder) !== holder.address || position.claimed !== bid.claimed) throw new Error(`${label}: bid ${bid.id} bidder or claim flag wrong: ${context()}`)
+						// A claimed bid's lots and earnings belong to its bidder's own position.
+						if (bid.claimed && ((account.positionId === 0n && !holder.takenOver) || position.earnedAttoEth !== 0n || position.earnedAttoRep !== 0n || BigInt(position.liquidationStarted) !== 0n)) throw new Error(`${label}: claimed bid ${bid.id} is not part of its bidder's position ${account.positionId}: ${context()}`)
 						if (position.principal !== bid.lots * repPerLot || position.commitment !== bid.lots * LOT) throw new Error(`${label}: bid ${bid.id} principal ${position.principal} commitment ${position.commitment}, expected ${bid.lots} lots: ${context()}`)
 						ownerEarned += position.earnedAttoEth
 					}
@@ -209,8 +210,7 @@ describe('audit fuzz: capital auction cohort owned by bidders', () => {
 					for (const winner of bids) if (!winner.owner.takenOver) winner.expectedAttoEthScaled += value * winner.lots
 				} else if (choice === 3 && !forked) await setPrice(pick([UNIT, UNIT / 2n, (UNIT * 3n) / 4n, UNIT - 1n]))
 				else if (choice === 4) {
-					// Third parties cannot plant principal on a winner's account or act on the shared cohort position.
-					expect(await reasonOf(() => keeper.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [bid.owner.address, 1n] }))).toContain(forked ? 'Capital universe inactive' : 'Invalid capital deposit')
+					// Third parties cannot act on the shared cohort position. A deposit credits only its caller.
 					expect(await reasonOf(() => keeper.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOver', args: [cohortId, LOT, 0n, 0n] }))).not.toBe('no revert')
 					expect(await reasonOf(() => keeper.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'serveRetirement', args: [cohortId] }))).not.toBe('no revert')
 					expect(await reasonOf(() => keeper.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'registerRepairAuctionBidder', args: [keeper.account.address] }))).toContain('Only the repair auction')
@@ -224,7 +224,7 @@ describe('audit fuzz: capital auction cohort owned by bidders', () => {
 					const deposit = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'requiredRep', args: [bid.lots * LOT, 10_000n] })
 					await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [keeper.account.address, deposit] }))
 					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, deposit] }))
-					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'depositFor', args: [keeper.account.address, deposit] }))
+					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'deposit', args: [deposit] }))
 					keeperDeposit += deposit
 					const target = (await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [holder.address] })).targetHealthFactorBps
 					const bounds = { maximumOwnerPrincipal: 100n * principal, maximumOwnerCommitment: lotsOf(holder) * LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }

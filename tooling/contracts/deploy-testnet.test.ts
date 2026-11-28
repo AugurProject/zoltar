@@ -526,8 +526,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.sharedPoolPriceFeedDeploymentWorker,
 			infrastructure.securityPoolFactory,
 			infrastructure.questionForker,
-			infrastructure.questionLedgerOperationsDelegate,
-			infrastructure.questionLedgerEventEmitter,
+			infrastructure.questionLedgerDelegate,
 			infrastructure.securityPoolCapitalLedgerDeployer,
 			infrastructure.securityPoolCommitmentIndexDeployer,
 			infrastructure.securityPoolCapitalFeeStreamsDeployer,
@@ -555,8 +554,8 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(23)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(23)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(22)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(22)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
 		expect(bootstrapDescendants.sharedPoolPriceFeedCreationCodeFirstChunk).toBe(getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 1n }))
@@ -566,9 +565,8 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCapitalLifecycleDelegate).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 3n }))
 		expect(bootstrapDescendants.securityPoolCapitalRepairAuctionDelegate).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 1n }))
 		expect(bootstrapDescendants.questionLedgerDeployer).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n }))
-		expect(bootstrapDescendants.questionLedgerDeploymentWorker).toBe(getCreateAddress({ from: bootstrapDescendants.questionLedgerDeployer, nonce: 1n }))
-		expect(bootstrapDescendants.questionLedgerCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.questionLedgerDeploymentWorker, nonce: 1n }))
-		expect(bootstrapDescendants.questionLedgerCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.questionLedgerDeploymentWorker, nonce: 2n }))
+		expect(bootstrapDescendants.questionLedgerCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.questionLedgerDeployer, nonce: 1n }))
+		expect(bootstrapDescendants.questionLedgerCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.questionLedgerDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }))
 		expect(bootstrapDescendants['securityPoolCapitalCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolServicesCreationCodeFirstChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 1n }))
@@ -580,12 +578,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolForkCoordinatorDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolRepairAuctionDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(31)
+		expect(plan).toHaveLength(30)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(36)
+		expect(deterministicPlan).toHaveLength(35)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {

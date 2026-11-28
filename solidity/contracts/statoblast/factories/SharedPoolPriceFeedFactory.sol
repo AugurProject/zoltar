@@ -1,36 +1,25 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
-import { CreationCodeStorage } from '../CreationCodeStorage.sol';
+import { CreationCodeDeployer, CreationCodeStorage } from '../CreationCodeStorage.sol';
 import { OraclePriceMath } from '../OraclePriceMath.sol';
 import { IWeth9 } from '../interfaces/IWeth9.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
-import { Create2Deployment } from './Create2Deployment.sol';
 import { SecurityPoolBoundClones } from '../SecurityPoolBoundClones.sol';
 import { SharedPoolPriceFeed, ISharedPoolPriceFeedConfig } from '../SharedPoolPriceFeed.sol';
-import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 
-contract SharedPoolPriceFeedDeploymentWorker {
-	address private immutable creationCodeFirstChunk;
-	address private immutable creationCodeSecondChunk;
-
-	constructor() {
-		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SharedPoolPriceFeed).creationCode);
-	}
+contract SharedPoolPriceFeedDeploymentWorker is CreationCodeDeployer {
+	constructor() CreationCodeDeployer(type(SharedPoolPriceFeed).creationCode) {}
 
 	function deployImplementation(ISharedPoolPriceFeedConfig config, OpenOracle oracle, uint256 priorityFee, address securityPoolFactory, address securityPool) external returns (SharedPoolPriceFeed) {
-		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(config, oracle, priorityFee, securityPoolFactory, securityPool));
-		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, securityPoolFactory, securityPool)));
-		require(deployed != address(0), 'Shared feed implementation deployment failed');
-		return SharedPoolPriceFeed(deployed);
+		return
+			SharedPoolPriceFeed(_deploy2(abi.encode(config, oracle, priorityFee, securityPoolFactory, securityPool), keccak256(abi.encode(msg.sender, securityPoolFactory, securityPool))));
 	}
 
 	function deployClone(SharedPoolPriceFeed implementation, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed) {
 		require(address(reputationToken) != address(0), 'REP token missing');
 		bytes memory initCode = SecurityPoolBoundClones.initCode(address(implementation), abi.encodePacked(universeId, address(reputationToken)));
-		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, salt)));
-		require(deployed != address(0), 'Shared price feed deployment failed');
-		return SharedPoolPriceFeed(deployed);
+		return SharedPoolPriceFeed(CreationCodeStorage.deploy2(initCode, keccak256(abi.encode(msg.sender, salt))));
 	}
 }
 
@@ -52,11 +41,9 @@ contract SharedPoolPriceFeedFactory {
 	constructor(IWeth9 _weth, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
 		require(address(_sharedPoolPriceFeedDeploymentWorker).code.length != 0, 'Deployment workers missing');
 		sharedPoolPriceFeedDeploymentWorker = _sharedPoolPriceFeedDeploymentWorker;
-		require(_targetPriceErrorForDispute < 10_000_000, 'Target price error must be below one hundred percent');
 		OraclePriceMath.maximumPriorityFee(_targetPriceErrorForDispute, _protocolFee, _feePercentage, _escalationHaltMultiplierBps, _maxSettlementBaseFeeMultiplierBps);
 		require(_settlementTime > _disputeDelay, 'Settlement time must exceed dispute delay');
 		require(_multiplier >= 100, 'Oracle dispute multiplier must be at least one hundred percent');
-		require(_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
 		weth = _weth;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		settlementTime = _settlementTime;

@@ -76,7 +76,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		for (const client of [alice, bob]) {
 			await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'mint', args: [0n, client.account.address, 150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [capital, 150n * E] }))
-			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'depositFor', args: [client.account.address, 150n * E] }))
+			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'deposit', args: [150n * E] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setHealthTarget', args: [12_000n] }))
 			await writeContractAndWait(client, () => client.writeContract({ ...ledger(capital), functionName: 'setCommitment', args: [100n * E] }))
 		}
@@ -139,7 +139,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const first = await childId(1n)
 		const second = await childId(2n)
 		for (const child of [first, second]) expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })).toBe(0n)
-		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(200n * E)
+		expect((await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'universes', args: [0n] }))[2]).toBe(200n * E)
 		await moveTo(forkTime + 9n * week)
 		await finalize(first)
 		await finalize(second)
@@ -148,7 +148,7 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 			const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
 			expect((await owner.readContract({ abi: bookArtifact.abi, address: bookAddress, functionName: 'totals', args: [bookId] })).slice(0, 2)).toEqual([100n * E, 200n * E])
 		}
-		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
+		expect((await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'universes', args: [0n] }))[2]).toBe(0n)
 		expect(await collateralBalance(owner, root, engine)).toBe(200n * E)
 	})
 
@@ -278,13 +278,13 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 200n * E] }))).rejects.toThrow('Fork choices still open')
 		await moveTo(forkTime + 8n * week)
 		await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 200n * E] }))
-		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(100n * E)
+		expect((await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'universes', args: [0n] }))[2]).toBe(100n * E)
 		await expect(writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 1n] }))).rejects.toThrow('Recovery requires unclaimed complete sets')
 		await start(1n)
-		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(100n * E)
+		expect((await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'universes', args: [0n] }))[2]).toBe(100n * E)
 		await moveTo(forkTime + 9n * week)
 		await finalize(await childId(1n))
-		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'availableForkCashAttoEth', args: [0n] })).toBe(0n)
+		expect((await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'universes', args: [0n] }))[2]).toBe(0n)
 		expect(await collateralBalance(owner, root, engine)).toBe(100n * E)
 	})
 

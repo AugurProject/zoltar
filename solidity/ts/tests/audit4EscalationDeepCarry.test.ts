@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -139,16 +138,15 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 			return leaf
 		}
 		const simulate = (pool: Address, outcome: number, proofs: readonly ReturnType<typeof e2e.proofFor>[]) => owner.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, [...proofs]], gas: BRANCH_GAS })
-		const empty = () => new SparseNullifierTree()
-		const honest = e2e.proofFor(yes, leafAt(yes, 5), empty())
-		const lone = e2e.proofFor(yes, leafAt(yes, 8), empty())
-		await simulate(childAAA.pool, YES, [{ ...honest, nullifierSiblings: [] }])
+		const honest = e2e.proofFor(yes, leafAt(yes, 5))
+		const lone = e2e.proofFor(yes, leafAt(yes, 8))
+		await simulate(childAAA.pool, YES, [honest])
 		await simulate(childAAA.pool, YES, [lone])
 		const forgeries: readonly (readonly [string, ReturnType<typeof e2e.proofFor>, string])[] = [
 			['inflated amount', { ...honest, amountAttoRep: honest.amountAttoRep + 1n }, 'Bad carry proof'],
 			['earlier reward coordinate', { ...honest, cumulativeAmountAttoRep: honest.cumulativeAmountAttoRep - 1n }, 'Bad carry proof'],
 			['another beneficiary', { ...honest, depositor: r6.account.address }, 'Bad carry proof'],
-			['another nullifier key', { ...honest, parentDepositIndex: honest.parentDepositIndex + 1n }, 'Bad carry proof'],
+			['another deposit identity', { ...honest, parentDepositIndex: honest.parentDepositIndex + 1n }, 'Bad carry proof'],
 			['another source node', { ...honest, sourceNodeId: honest.sourceNodeId + 1n }, 'Bad carry proof'],
 			['neighbouring position', { ...honest, leafIndex: 4n }, 'Bad carry proof'],
 			['position in the other peak', { ...honest, leafIndex: 8n }, 'Bad carry peak'],
@@ -162,21 +160,18 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 		]
 		for (const [label, proof, reason] of forgeries) await expect(simulate(childAAA.pool, YES, [proof]), label).rejects.toThrow(reason)
 		// A leaf of another outcome, and a proof against the two-generation or one-generation commitment, fail.
-		await expect(simulate(childAAA.pool, YES, [e2e.proofFor(snapshot[NO], leafAt(snapshot[NO], 0), empty())])).rejects.toThrow('Bad carry')
+		await expect(simulate(childAAA.pool, YES, [e2e.proofFor(snapshot[NO], leafAt(snapshot[NO], 0))])).rejects.toThrow('Bad carry')
 		const twoGenerations = await e2e.lineageLeaves([game0, childA.game], YES)
-		await expect(simulate(childAAA.pool, YES, [e2e.proofFor(twoGenerations, leafAt(twoGenerations, 0), empty())])).rejects.toThrow('Bad carry')
+		await expect(simulate(childAAA.pool, YES, [e2e.proofFor(twoGenerations, leafAt(twoGenerations, 0))])).rejects.toThrow('Bad carry')
 		// AAA's own local deposit is not part of the inherited commitment.
 		const localYes = await e2e.localLeaves(childAAA.game, YES)
-		await expect(simulate(childAAA.pool, YES, [e2e.proofFor([...yes, ...localYes], leafAt(localYes, 0), empty())])).rejects.toThrow('Bad carry')
-		// The same deposit twice in one transaction: the second proof meets the consumed identity, regardless of witness bytes.
+		await expect(simulate(childAAA.pool, YES, [e2e.proofFor([...yes, ...localYes], leafAt(localYes, 0))])).rejects.toThrow('Bad carry')
+		// The same deposit twice in one transaction: the second proof meets the consumed identity.
 		await expect(simulate(childAAA.pool, YES, [honest, honest])).rejects.toThrow('Deposit settled')
-		const advanced = empty()
-		advanced.consume(honest.leafIndex)
-		await expect(simulate(childAAA.pool, YES, [honest, { ...honest, nullifierSiblings: advanced.getProof(honest.leafIndex) }])).rejects.toThrow('Deposit settled')
 		// Losing outcomes never pay, here or in the sibling.
 		for (const outcome of OUTCOMES) {
-			if (outcome !== YES) await expect(simulate(childAAA.pool, outcome, [e2e.proofFor(snapshot[outcome], leafAt(snapshot[outcome], 0), empty())])).rejects.toThrow('Not winning outcome')
-			if (outcome !== NO) await expect(simulate(childAAB.pool, outcome, [e2e.proofFor(snapshot[outcome], leafAt(snapshot[outcome], 0), empty())])).rejects.toThrow('Not winning outcome')
+			if (outcome !== YES) await expect(simulate(childAAA.pool, outcome, [e2e.proofFor(snapshot[outcome], leafAt(snapshot[outcome], 0))])).rejects.toThrow('Not winning outcome')
+			if (outcome !== NO) await expect(simulate(childAAB.pool, outcome, [e2e.proofFor(snapshot[outcome], leafAt(snapshot[outcome], 0))])).rejects.toThrow('Not winning outcome')
 		}
 		// Nothing is payable in any interrupted ancestor.
 		for (const pool of [source, childA.pool, childAA.pool]) {
@@ -192,7 +187,6 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 			const winning = balances[outcome]
 			if (winning === undefined) throw new Error('Missing balance')
 			const supplyBefore = await e2e.supply(child.universe)
-			const tree = new SparseNullifierTree()
 			let paid = 0n
 			let burn = 0n
 			const leaves = snapshot[outcome]
@@ -201,18 +195,15 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 			for (const leaf of [...leaves].reverse()) {
 				const expected = expectedWinningClaim(leaf.amount, leaf.cumulative, binding, winning)
 				const before = await e2e.rep(child.universe, leaf.depositor)
-				const proof = e2e.proofFor(leaves, leaf, tree)
+				const proof = e2e.proofFor(leaves, leaf)
 				const hash = await writeContractAndWait(r6, () => r6.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, [proof]], gas: BRANCH_GAS }))
 				gas.push((await r6.getTransactionReceipt({ hash })).gasUsed)
-				tree.consume(leaf.leafIndex)
 				expect((await e2e.rep(child.universe, leaf.depositor)) - before).toBe(expected.payout)
 				paid += expected.payout
 				burn += expected.burn
 				expect(await e2e.gameBalance(child.game)).toBe(startingBacking - paid - burn)
-				// Replays: the stale path, a fresh empty path, and the current path.
+				// Replaying the same proof meets the consumed identity.
 				await expect(simulate(child.pool, outcome, [proof])).rejects.toThrow('Deposit settled')
-				await expect(simulate(child.pool, outcome, [e2e.proofFor(leaves, leaf, empty())])).rejects.toThrow('Deposit settled')
-				await expect(simulate(child.pool, outcome, [e2e.proofFor(leaves, leaf, tree)])).rejects.toThrow('Deposit settled')
 			}
 			for (const leaf of await e2e.localLeaves(child.game, outcome)) {
 				const expected = expectedWinningClaim(leaf.amount, leaf.cumulative, binding, winning)

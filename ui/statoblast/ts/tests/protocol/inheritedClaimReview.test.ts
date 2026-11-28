@@ -20,7 +20,6 @@ test('inherited claim review rechecks the selected proofs and wallet balance in 
 		leafIndex: 1n,
 		merkleMountainRangePeakIndex: 1n,
 		merkleMountainRangeSiblings: [],
-		nullifierSiblings: [],
 	}
 	let step: TransactionPlanStep | undefined
 	let wallet = 12n * rep

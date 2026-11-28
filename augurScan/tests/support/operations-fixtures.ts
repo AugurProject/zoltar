@@ -34,7 +34,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 		const submitted = { ...decodedLog(hash, 0, oracle, 'ReportSubmitted', reportData), blockNumber: 1n }
 		const disputed = { ...decodedLog(hash, 1, oracle, 'ReportDisputed', { ...reportData, numReports: '2' }), blockNumber: 1n, transactionHash }
 		const capitalEvidence = [
-			{ name: 'PrincipalDeposited', argumentsValue: { payer: address, owner: address, amountAttoRep: 120n.toString() } },
+			{ name: 'PrincipalDeposited', argumentsValue: { owner: address, amountAttoRep: 120n.toString() } },
 			{ name: 'CommitmentAuthorized', argumentsValue: { owner: address, positionId: '1', rep: '120', commitment: '100', targetHealthFactorBps: '12000' } },
 			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
 			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', takeoverRewardAttoRep: 5n.toString() } },

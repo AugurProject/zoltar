@@ -84,8 +84,8 @@ const LOCAL_DEPOSIT_APPENDED = eventTopic('LocalDepositAppended(uint256,uint8,ad
 const DEPOSIT_ON_OUTCOME = eventTopic('DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)')
 const ORDINARY_SETTLEMENT_INITIALIZED = eventTopic('OrdinarySettlementInitialized(uint8,uint256,uint256)')
 const CLAIM_DEPOSIT = eventTopic('ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)')
-const CARRY_DEPOSIT_CONSUMED = eventTopic('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)')
-const MIGRATION_REP_SPLIT = eventTopic('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)')
+const CARRY_DEPOSIT_CONSUMED = eventTopic('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32)')
+const MIGRATION_REP_SPLIT = eventTopic('MigrationRepSplit(address,uint248,uint256,uint248,uint256,uint256)')
 const UINT248_LIMIT = 1n << 248n
 const MAXIMUM_ACTIVE_SIGNER_REPORTS = 64
 
@@ -202,12 +202,6 @@ function strictTopicUnsigned(topic: Hash | undefined, bits: number, label: strin
 	const value = topicUnsigned(topic, label)
 	if (value >= 1n << BigInt(bits)) throw new Error(`${label} topic exceeds uint${bits.toString()}`)
 	return value
-}
-
-function abiWordAddress(bytes: Uint8Array, offset: number, label: string) {
-	if (offset < 0 || offset + 32 > bytes.length) throw new Error(`${label} ABI word is incomplete`)
-	if (readUnsigned(bytes, offset, 12) !== 0n) throw new Error(`${label} ABI word has nonzero address padding`)
-	return readAddress(bytes, offset + 12)
 }
 
 function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
@@ -416,12 +410,10 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 				const universeId = strictTopicUnsigned(log.topics[2], 248, 'MigrationRepSplit universe id')
 				const childUniverseId = strictTopicUnsigned(log.topics[3], 248, 'MigrationRepSplit child universe id')
 				const data = hexToBytes(log.data)
-				if (data.length !== 128) throw new Error('MigrationRepSplit has an invalid data length')
-				const recipient = abiWordAddress(data, 0, 'MigrationRepSplit recipient')
-				if (recipient.toLowerCase() !== context.wallet.toLowerCase()) throw new Error('Wallet MigrationRepSplit recipient does not match the indexed wallet')
-				const outcomeIndex = readUnsigned(data, 32, 32)
-				const amountAttoRep = readUnsigned(data, 64, 32)
-				const cumulativeAttoRep = readUnsigned(data, 96, 32)
+				if (data.length !== 96) throw new Error('MigrationRepSplit has an invalid data length')
+				const outcomeIndex = readUnsigned(data, 0, 32)
+				const amountAttoRep = readUnsigned(data, 32, 32)
+				const cumulativeAttoRep = readUnsigned(data, 64, 32)
 				const expectedChildUniverseId = deriveChildUniverseId(universeId, outcomeIndex)
 				if (childUniverseId !== expectedChildUniverseId) throw new Error('MigrationRepSplit child universe ID does not match its parent/outcome derivation')
 				const routeKey = migrationProgressKey(universeId.toString(), outcomeIndex.toString())
@@ -478,8 +470,9 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 					const credit = readUnsigned(data, 32, 32)
 					if (credit > 0n) {
 						const prior = auctionRefunds[key]
-						// Without cumulative credit events, a partial prefix cannot establish a zero balance.
-						// Quorum-verified storage seeds the missing episode at the scan anchor.
+						// The engine pays each refund in the same call that settles the bid, so RefundWithdrawn follows
+						// at once and clears this credit. Nothing reads the credit; the persisted index schema keeps it.
+						// After a missing prefix, skip it; the matching withdrawal is skipped too.
 						if (partialHistory && prior === undefined) continue
 						auctionRefunds[key] = { generation: prior?.generation ?? refundEpisodeGeneration(log), pendingAttoEth: ((prior === undefined ? 0n : BigInt(prior.pendingAttoEth)) + credit).toString() }
 					}
@@ -573,7 +566,6 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {
 	return {
 		indexedAuctionBids: index.auctionBids,
-		indexedAuctionRefunds: index.auctionRefunds,
 		indexedEscalationDeposits: index.escalationDeposits,
 		indexedMigrationRepSplits: index.migrationRepSplits,
 		indexedReports: index.reports,

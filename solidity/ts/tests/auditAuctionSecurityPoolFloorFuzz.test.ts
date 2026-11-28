@@ -131,11 +131,11 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 			if (expected.filled !== 0n) expect(cohort[3]).toBe(expected.attoRepPerLot)
 			let roundingOwned = 0n
 			// Without any filled lot no cohort is installed; each bid still reads as an unclaimed bid without lots.
-			if (expected.filled === 0n) for (const bid of bids) expect(await repairAuctionPositionOf(context.owner, context.capital, bid.id)).toMatchObject({ claimed: false, materialized: false, principal: 0n, commitment: 0n })
+			if (expected.filled === 0n) for (const bid of bids) expect(await repairAuctionPositionOf(context.owner, context.capital, bid.id)).toMatchObject({ claimed: false, principal: 0n, commitment: 0n })
 			for (const bid of expected.filled === 0n ? [] : bids) {
 				const fill = expected.fills.get(bid.id) ?? 0n
 				const position = await repairAuctionPositionOf(context.owner, context.capital, bid.id)
-				expect({ label, bid: bid.id, principal: position.principal, commitment: position.commitment, materialized: position.materialized }).toEqual({ label, bid: bid.id, principal: fill * expected.attoRepPerLot, commitment: fill * lot, materialized: false })
+				expect({ label, bid: bid.id, principal: position.principal, commitment: position.commitment, claimed: position.claimed }).toEqual({ label, bid: bid.id, principal: fill * expected.attoRepPerLot, commitment: fill * lot, claimed: false })
 				roundingOwned += position.earnedAttoRep
 				if (fill !== 0n && BigInt(position.liquidationStarted) !== 0n) throw new Error(`winner ${bid.id} is under an adverse observation (${position.liquidationStarted}, ${typeof position.liquidationStarted}) immediately after closing: ${label}`)
 			}
@@ -174,7 +174,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 					continue
 				}
 				if (base.positionId !== 0n) expect(owner.positionId).toBe(base.positionId)
-				for (const bid of bids.filter(candidate => candidate.bidder === bidder && (expected.fills.get(candidate.id) ?? 0n) !== 0n)) expect(await repairAuctionPositionOf(context.owner, context.capital, bid.id)).toMatchObject({ materialized: true, positionId: owner.positionId })
+				for (const bid of bids.filter(candidate => candidate.bidder === bidder && (expected.fills.get(candidate.id) ?? 0n) !== 0n)) expect(await repairAuctionPositionOf(context.owner, context.capital, bid.id)).toMatchObject({ claimed: true, earnedAttoEth: 0n, earnedAttoRep: 0n })
 				const position = await positionOf(owner.positionId)
 				expect({ label, bidder: slot, rep: position.rep, commitment: position.commitment }).toEqual({ label, bidder: slot, rep: base.rep + won * expected.attoRepPerLot, commitment: base.commitment + won * lot })
 				if (base.positionId !== 0n) continue
@@ -186,10 +186,10 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 			expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionCohort' }))[2]).toBe(0n)
 			for (const bidder of [context.owner, context.other]) {
 				const owed = bids.filter(bid => bid.bidder === bidder).reduce((sum, bid) => sum + (bid.lots - (expected.fills.get(bid.id) ?? 0n)) * lot, 0n)
-				const mine = bids.filter(bid => bid.bidder === bidder)
-				for (const bid of mine) await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [bid.id] }))
-				expect(await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'refundCreditAttoEth', args: [bidder.account.address] })).toBe(owed)
-				if (owed !== 0n) await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [bidder.account.address] }))
+				const before = await collateralBalance(context.owner, fixture.securityPool, bidder.account.address)
+				for (const bid of bids.filter(candidate => candidate.bidder === bidder && candidate.lots !== (expected.fills.get(candidate.id) ?? 0n)))
+					await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'refundBid', args: [bid.id, bidder.account.address] }))
+				expect((await collateralBalance(context.owner, fixture.securityPool, bidder.account.address)) - before).toBe(owed)
 			}
 			expect(await collateralBalance(context.owner, fixture.securityPool, context.engine)).toBe(0n)
 		})

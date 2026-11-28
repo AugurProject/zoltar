@@ -12,7 +12,6 @@ import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol'
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGameDepositDelegate } from '../EscalationGameDepositDelegate.sol';
 import { CreationCodeStorage } from '../CreationCodeStorage.sol';
-import { Create2Deployment } from './Create2Deployment.sol';
 
 contract EscalationGameFactory {
 	EscalationGameProofVerifier public immutable proofVerifier;
@@ -72,9 +71,7 @@ contract EscalationGameFactory {
 		// A reused game may be unstarted (prepared) or already started; start and startFromFork accept only this
 		// factory, and the game refuses any second start, so reuse can never restart or re-parameterize a game.
 		if (prepared.code.length != 0) return EscalationGame(prepared);
-		address deployed = Create2Deployment.deploy(initCode, 0);
-		require(deployed != address(0x0), 'Escalation game deployment failed');
-		return EscalationGame(deployed);
+		return EscalationGame(CreationCodeStorage.deploy2(initCode, 0));
 	}
 
 	function _create2Address(bytes memory initCode) private view returns (address) {

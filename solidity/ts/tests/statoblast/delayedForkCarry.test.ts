@@ -22,7 +22,7 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
-import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
+import { createCarryProof } from '../carryProofHelpers'
 import { useSecurityPoolFixture } from './securityPoolFixture'
 
 const ATTO_REP_PER_REP = 10n ** 18n
@@ -70,7 +70,6 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			leafIndex: 0n,
 			merkleMountainRangePeakIndex: 0n,
 			merkleMountainRangeSiblings: [],
-			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		})
 		const firstQuestion = { ...questionData, title: 'delayed carry first unrelated fork' }
 		await createQuestion(noDepositor, firstQuestion, outcomes)
@@ -118,7 +117,6 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const poolOutcome = await client.readContract({ abi: statoblast_QuestionForker_QuestionForker.abi, address: getInfraContractAddresses().questionForker, functionName: 'getQuestionOutcome', args: [pool.questionLedger] })
 			assert.deepStrictEqual(delayedSnapshot[0], beforeFork[0], 'delay must preserve proof commitments')
 			assert.deepStrictEqual(delayedSnapshot[1], beforeFork[1], 'delay must preserve leaf counts')
-			assert.deepStrictEqual(delayedSnapshot[3], beforeFork[3], 'delay must not consume claims')
 
 			if (finalizedBeforeFork) {
 				assert.equal(delayedFinality, BigInt(QuestionOutcome.Yes), 'a dispute finalized before the fork stays settled')
@@ -132,7 +130,6 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 					leafIndex: 0n,
 					merkleMountainRangePeakIndex: 0n,
 					merkleMountainRangeSiblings: [],
-					nullifierSiblings: new SparseNullifierTree().getProof(0n),
 				})
 				const token = await getRepToken(client, pool.questionLedger)
 				const balanceBefore = await getERC20Balance(client, token, client.account.address)
@@ -150,7 +147,6 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const migratedBacking = await client.readContract({ abi: reporterArtifact.abi, address: reporter, functionName: 'balanceOfGame', args: [nextGame] })
 			const inheritedNo = await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)
 			assert.deepStrictEqual(inheritedNo.snapshotCarryRoot, beforeForkRoots[QuestionOutcome.No], 'the original proof commitment must reach the next continuation')
-			assert.equal(inheritedNo.currentNullifierRoot, beforeFork[3][QuestionOutcome.No])
 			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'isForkCarryFundingComplete' }), true)
 			await resumePool(nextPool.questionLedger)
 			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'forkResumedAt' })
@@ -187,9 +183,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const walletBefore = await getERC20Balance(client, nextRep, noDepositor.account.address)
 			await writeContractAndWait(noDepositor, () => noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }))
 			assert.ok((await getERC20Balance(client, nextRep, noDepositor.account.address)) - walletBefore > 80n * ATTO_REP_PER_REP, 'the original carried NO claim must pay principal plus its winning reward')
-			const emptyNullifiers = new SparseNullifierTree()
-			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentNullifierRoot, emptyNullifiers.root)
-			await assert.rejects(noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Deposit settled|Bad nullifier proof/)
+			await assert.rejects(noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Deposit settled/)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentCarryTotalAttoRep, 30n * ATTO_REP_PER_REP, 'settling inherited principal must leave the new deposit intact')
 			// Keep these checks after settlement so the pre-fix implementation reproduces Carried REP low.
 			assertPreservedCarry()

@@ -100,16 +100,16 @@ function carryPlan(parentDepositIndex: string, block = '10'): OperationPlan {
 	}
 }
 
-function refundPlan(refundGeneration: string, block = '10'): OperationPlan {
+function refundPlan(bidId: string, block = '10'): OperationPlan {
 	return {
 		...plan(block),
-		definitionId: 'statoblast.auction.withdraw-refund',
+		definitionId: 'statoblast.auction.settle-bids',
 		ecosystem: 'statoblast',
-		id: `withdraw-refund:${refundGeneration}:${block}`,
-		label: 'Withdraw deferred auction refund',
+		id: `settle-bids:${bidId}:${block}`,
+		label: 'Refund unused auction bid collateral',
 		metadata: {
 			auction: '0x0000000000000000000000000000000000000005',
-			refundGeneration,
+			bidId,
 		},
 	}
 }
@@ -185,7 +185,7 @@ describe('durable lifecycle obligations', () => {
 			['open-oracle.settle', '10', true],
 			['open-oracle.settle', '4', false],
 			['statoblast.escalation.withdraw-forked', '10', false],
-			['statoblast.auction.withdraw-refund', '10', true],
+			['statoblast.auction.settle-bids', '10', true],
 		] as const) {
 			const value = { ...plan(block), definitionId }
 			const state = obligationState()
@@ -773,18 +773,18 @@ describe('durable lifecycle obligations', () => {
 		expect(state.workflows).toHaveLength(0)
 	})
 
-	test('allows a later deferred-refund episode after the prior generation is tombstoned', () => {
-		const first = refundPlan(`0x${'11'.repeat(32)}`)
+	test('allows a later bid refund after the prior one is tombstoned', () => {
+		const first = refundPlan('1')
 		const state = obligationState()
 		synchronizeLifecycleObligations(state, [evaluation(first)], presence(first), true, 10n)
 		const firstObligation = obligationForPlan(state, first)
 		const firstWorkflow = state.workflows[0]
-		if (firstObligation === undefined || firstWorkflow === undefined) throw new Error('Missing first refund episode fixture')
+		if (firstObligation === undefined || firstWorkflow === undefined) throw new Error('Missing first refund fixture')
 		firstWorkflow.status = 'completed'
 		firstWorkflow.completedAt = new Date().toISOString()
 		expect(completeLifecycleObligation(state, firstObligation)).toBeTrue()
 
-		const later = refundPlan(`0x${'22'.repeat(32)}`, '12')
+		const later = refundPlan('2', '12')
 		synchronizeLifecycleObligations(state, [evaluation(later)], presence(later), true, 12n)
 
 		expect(state.obligationTombstones).toContainEqual(expect.objectContaining({ id: firstObligation.id, resolution: 'completed' }))

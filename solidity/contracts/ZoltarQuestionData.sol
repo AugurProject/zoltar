@@ -44,7 +44,6 @@ contract ZoltarQuestionData {
 			uint256 previous = type(uint256).max;
 			bytes32[] memory normalizedHashes = new bytes32[](outcomeOptions.length);
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
-				require(bytes(outcomeOptions[index]).length > 0, 'Outcome option label must not be an empty string');
 				bytes32 normalizedHash = _validatedOutcomeLabelHash(bytes(outcomeOptions[index]));
 				for (uint256 previousIndex; previousIndex < index; previousIndex++)
 					require(normalizedHashes[previousIndex] != normalizedHash, 'Outcome labels must be unique ignoring case');
@@ -107,22 +106,6 @@ contract ZoltarQuestionData {
 		return questions[questionId].endTime;
 	}
 
-	/// @dev Bit 255 is set for a non-invalid scalar answer; bits 240..254 are
-	/// reserved. Bits 120..239 and 0..119 hold the two uint120 payout numerators.
-	/// This decoder only splits fields; answer validation checks reserved bits and sums.
-	function splitUint256IntoTwoWithInvalid(uint256 value) public pure returns (bool invalid, uint120 firstPart, uint120 secondPart) {
-		// Highest bit (bit 255)
-		invalid = (value >> 255) == 0;
-		// Middle 120 bits
-		firstPart = uint120((value >> 120) & ((1 << 120) - 1));
-		// Lowest 120 bits
-		secondPart = uint120(value & ((1 << 120) - 1));
-	}
-
-	function hasNonZeroScalarReservedBits(uint256 answer) public pure returns (bool) {
-		return answer & SCALAR_RESERVED_BITS_MASK != 0;
-	}
-
 	function getOutcomeLabels(uint256 questionId, uint256 startIndex, uint256 numberOfEntries) external view returns (string[] memory returnOutcomeLabels) {
 		uint256 iterateUntil = Pagination.sliceEnd(startIndex, numberOfEntries, outcomeLabels[questionId].length);
 		if (iterateUntil <= startIndex) return new string[](0);
@@ -132,47 +115,38 @@ contract ZoltarQuestionData {
 		}
 	}
 
-	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {
-		if (outcomeLabels[questionId].length == 0) {
-			// scalar
-			if (hasNonZeroScalarReservedBits(answer)) return true;
-			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
-			if (invalid) {
-				if (firstPart == 0 && secondPart == 0) return false;
-				return true;
-			}
-			// When invalid=false (high bit set), malformed iff sum != numTicks.
-			// An unregistered question has zero ticks and so no valid scalar answer.
-			uint256 numTicks = questions[questionId].numTicks;
-			return numTicks == 0 || uint256(firstPart) + uint256(secondPart) != numTicks;
-		}
-		if (answer == 0) return false;
-		if (answer < outcomeLabels[questionId].length + 1) {
-			// categorical
-			return false;
-		}
-		return true;
+	/// @notice Categorical answers are 0 for Invalid or a 1-based label index; anything else is malformed.
+	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool malformed) {
+		uint256 labelCount = outcomeLabels[questionId].length;
+		if (labelCount != 0) return answer > labelCount;
+		(malformed, , , ) = _classifyScalarAnswer(questionId, answer);
 	}
 
 	function getAnswerOptionName(uint256 questionId, uint256 answer) external view returns (string memory) {
-		if (outcomeLabels[questionId].length == 0) {
-			// scalar
-			if (hasNonZeroScalarReservedBits(answer)) return 'Malformed';
-			(bool invalid, uint120 firstPart, uint120 secondPart) = splitUint256IntoTwoWithInvalid(answer);
-			if (invalid) {
-				if (firstPart == 0 && secondPart == 0) return 'Invalid';
-				return 'Malformed';
-			}
-			uint256 sum = uint256(firstPart) + uint256(secondPart);
-			if (questions[questionId].numTicks != 0 && sum == questions[questionId].numTicks) {
-				return
-					ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], questions[questionId].answerUnit, questions[questionId].numTicks, questions[questionId].displayValueMin, questions[questionId].displayValueMax);
-			}
-		} else if (answer == 0) return 'Invalid';
-		else if (answer < outcomeLabels[questionId].length + 1) {
-			// categorical
-			return outcomeLabels[questionId][answer - 1];
+		uint256 labelCount = outcomeLabels[questionId].length;
+		if (labelCount != 0) {
+			if (answer == 0) return 'Invalid';
+			return answer > labelCount ? 'Malformed' : outcomeLabels[questionId][answer - 1];
 		}
-		return 'Malformed';
+		(bool malformed, bool invalid, uint120 firstPart, uint120 secondPart) = _classifyScalarAnswer(questionId, answer);
+		if (malformed) return 'Malformed';
+		if (invalid) return 'Invalid';
+		QuestionData storage question = questions[questionId];
+		return
+			ScalarOutcomes.getScalarOutcomeName([firstPart, secondPart], question.answerUnit, question.numTicks, question.displayValueMin, question.displayValueMax);
+	}
+
+	/// @dev Bit 255 is set for a non-invalid scalar answer; bits 240..254 are reserved and must be zero.
+	/// Bits 120..239 and 0..119 hold the two uint120 payout numerators. Invalid is only the all-zero
+	/// answer; a non-invalid answer is well formed iff its numerators sum to the question's numTicks.
+	/// An unregistered question has zero ticks and so no valid non-invalid scalar answer.
+	function _classifyScalarAnswer(uint256 questionId, uint256 answer) private view returns (bool malformed, bool invalid, uint120 firstPart, uint120 secondPart) {
+		if (answer & SCALAR_RESERVED_BITS_MASK != 0) return (true, false, 0, 0);
+		invalid = answer >> 255 == 0;
+		firstPart = uint120(answer >> 120);
+		secondPart = uint120(answer);
+		if (invalid) return (firstPart != 0 || secondPart != 0, true, firstPart, secondPart);
+		uint256 numTicks = questions[questionId].numTicks;
+		malformed = numTicks == 0 || uint256(firstPart) + secondPart != numTicks;
 	}
 }

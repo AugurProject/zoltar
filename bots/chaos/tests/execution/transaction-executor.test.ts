@@ -35,7 +35,7 @@ const sender = getAddress('0x0000000000000000000000000000000000000001')
 const caller = getAddress('0x0000000000000000000000000000000000000002')
 const target = getAddress('0x0000000000000000000000000000000000000003')
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
-const migrationRepSplitSignature = 'MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'
+const migrationRepSplitSignature = 'MigrationRepSplit(address,uint248,uint256,uint248,uint256,uint256)'
 const migrationRepSplitTopic = keccak256(toHex(migrationRepSplitSignature))
 
 afterEach(async () => {
@@ -706,7 +706,7 @@ function canonicalLifecyclePlan(): OperationPlan {
 				...step,
 				evidence: [
 					{
-						abi: 'event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
+						abi: 'event MigrationRepSplit(address indexed migrator, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
 						canonicalLifecycleConfirmation: true,
 						emitter: target,
 						equals: targetAttoRep,
@@ -1168,7 +1168,7 @@ describe('canonical lifecycle receipt disposition', () => {
 		const { environment, stateFile } = await finalizedExecutionFixture([
 			{
 				address: target,
-				data: encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [target, 0n, 100n, 100n]),
+				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [0n, 100n, 100n]),
 				topics: [migrationRepSplitTopic, toHex(BigInt(target), { size: 32 }), toHex(0n, { size: 32 }), toHex(deriveChildUniverseId(0n, 0n), { size: 32 })],
 			},
 		])

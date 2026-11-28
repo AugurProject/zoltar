@@ -14,8 +14,7 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
 import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '../hooks/useSecurityPoolAuction.js'
 import { useSecurityPoolDeadline } from '../hooks/useSecurityPoolDeadline.js'
-import { useEffect, useId } from 'preact/hooks'
-import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
+import { useEffect } from 'preact/hooks'
 import type { SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import { deadlineChecking } from '../../../copy/questionPage.js'
@@ -178,13 +177,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 					</div>
 				</>
 			)}
-			<MetricGrid>
-				<MetricField label={copy.refundEth}>
-					<CurrencyValue value={auction?.refundAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-				</MetricField>
-			</MetricGrid>
 			<div className='actions'>
-				<SecurityPoolButton model={parameters.actions} action='withdrawSecurityPoolAuction' label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawalReason} onClick={model.withdraw} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: refreshReason !== undefined, reason: refreshReason }} onClick={model.refresh} />
 			</div>
 		</WorkflowSubsection>
@@ -263,10 +256,14 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 	else if (bid.fill !== undefined) bidStatus = standing === copy.noFill ? undefined : copy.noFill
 	else if (isOpen && excluded && bid.minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot + auction.repGrid) bidStatus = copy.lowerAsksFill
 	else if (excluded) bidStatus = copy.earlierBidsFill
-	const creditStatus = !auction.finalized && bid.refundSettled ? copy.earlyRefundSettled : undefined
+	const refundStatus = bid.refundSettled ? copy.refunded : undefined
 	let refund: bigint | undefined
 	if (excluded) refund = escrow
 	if (bid.fill !== undefined) refund = bid.fill.refundAttoEth
+	// A paid refund leaves nothing owed; the status note records the payment.
+	if (bid.refundSettled) refund = 0n
+	// A fully filled bid has nothing to refund, so the engine never settles it and its refund never opens.
+	const refundPossible = !bid.refundSettled && !(auction.finalized && bid.fill?.refundAttoEth === 0n)
 	const money = (value: bigint | undefined) => <CurrencyValue value={value} suffix={collateral.symbol} units={collateral.decimals} />
 	return (
 		<tbody>
@@ -283,13 +280,17 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 				<td data-label={copy.status}>
 					<Badge tone={winning ? 'ok' : 'muted'}>{standing}</Badge>
 					{bidStatus !== undefined && <small>{bidStatus}</small>}
-					{creditStatus !== undefined && <small>{creditStatus}</small>}
+					{refundStatus !== undefined && <small>{refundStatus}</small>}
 					{bid.claimed && <small>{copy.claimedStatus}</small>}
 				</td>
 			</tr>
 			<tr>
 				<td className='statoblast-auction-bid-actions' colSpan={5}>
-					<RefundActions model={model} actions={parameters.actions} bid={bid} />
+					{refundPossible && (
+						<div className='actions'>
+							<SecurityPoolButton model={parameters.actions} action={`refundSecurityPoolAuction${bid.id}`} label={copy.refund} pendingLabel={copy.refunding} reason={model.refundReason(bid)} onClick={() => model.refund(bid)} />
+						</div>
+					)}
 					{bid.claimable && (
 						<div className='actions'>
 							<SecurityPoolButton model={parameters.actions} action={`claimSecurityPoolAuctionBid${bid.id}`} label={copy.claimBid} pendingLabel={copy.claimingBid} reason={model.bidClaimReason(bid)} onClick={() => model.claimBid(bid)} />
@@ -314,27 +315,5 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 				</td>
 			</tr>
 		</tbody>
-	)
-}
-
-/** The two refund actions often rest disabled for one shared cause, such as a bid that may still win; that reason renders once for the pair. */
-function RefundActions({ model, actions, bid }: { model: ReturnType<typeof useSecurityPoolAuction>; actions: SecurityPoolAuctionParameters['actions']; bid: SecurityPoolAuctionBid }) {
-	const sharedReasonId = useId()
-	const creditReason = model.refundReason(bid)
-	const claimReason = model.claimReason(bid)
-	const sharedReason = actions.busy === undefined && creditReason !== undefined && creditReason === claimReason ? creditReason : undefined
-	const reasonId = sharedReason === undefined ? undefined : sharedReasonId
-	return (
-		<>
-			<div className='actions'>
-				<SecurityPoolButton model={actions} action={`creditSecurityPoolAuction${bid.id}`} label={copy.credit} pendingLabel={copy.crediting} reason={creditReason} sharedReasonId={reasonId} onClick={() => model.credit(bid)} />
-				<SecurityPoolButton model={actions} action={`claimSecurityPoolAuction${bid.id}`} label={copy.claim} pendingLabel={copy.claiming} reason={claimReason} sharedReasonId={reasonId} onClick={() => model.claim(bid)} />
-			</div>
-			{sharedReason === undefined ? undefined : (
-				<div className='tx-action-feedback shared-action-reason'>
-					<InlineHint id={sharedReasonId} message={sharedReason} />
-				</div>
-			)}
-		</>
 	)
 }

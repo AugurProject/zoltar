@@ -12,10 +12,9 @@ const replacement = keccak256('0x02')
 
 function emptyCarryResponse(functionName: string) {
 	if (functionName === 'escalationGame') return game
-	if (functionName === 'appendOnlyCarry') return false
 	if (functionName === 'forkContinuation') return false
 	if (functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') return 10n
-	if (functionName === 'getOutcomeState') return { currentCarryRoot: zeroHash, currentLeafCount: 0n, currentNullifierRoot: zeroHash, localHeadNodeId: 0n, snapshotLeafCount: 0n, snapshotCarryRoot: zeroHash }
+	if (functionName === 'getOutcomeState') return { currentCarryRoot: zeroHash, currentLeafCount: 0n, localHeadNodeId: 0n, snapshotLeafCount: 0n, snapshotCarryRoot: zeroHash }
 	if (functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
 	if (functionName === 'getProofConsumedCarriedDepositIndexesByOutcome') return []
 	throw new Error(`Unexpected read: ${functionName}`)
@@ -25,7 +24,8 @@ const load = (client: Parameters<typeof loadForkCarriedEscalationDepositsFromPar
 
 test('claim discovery follows empty consumed-node pages to the oldest live leaf', async () => {
 	const leaf = { amountAttoRep: 10n, cumulativeAmountAttoRep: 10n, depositor: parent, parentDepositIndex: 0n, sourceNodeId: 1n }
-	const leafHashes = Array.from({ length: 32 }, (_, index) => (index === 0 ? hashCarryLeaf(leaf, 1) : zeroHash))
+	// Append-only carry keeps consumed leaves in the frozen root, so every node contributes its own hash.
+	const leafHashes = Array.from({ length: 32 }, (_, index) => hashCarryLeaf({ ...leaf, cumulativeAmountAttoRep: BigInt(index + 1) * 10n, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1) }, 1))
 	const root = buildCarryMerkleMountainRangeProof(leafHashes, 0).root
 	const cursors: bigint[] = []
 	const client = {
@@ -34,7 +34,7 @@ test('claim discovery follows empty consumed-node pages to the oldest live leaf'
 		readContract: createReadContractStub(async request => {
 			switch (request.functionName) {
 				case 'getOutcomeState':
-					return { currentCarryRoot: root, currentLeafCount: 32n, currentNullifierRoot: zeroHash, localHeadNodeId: request.address === game ? 32n : 0n, snapshotLeafCount: request.address === child ? 32n : 0n, snapshotCarryRoot: root }
+					return { currentCarryRoot: root, currentLeafCount: 32n, localHeadNodeId: request.address === game ? 32n : 0n, snapshotLeafCount: request.address === child ? 32n : 0n, snapshotCarryRoot: root }
 				case 'getCarryLeafPageByOutcome': {
 					const cursor = request.args?.[1]
 					if (typeof cursor !== 'bigint') throw new Error('Missing carry page cursor')

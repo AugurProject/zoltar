@@ -97,7 +97,7 @@ test('rejects a reverting candidate before selecting an executable operation', a
 		[reverting, executable],
 		async candidate => {
 			checked.push(candidate.id)
-			if (candidate === reverting) throw new OperationRediscoveryRequired('Question ledger deployment failed')
+			if (candidate === reverting) throw new OperationRediscoveryRequired('Contract deployment failed')
 		},
 		candidate => {
 			rejected.push(candidate.id)

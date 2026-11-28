@@ -10,8 +10,7 @@ export type DeploymentStepId =
 	| ZoltarDeploymentStepId
 	| 'sharedPoolPriceFeedDeploymentWorker'
 	| 'questionForker'
-	| 'questionLedgerOperationsDelegate'
-	| 'questionLedgerEventEmitter'
+	| 'questionLedgerDelegate'
 	| 'escalationGameDepositDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'

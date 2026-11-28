@@ -131,10 +131,6 @@ contract SecurityPoolCapitalFeeStreams {
 		);
 	}
 
-	function fundedOutstanding() external view returns (uint256 ethAmount, uint256 repAmount) {
-		return (outstandingEth, outstandingRep);
-	}
-
 	/// @dev The immutable horizon orders every funded expiry. Funding appends or
 	/// merges one cumulative checkpoint; it never writes a path or migrates history.
 	/// Strictly increasing nonzero uint48 ends allow at most 2^48-1 checkpoints,

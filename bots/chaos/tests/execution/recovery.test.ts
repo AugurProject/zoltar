@@ -19,7 +19,7 @@ const directories: string[] = []
 const target = getAddress('0x0000000000000000000000000000000000000020')
 const openOracle = getAddress('0x0000000000000000000000000000000000000021')
 const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
-const migrationRepSplitSignature = 'MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)'
+const migrationRepSplitSignature = 'MigrationRepSplit(address,uint248,uint256,uint248,uint256,uint256)'
 const migrationRepSplitTopic = keccak256(toHex(migrationRepSplitSignature))
 const recoveryReceiptBlockHash = `0x${'aa'.repeat(32)}` as const
 const recoveryFinalityBlockHash = `0x${'bb'.repeat(32)}` as const
@@ -239,7 +239,7 @@ function canonicalLifecycleRecoveryPlan(): OperationPlan {
 				...step,
 				evidence: [
 					{
-						abi: 'event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
+						abi: 'event MigrationRepSplit(address indexed migrator, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep)',
 						canonicalLifecycleConfirmation: true,
 						emitter: target,
 						equals: targetAttoRep,

@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Leaf encoding, peak bagging, proof shape, nullifier tree, and bounds of Statoblast's Merkle Mountain Range carry proofs." />
+		<meta name="description" content="Leaf encoding, peak bagging, proof shape, replay protection, and bounds of Statoblast's Merkle Mountain Range carry proofs." />
 		<title>Merkle Mountain Range carry proofs · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -65,8 +65,7 @@ bagPeaks(peaks, peakCount):
 					<li>a <code>merkleMountainRangePeakIndex</code> that is not the height of the peak containing <code>leafIndex</code>: <code>Bad carry peak</code>;</li>
 					<li>a sibling array whose length is not <code>peakHeight + peakCount - 1</code>: <code>Bad MMR proof length</code>;</li>
 					<li>a reconstructed root that differs from the stored snapshot root: <code>Bad carry proof</code>;</li>
-					<li>in standalone games, a nullifier path whose length is not <code>64</code>: <code>Bad nullifier length</code>;</li>
-					<li>in standalone games, a nullifier path that does not reproduce the current nullifier root from an empty leaf, which includes an already-consumed nullifier: <code>Bad nullifier proof</code>.</li>
+					<li>a <code>parentDepositIndex</code> this game has already settled: <code>Deposit settled</code>.</li>
 				</ul>
 				<h3>Conformance vectors</h3>
 				<table>
@@ -109,10 +108,6 @@ bagPeaks(peaks, peakCount):
 							<td>Three-leaf root</td>
 							<td><code>0x3488c83edd77c5259c9432e90f972d45d0ced819fd3691eddfe41fe05d676564</code></td>
 						</tr>
-						<tr>
-							<td>Empty nullifier root</td>
-							<td><code>0xe2c3ed4052eeb1d60514b4c38ece8d73a27f37fa5b36dcbf338e70de95798caa</code></td>
-						</tr>
 					</tbody>
 				</table>
 			</section>
@@ -140,7 +135,7 @@ bagPeaks(peaks, peakCount):
 
 			<section id="proofs">
 				<h2>Proof structure</h2>
-				<p>Every carried-deposit proof authenticates membership in the inherited MMR snapshot for one outcome. In canonical games, whose REP is held by the security pool reporter ledger, <code>appendOnlyCarry()</code> returns true: live roots only append, finalized claims leave historical membership intact, and a per-game consumed-deposit check prevents replay. Builders pass an empty <code>nullifierSiblings</code> array. Standalone games, which hold REP directly, also require a nullifier proof that the inherited leaf has not been consumed.</p>
+				<p>Every carried-deposit proof authenticates membership in the inherited MMR snapshot for one outcome. Carry is append-only: deposits are settled only after finality, settled leaves stay in the carry roots, and a live fork export never contains a spent deposit. Each game records the <code>parentDepositIndex</code> of every deposit it settles and rejects a second claim for the same identity, so a proof cannot be replayed.</p>
 				<table>
 					<thead>
 						<tr>
@@ -154,28 +149,20 @@ bagPeaks(peaks, peakCount):
 							<td>Proves the carried deposit belongs to the inherited snapshot root for that outcome.</td>
 						</tr>
 						<tr>
-							<td><code>nullifierSiblings</code></td>
-							<td>Standalone games: proves the nullifier leaf is still empty. Canonical games use the consumed-deposit check instead and accept an empty array.</td>
+							<td><code>parentDepositIndex</code></td>
+							<td>Identifies the deposit for the replay check. <code>getProofConsumedCarriedDepositIndexesByOutcome</code> lists the identities this game has already settled by proof.</td>
 						</tr>
 					</tbody>
 				</table>
 				<figure class="diagram diagram-wide" id="fig-mmr-proof-anatomy">
-					<div class="plot-chart" data-plot-chart="fig-mmr-proof-anatomy" data-plot-width="940" data-plot-height="1390" role="img" aria-label="A standalone carried-deposit proof has an MMR membership lane and a separate nullifier lane"><span class="plot-chart-fallback">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane uses the unique carry leaf position and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Standalone carry proof anatomy.</span> The MMR sibling array first reconstructs one selected peak and then supplies every other occupied peak. The independent 64-level nullifier path uses the proof-bound MMR leaf index directly, so distinct leaves cannot collide in one slot. The position persists through descendant snapshots.</p>
+					<div class="plot-chart" data-plot-chart="fig-mmr-proof-anatomy" data-plot-width="940" data-plot-height="1288" role="img" aria-label="A carried-deposit claim has an MMR membership lane and a consumed-deposit replay check"><span class="plot-chart-fallback">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The replay lane looks up the deposit’s parentDepositIndex in the game’s consumed-deposit record, which must not already contain it.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Carry proof anatomy.</span> The MMR sibling array first reconstructs one selected peak and then supplies every other occupied peak. The replay check needs no witness: the game looks up the deposit identity in its own consumed-deposit record.</p>
 				</figure>
-				<p><code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the leaf's global position across the whole snapshot. The verifier derives the peak that contains that position, requires <code>merkleMountainRangePeakIndex</code> to equal its height, and orders the in-peak siblings by the in-peak offset <code>leafIndex - peakStart</code>, where <code>peakStart</code> is the <code>peakStartIndex</code> returned by <code>getCurrentCarryPeakForLeaf</code>. The game identifies inherited leaves and nullifier positions by this global index. For example, if the full snapshot has <code>13</code> leaves, the height-<code>3</code> peak holds global leaves <code>0</code> through <code>7</code>, the height-<code>2</code> peak holds <code>8</code> through <code>11</code>, and the height-<code>0</code> peak holds <code>12</code>. A proof for the third leaf of the height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and <code>leafIndex = 10</code>; its in-peak offset is <code>2</code>.</p>
+				<p><code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the leaf's global position across the whole snapshot. The verifier derives the peak that contains that position, requires <code>merkleMountainRangePeakIndex</code> to equal its height, and orders the in-peak siblings by the in-peak offset <code>leafIndex - peakStart</code>, where <code>peakStart</code> is the first global index of that peak. The game identifies inherited leaves by this global index. For example, if the full snapshot has <code>13</code> leaves, the height-<code>3</code> peak holds global leaves <code>0</code> through <code>7</code>, the height-<code>2</code> peak holds <code>8</code> through <code>11</code>, and the height-<code>0</code> peak holds <code>12</code>. A proof for the third leaf of the height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and <code>leafIndex = 10</code>; its in-peak offset is <code>2</code>.</p>
 				<p><code>merkleMountainRangeSiblings</code> is also ordered in two phases. The first <code>merkleMountainRangePeakIndex</code> entries are the bottom-up Merkle siblings inside the selected peak. The remaining entries are the other occupied peak roots in ascending peak-height order, skipping the selected peak height. That exact ordering is why the verifier checks <code>merkleMountainRangeSiblings.length == peakHeight + peakCount - 1</code>.</p>
-				<h3 id="nullifier-tree">Standalone nullifier tree</h3>
-				<p>Each standalone continuation outcome keeps a binary Merkle tree of fixed depth <code>NULLIFIER_DEPTH = 64</code>, hashed with the same <code>parentHash</code>.</p>
-				<ul>
-					<li>The path is the proof-bound <code>leafIndex</code>, which must fit 64 bits: bit <code>d</code>, counted from the least significant bit, selects the side at depth <code>d</code>, starting at the leaf. A <code>0</code> bit hashes <code>parentHash(node, sibling)</code>; a <code>1</code> bit hashes <code>parentHash(sibling, node)</code>.</li>
-					<li>An unconsumed leaf is <code>bytes32(0)</code>; a consumed leaf is <code>bytes32(uint256(1))</code>.</li>
-					<li>The empty root is <code>bytes32(0)</code> hashed with itself 64 times: <code>root = parentHash(root, root)</code>. Its value is in the <a href="#encoding">conformance vectors</a>.</li>
-					<li><code>nullifierSiblings</code> lists the 64 siblings from the leaf upward. The verifier recomputes the current root with the empty leaf, then stores the root recomputed with the consumed leaf.</li>
-				</ul>
 				<details class="interactive-example" id="mmr-proof-planner" open>
-					<summary>Plan a standalone carry proof</summary>
-					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact sibling-array lengths the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
+					<summary>Plan a carry proof</summary>
+					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact <code>merkleMountainRangeSiblings</code> length the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Selection</span><output data-mmr-output="selection">Valid in-peak offset</output></div>
 						<div data-primary-output><span>Selected peak capacity</span><output data-mmr-output="capacity">4 leaves; leafIndex 8…11</output></div>
@@ -209,13 +196,9 @@ bagPeaks(peaks, peakCount):
 						</div>
 						<div class="tool-workspace-view">
 							<div class="example-output-grid tool-detail-grid mmr-proof-profile" data-tool-output-region>
-								<div class="mmr-proof-length" style="--widget-meter: 6.25%" data-widget-meter="true">
+								<div class="mmr-proof-length" style="--widget-meter: 3.1746031746031744%" data-widget-meter="true">
 									<span>MMR sibling hashes required</span>
 									<output data-mmr-output="mmrSiblings">4</output>
-								</div>
-								<div class="mmr-proof-length" style="--widget-meter: 100%" data-widget-meter="true">
-									<span>Nullifier sibling hashes required</span>
-									<output data-mmr-output="nullifierSiblings">64</output>
 								</div>
 								<div>
 									<span>Binary leaf count</span>
@@ -233,7 +216,7 @@ bagPeaks(peaks, peakCount):
 
 			<section id="snapshots">
 				<h2>Snapshots in child continuations</h2>
-				<p>Each continuation outcome stores both an inherited snapshot baseline and a mutable current state.</p>
+				<p>Each continuation outcome stores both an inherited snapshot baseline and an append-only current state.</p>
 				<table>
 					<thead>
 						<tr>
@@ -248,19 +231,15 @@ bagPeaks(peaks, peakCount):
 						</tr>
 						<tr>
 							<td><code>currentLeafCount</code> and <code>currentPeaks</code></td>
-							<td>The descendant carry snapshot after inherited initialization and local appends. Canonical claims retain these historical peaks. Standalone local claims remove their carry leaves; standalone inherited claims update <code>currentNullifierRoot</code> instead.</td>
+							<td>The descendant carry snapshot after inherited initialization and local appends. Claims never remove leaves from these peaks.</td>
 						</tr>
 						<tr>
 							<td><code>inheritedUnresolvedTotalAttoRep</code> and <code>localUnresolvedTotalAttoRep</code></td>
 							<td>The principal totals the current carry state must still represent.</td>
 						</tr>
-						<tr>
-							<td><code>currentNullifierRoot</code></td>
-							<td>The replay-protection root for standalone games; canonical games retain the empty root.</td>
-						</tr>
 					</tbody>
 				</table>
-				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, totals, and nullifier roots after local appends and proof consumption. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves in newest-first order. Its <code>maxEntries</code> parameter bounds visited nodes, including consumed leaves. An empty or short page can return a nonzero <code>nextPageNodeId</code>; pass that cursor as <code>startNodeId</code> to continue until the cursor is zero.</p>
+				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, and unresolved totals after local appends and settlement. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves in newest-first order. Its <code>maxEntries</code> parameter bounds visited nodes, including consumed leaves. An empty or short page can return a nonzero <code>nextPageNodeId</code>; pass that cursor as <code>startNodeId</code> to continue until the cursor is zero.</p>
 			</section>
 
 			<section id="sources">

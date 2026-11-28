@@ -4,7 +4,6 @@ import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_Qu
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, WEEK, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -76,7 +75,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 			for (const outcome of OUTCOMES) {
 				await expect(r2.simulateContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, N / 10n] })).rejects.toThrow()
 				const first = leaves[outcome]?.[0]
-				if (first !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, outcome, leaves[outcome] ?? [], first, new SparseNullifierTree())).rejects.toThrow('Question not final')
+				if (first !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, outcome, leaves[outcome] ?? [], first)).rejects.toThrow('Question not final')
 			}
 			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Question not final')
 		}
@@ -136,7 +135,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 			expect(await owner.readContract({ ...g, functionName: 'getFinalQuestionResolution' })).toBe(BigInt(outcome))
 			for (const losing of OUTCOMES) {
 				const loser = leaves[losing]?.[0]
-				if (losing !== outcome && loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, pool, losing, leaves[losing] ?? [], loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
+				if (losing !== outcome && loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, pool, losing, leaves[losing] ?? [], loser)).rejects.toThrow('Not winning outcome')
 			}
 			const supplyBefore = await e2e.supply(universe)
 			const wallets = new Map<Address, bigint>()

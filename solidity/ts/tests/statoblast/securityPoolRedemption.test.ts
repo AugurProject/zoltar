@@ -336,7 +336,7 @@ describe('Statoblast: native finalized security pool redemptions', () => {
 		const reportHash = await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit], gas: 14_000_000n }))
 		const [firstReport] = await owner.readContract({ ...ledger, functionName: 'scaledQuestion', args: [childBook, reportTarget] })
 		const services = await owner.readContract({ ...securityPool(), functionName: 'services' })
-		const [premiumUnits] = await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'questionPremium', args: [child, reportTarget] })
+		const [premiumUnits] = await owner.readContract({ abi: premiumArtifact.abi, address: await owner.readContract({ abi: servicesArtifact.abi, address: services, functionName: 'premiumLedger' }), functionName: 'question', args: [child, reportTarget] })
 		expect(premiumUnits).toBeGreaterThan(0n)
 		const childGame = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		const activation = await owner.readContract({ abi: gameArtifact.abi, address: childGame, functionName: 'activationTime' })

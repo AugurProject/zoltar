@@ -24,7 +24,7 @@ const definitions = (domain: DomainEventProjection['domain'], entityType: string
 const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
 	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
-	...definitions('system', 'reputation-token', ['ReputationTokenInitialized', 'TheoreticalSupplySet', 'Mint', 'Burn']),
+	...definitions('system', 'reputation-token', ['ReputationTokenInitialized', 'Burn']),
 	...definitions('system', 'share-token', ['ApprovalForAll', 'AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate', 'SecurityPoolRecoveryRightsTransferred', 'SecurityPoolRecoveryRightsConsumed']),
 	...definitions('risk', 'pool', ['CompleteSetRedeemedByTransfer'], ['questionLedger']),
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
@@ -33,7 +33,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('oracle', 'arbitrage-executor', ['HedgeAndDisputeExecuted', 'LifecycleExecuted', 'ReplacementCreditWithdrawn']),
 	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceRequested']),
 	...definitions('oracle', 'open-oracle', ['InternalApproval']),
-	...definitions('oracle', 'price-feed', ['ExposureCheckpoint', 'PriceCandidateAccepted', 'ReportFundingAssigned', 'ReportOperationAttempted']),
+	...definitions('oracle', 'price-feed', ['PriceCandidateAccepted', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
 		'ClaimDeposit',
@@ -55,8 +55,8 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	// The reporter ledger names the game it registers or schedules, so both join that game's history.
 	...definitions('escalation', 'escalation', ['GameRegistered', 'ReporterFinalityScheduled'], ['game']),
 	...definitions('risk', 'reporter-ledger', ['ReporterBalanceChanged'], ['universeId']),
-	...definitions('auction', 'auction', ['RepairAuctionStarted', 'BidSubmitted', 'RepairAuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
-	...definitions('risk', 'pool', ['DeployQuestionLedger', 'QuestionLedgerRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['questionLedger']),
+	...definitions('auction', 'auction', ['RepairAuctionStarted', 'BidSubmitted', 'RepairAuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn']),
+	...definitions('risk', 'pool', ['DeployQuestionLedger', 'QuestionLedgerRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'SharesRedeemed', 'SystemStateSet'], ['questionLedger']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'HealthTargetSet', 'EarningsClaimed'], ['owner']),
 	// Claiming a winning bid moves its lots into its bidder's own capital account, so the bidder is the owner.
 	...definitions('risk', 'vault', ['RepairAuctionBidMaterialized'], ['bidder']),
@@ -77,7 +77,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	// A report escrow completes one funded report for the shared feed that created it, so the event joins that feed's history.
 	...definitions('oracle', 'price-feed', ['ReportCompleted'], ['priceFeed']),
 	...definitions('trading', 'amm', ['PositionExitedByTransfer', 'PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
-	...definitions('fork', 'fork', ['ChildReputationTokenInitialized', 'UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId']),
+	...definitions('fork', 'fork', ['UniverseInitialized', 'UniverseForked', 'DeployChild', 'MigrationRepAdded', 'MigrationRepSplit', 'RepBurned'], ['universeId']),
 }
 
 // Every taxonomy entry must name an event the pinned ABI catalog can decode;
@@ -102,10 +102,8 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'questionLedger',
 	'securityPoolCapitalRepairAuctionDelegate',
 	'securityPoolCapitalLifecycleDelegate',
-	'questionLedgerEventEmitter',
+	'questionLedgerDelegate',
 	'securityPoolFactory',
-	'questionLedgerOperationsDelegate',
-	'questionLedgerSettlementDelegate',
 	'shareToken',
 	'sharedPoolPriceFeed',
 	'weth',

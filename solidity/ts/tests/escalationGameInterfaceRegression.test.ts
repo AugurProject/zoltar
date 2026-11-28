@@ -13,7 +13,7 @@ test('production games expose no ancestor checkpoint interface or linked librari
 	const output = getEscalationGameOutput()
 	const abi = getArray(output['abi'], 'Game ABI missing')
 	const names = abi.map(entry => getRecord(entry, 'Invalid ABI entry')['name'])
-	for (const removed of ['processClaimCheckpoint', 'getInheritedClaimAllocation', 'getClaimCheckpointProgress', 'rootClaimSourceGame']) assert.ok(!names.includes(removed))
+	for (const removed of ['processClaimCheckpoint', 'getInheritedClaimAllocation', 'getClaimCheckpointProgress', 'rootClaimSourceGame', 'claimDepositForWinning', 'appendOnlyCarry']) assert.ok(!names.includes(removed))
 	const evm = getRecord(output['evm'], 'Game EVM missing')
 	assert.deepStrictEqual(getRecord(evm['bytecode'], 'Creation bytecode missing')['linkReferences'], {})
 })
@@ -123,35 +123,30 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'forkElapsedAtStart', slot: '6', offset: 0, type: 'int256' },
 			{ label: 'forkResumedAt', slot: '7', offset: 0, type: 'uint256' },
 			{ label: 'outcomeState', slot: '8', offset: 0, type: 'struct OutcomeState[3]' },
-			{ label: 'nextNodeId', slot: '236', offset: 0, type: 'uint256' },
-			{ label: 'nodes', slot: '237', offset: 0, type: 'mapping(uint256 => struct Node)' },
-			{ label: 'vaultAccounting', slot: '238', offset: 0, type: 'mapping(address => struct EscalationGameStorage.VaultAccounting)' },
-			{ label: 'totalDisputeStakedAttoRep', slot: '239', offset: 0, type: 'uint256' },
-			{ label: 'totalLocalUnresolvedAttoRep', slot: '240', offset: 0, type: 'uint256' },
-			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '241', offset: 0, type: 'bool' },
-			{ label: 'winnerHaircutPaidByFork', slot: '241', offset: 1, type: 'bool' },
-			{ label: 'forkCarryInitialBackingAttoRep', slot: '242', offset: 0, type: 'uint256' },
-			{ label: 'forkCarryDisputeStakedAttoRep', slot: '243', offset: 0, type: 'uint256' },
-			{ label: 'forkCarrySourceGame', slot: '244', offset: 0, type: 'address' },
-			{ label: 'fixedQuestionOutcome', slot: '244', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
-			{ label: 'nonDecisionState', slot: '244', offset: 21, type: 'enum NonDecisionState' },
-			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '244', offset: 22, type: 'uint8' },
-			{ label: 'forkCarrySnapshotId', slot: '245', offset: 0, type: 'bytes32' },
-			{ label: 'ordinarySettlementInitialized', slot: '246', offset: 0, type: 'bool' },
-			{ label: 'ordinarySettlementOutcome', slot: '246', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
-			{ label: 'ordinaryWinningReserveAttoRep', slot: '247', offset: 0, type: 'uint256' },
-			{ label: 'creditedSurplusAttoRep', slot: '248', offset: 0, type: 'uint256' },
-			{ label: 'settlementForkThresholdAttoRep', slot: '249', offset: 0, type: 'uint256' },
-			{ label: 'cachedBindingCapitalAttoRep', slot: '250', offset: 0, type: 'uint256' },
-			{ label: 'cachedFinalityElapsed', slot: '251', offset: 0, type: 'uint256' },
+			{ label: 'nextNodeId', slot: '230', offset: 0, type: 'uint256' },
+			{ label: 'nodes', slot: '231', offset: 0, type: 'mapping(uint256 => struct Node)' },
+			{ label: 'localUnresolvedPrincipalByVault', slot: '232', offset: 0, type: 'mapping(address => uint256[3])' },
+			{ label: 'totalDisputeStakedAttoRep', slot: '233', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '234', offset: 0, type: 'bool' },
+			{ label: 'winnerHaircutPaidByFork', slot: '234', offset: 1, type: 'bool' },
+			{ label: 'forkCarryInitialBackingAttoRep', slot: '235', offset: 0, type: 'uint256' },
+			{ label: 'forkCarryDisputeStakedAttoRep', slot: '236', offset: 0, type: 'uint256' },
+			{ label: 'forkCarrySourceGame', slot: '237', offset: 0, type: 'address' },
+			{ label: 'fixedQuestionOutcome', slot: '237', offset: 20, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'nonDecisionState', slot: '237', offset: 21, type: 'enum NonDecisionState' },
+			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '237', offset: 22, type: 'uint8' },
+			{ label: 'forkCarrySnapshotId', slot: '238', offset: 0, type: 'bytes32' },
+			{ label: 'ordinarySettlementInitialized', slot: '239', offset: 0, type: 'bool' },
+			{ label: 'ordinarySettlementOutcome', slot: '239', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'ordinaryWinningReserveAttoRep', slot: '240', offset: 0, type: 'uint256' },
+			{ label: 'creditedSurplusAttoRep', slot: '241', offset: 0, type: 'uint256' },
+			{ label: 'settlementForkThresholdAttoRep', slot: '242', offset: 0, type: 'uint256' },
+			{ label: 'cachedBindingCapitalAttoRep', slot: '243', offset: 0, type: 'uint256' },
+			{ label: 'cachedFinalityElapsed', slot: '244', offset: 0, type: 'uint256' },
 		],
 	)
 
 	const typeTable = getStorageTypes(escalationGameOutput)
-	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct EscalationGameStorage.VaultAccounting'), [
-		{ label: 'unresolvedAttoRep', slot: '0', offset: 0, type: 'uint256' },
-		{ label: 'localUnresolvedPrincipalByOutcome', slot: '1', offset: 0, type: 'uint256[3]' },
-	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct OutcomeState'), [
 		{ label: 'balanceAttoRep', slot: '0', offset: 0, type: 'uint256' },
 		{ label: 'snapshotLeafCount', slot: '1', offset: 0, type: 'uint256' },
@@ -159,13 +154,11 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 		{ label: 'inheritedUnresolvedTotalAttoRep', slot: '3', offset: 0, type: 'uint256' },
 		{ label: 'currentLeafCount', slot: '4', offset: 0, type: 'uint256' },
 		{ label: 'currentPeaks', slot: '5', offset: 0, type: 'bytes32[64]' },
-		{ label: 'currentNullifierRoot', slot: '69', offset: 0, type: 'bytes32' },
-		{ label: 'localHeadNodeId', slot: '70', offset: 0, type: 'uint256' },
-		{ label: 'localUnresolvedTotalAttoRep', slot: '71', offset: 0, type: 'uint256' },
-		{ label: 'localNodeIds', slot: '72', offset: 0, type: 'uint256[]' },
-		{ label: 'currentCarryNodeHashes', slot: '73', offset: 0, type: 'mapping(uint256 => mapping(uint256 => bytes32))' },
-		{ label: 'consumedParentDepositIndexes', slot: '74', offset: 0, type: 'mapping(uint256 => bool)' },
-		{ label: 'proofConsumedDepositIndexes', slot: '75', offset: 0, type: 'uint256[]' },
+		{ label: 'localHeadNodeId', slot: '69', offset: 0, type: 'uint256' },
+		{ label: 'localUnresolvedTotalAttoRep', slot: '70', offset: 0, type: 'uint256' },
+		{ label: 'localNodeIds', slot: '71', offset: 0, type: 'uint256[]' },
+		{ label: 'consumedParentDepositIndexes', slot: '72', offset: 0, type: 'mapping(uint256 => bool)' },
+		{ label: 'proofConsumedDepositIndexes', slot: '73', offset: 0, type: 'uint256[]' },
 	])
 	assert.deepStrictEqual(storageMemberSummary(typeTable, 'struct Node'), [
 		{ label: 'parentNodeId', slot: '0', offset: 0, type: 'uint256' },

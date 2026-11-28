@@ -49,7 +49,7 @@ describe('security pool abandoned funding integration', () => {
 			// Unrelated manual deposits are not part of the operator's funding journal.
 			await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.token, abi: erc20Abi, functionName: 'transfer', args: [account.address, 5n * unit] }))
 			await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.token, abi: erc20Abi, functionName: 'approve', args: [context.capital, 5n * unit] }))
-			await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'depositFor', args: [account.address, 5n * unit] }))
+			await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'deposit', args: [5n * unit] }))
 			const walletBefore = await context.balance(account.address)
 			expect(await executeUnusedSecurityPoolFunding(wallet, settings, state, pool, funded, async () => true)).toBe(true)
 			expect(await context.balance(account.address)).toBe(walletBefore + journal.amount)

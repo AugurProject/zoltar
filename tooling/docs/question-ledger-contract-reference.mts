@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: '8e994bcada473de1176cf54eab6f96fde29e682ca4a96ad057b32ae152ce3a57',
+	compiledAbiFingerprint: '4f97bfd0bab8c31d9feb92cd9e7b4a5deb8a0f101af0a5bad29a7010dbb04b96',
 	name: 'QuestionLedger',
 	interactionNotes: 'See the [security pool module boundaries](./contract-inventory.html#security-pool-boundary) for capital, settlement, and reporter custody.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
-	readAbiFingerprint: '5fa6edd85169b799786d8411da7312ce2945b82e1984edca945be970ced6e3b7',
+	readAbiFingerprint: '39577cbecb307d806103962c9af8042e5d486d5c35ce6b04d649e8d544a90c63',
 	readSurface:
-		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `additionalMintCapacityAttoEth` is zero once the question ends, reporting starts or its admission policy rejects it; otherwise it returns available shared capacity, excluding existing question collateral. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. The collateral quote projects holding fees through the effective price checkpoint. After the source book seals, active source claims quote zero current collateral and REP proceeds; protected claims finalized in that source retain their ordinary quotes. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. The settlement book tracks each question’s fee stream. An unreported question can continue paying fees after its calendar end until reporting starts. `initialReportingResponseWindow` returns the seconds between the first report and ordinary escalation game activation, and can be read before a game exists. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceFeed`, `openOracle`, `escalationGameFactory`, `accountingModule`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
+		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `additionalMintCapacityAttoEth` is zero once the question ends, reporting starts or its admission policy rejects it; otherwise it returns available shared capacity, excluding existing question collateral. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. The collateral quote projects holding fees through the effective price checkpoint. After the source book seals, active source claims quote zero current collateral and REP proceeds; protected claims finalized in that source retain their ordinary quotes. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. The settlement book tracks each question’s fee stream. An unreported question can continue paying fees after its calendar end until reporting starts. `initialReportingResponseWindow` returns the seconds between the first report and ordinary escalation game activation, and can be read before a game exists. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceFeed`, `openOracle`, `escalationGameFactory`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
 	securityBoundary:
 		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 REP and selected collateral behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated question ledger calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
@@ -61,9 +61,6 @@ export const questionLedgerContractReference: ContractReference = {
 			name: 'escalationGameFactory',
 		},
 		{
-			name: 'accountingModule',
-		},
-		{
 			name: 'escalationGame',
 			sourcePath: 'solidity/contracts/statoblast/QuestionLedgerStorage.sol',
 		},
@@ -82,7 +79,6 @@ export const questionLedgerContractReference: ContractReference = {
 		},
 		{
 			name: 'statoblastSecurityMultiplierBps',
-			sourcePath: 'solidity/contracts/statoblast/QuestionLedgerStorage.sol',
 		},
 		{
 			name: 'shareTokenSupplyAttoShares',
@@ -284,14 +280,14 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)`',
+			call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep)`',
 			caller: '`QuestionForker` only',
 			declarations: [
 				{
 					name: 'initializeForkCarryOutcome',
 				},
 			],
-			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Canonical live sources require empty nullifier roots and cannot export finalized claims.',
+			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Sources export only live carry, which never contains spent deposits.',
 			preconditions: 'A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.',
 			signals: '`ForkCarryCheckpoint` on completion of the third outcome',
 		},
@@ -330,18 +326,6 @@ export const questionLedgerContractReference: ContractReference = {
 			effect: 'Replaces the question ledger lifecycle state directly, then refreshes bound security pool fee accounting.',
 			preconditions: 'No transition or value-change guard.',
 			signals: '`SystemStateSet`, including for a repeated state; bound question ledgers then emit central checkpoints and stream replacement when applicable',
-		},
-		{
-			call: '`setShareTokenSupplyAttoShares(newShareTokenSupplyAttoShares)`',
-			caller: 'QuestionForker only',
-			declarations: [
-				{
-					name: 'setShareTokenSupplyAttoShares',
-				},
-			],
-			effect: 'Initializes the child question share-supply mirror.',
-			preconditions: 'Caller is the immutable forker.',
-			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
 			call: '`authorizeChildQuestionLedger(pool)`',

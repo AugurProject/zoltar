@@ -173,7 +173,7 @@
 											If the status oracle has no code, its mask is unavailable. Set bits indicate code presence only. Read <a href="../reference/deployment-status.html"><code>getDeploymentMask()</code></a>
 										</li>
 										<li>Runtime hashes: <a href="./launch-a-release.html#launch-release-checklist">release checklist</a></li>
-										<li>For inherited claims, record the indexer coverage start and snapshot block. Reconstruct the outcome snapshot root from canonical history and check membership. Include the nullifier path for standalone games.</li>
+										<li>For inherited claims, record the indexer coverage start and snapshot block. Reconstruct the outcome snapshot root from canonical history, check membership, and check that the deposit identity is not in <code>getProofConsumedCarriedDepositIndexesByOutcome</code>.</li>
 										<li>Check the signer inventory and on-chain approvals for the owner, spender or operator, asset and chain. Inspect typed-data domains and nonces before signing.</li>
 									</ul>
 								</td>

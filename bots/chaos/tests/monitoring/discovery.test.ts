@@ -42,7 +42,7 @@ test('keyless discovery scans protocol topology without querying account invento
 })
 
 test('discovers a fully prepared security pool with no admitted questions', async () => {
-	const fake = refundBackfillClient(0n)
+	const fake = refundBackfillClient()
 	const identity = topologyIdentity()
 	const { chainId: _chainId, ...deployments } = identity
 	const capital = await discoverSecurityPoolCapital({ client: fake.client, deployments, wallet: address(1), anchorBlockNumber: 10n }, [], 10n)
@@ -68,13 +68,13 @@ test('monitors inventory for a known execution address without requiring a signe
 })
 
 test('discovers live shared exposure despite oversized fresh accepted capacity', async () => {
-	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n })
+	const fake = refundBackfillClient(false, { sharedExposure: 10n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(21), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { settlementBountyMultiplierBps: '30000' } })
 })
 
 test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
-	const fake = refundBackfillClient(0n, false, { sharedExposure: 0n })
+	const fake = refundBackfillClient(false, { sharedExposure: 0n })
 	const funding = {
 		escalationHaltMultiplierBps: '10000',
 
@@ -107,7 +107,7 @@ for (const shared of [false, true])
 		})
 
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
-	const fake = refundBackfillClient(25n)
+	const fake = refundBackfillClient()
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.pools).toHaveLength(1)
 	expect(snapshot.auctions).toHaveLength(1)
@@ -484,7 +484,7 @@ interface RefundBackfillOverrides {
 	auctionFinalized?: boolean
 	baseFeePerGas?: bigint
 }
-function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegistered = false, overrides: RefundBackfillOverrides = {}) {
+function refundBackfillClient(_walletVaultRegistered = false, overrides: RefundBackfillOverrides = {}) {
 	const pool = address(20)
 	const coordinator = address(21)
 	const shareToken = address(22)
@@ -516,8 +516,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				expect(parameters.args).toEqual([[1n]])
 				return { result: [0n] }
 			}
-			expect(parameters.functionName).toBe('settleRefund')
-			expect(parameters.args).toEqual([1n])
+			expect(parameters.functionName).toBe('refundBid')
+			expect(parameters.args?.[0]).toBe(1n)
 			return { result: undefined }
 		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string; gasPrice?: bigint }) {
@@ -595,7 +595,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 10n ** 18n
 				case 'closesAt':
 					return 2000n
-				case 'opensAt':
 				case 'repGrid':
 				case 'lotAttoEth':
 				case 'minimumCollateralAttoRepPerLot':
@@ -604,8 +603,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'maximumBidAttoRepPerLot':
 				case 'maximumAdmissibleBidAttoRepPerLot':
 					return 1000n
-				case 'refundCreditAttoEth':
-					return pendingRefundAttoEth
 				case 'originUniverseId':
 				case 'purchaseFeeBps':
 				case 'annualFeeBps':
@@ -739,7 +736,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 
 describe('anchored ecosystem discovery', () => {
 	test.each([0n, 1n, 1_111_894_317n])('preserves the anchored base fee %s in oracle funding reads', async baseFeePerGas => {
-		const fake = refundBackfillClient(0n, false, { baseFeePerGas })
+		const fake = refundBackfillClient(false, { baseFeePerGas })
 		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 		expect(snapshot.pools).toHaveLength(1)
 		expect(snapshot.pools[0]).toMatchObject({
@@ -748,27 +745,8 @@ describe('anchored ecosystem discovery', () => {
 		})
 	})
 
-	test('allows positive auction refunds while the authenticated episode index is absent or lagging', async () => {
-		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
-		const missing = refundBackfillClient(8n)
-		const withoutIndex = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: missing.client, deployments, wallet: address(1) })
-		expect(withoutIndex.auctions).toContainEqual(expect.objectContaining({ address: missing.collateralRepairAuction, pendingEthRefund: '8' }))
-		expect(withoutIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
-
-		const lagging = refundBackfillClient(8n)
-		const withLaggingIndex = await discoverEcosystemSnapshot({
-			anchorBlockNumber: 10n,
-			client: lagging.client,
-			deployments,
-			indexedAuctionRefunds: { [address(24).toLowerCase()]: { generation: hash(700), pendingAttoEth: 5n.toString() } },
-			wallet: address(1),
-		})
-		expect(withLaggingIndex.auctions).toContainEqual(expect.objectContaining({ address: lagging.collateralRepairAuction, pendingEthRefund: '8' }))
-		expect(withLaggingIndex.auctions[0]?.pendingEthRefundGeneration).toBeUndefined()
-	})
-
 	test('uses anchored refund simulation to classify finalized losing bids', async () => {
-		const fixture = refundBackfillClient(0n, false, { auctionFinalized: true })
+		const fixture = refundBackfillClient(false, { auctionFinalized: true })
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fixture.client,
@@ -776,7 +754,7 @@ describe('anchored ecosystem discovery', () => {
 			wallet: address(1),
 			indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', lots: '1', minimumAttoRepPerLot: 100n.toString(), settled: false }] },
 		})
-		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'], capital: address(91), claimableBidIds: ['1'] })
+		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'], capital: address(91), claimableBidIds: ['1'], unclaimedBidIds: ['1'] })
 		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidId: '1' }) })])
 		// A finalized bid must be claimed, winning or not, before the wallet can choose a branch in a later fork.
 		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.claim-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidIds: '1' }) })])
@@ -1581,21 +1559,21 @@ test('rejects a deployed trading router without its factory', async () => {
 })
 
 test.each(['universe forked', 'no saleable lots', 'quote is not funded and fresh'])('auction discovery rejects an anchored opening revert: %s', async reason => {
-	const fake = refundBackfillClient(0n, false, { auctionOpened: false, auctionOpeningError: new Error(`execution reverted: ${reason}`) })
+	const fake = refundBackfillClient(false, { auctionOpened: false, auctionOpeningError: new Error(`execution reverted: ${reason}`) })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.auctions[0]?.openingExpectedSuccess).toBe(false)
 })
 
 test('auction discovery distinguishes a successful opening from a provider failure', async () => {
-	const fake = refundBackfillClient(0n, false, { auctionOpened: false })
+	const fake = refundBackfillClient(false, { auctionOpened: false })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.auctions[0]?.openingExpectedSuccess).toBe(true)
-	const failed = refundBackfillClient(0n, false, { auctionOpened: false, auctionOpeningError: new Error('Read provider unavailable') })
+	const failed = refundBackfillClient(false, { auctionOpened: false, auctionOpeningError: new Error('Read provider unavailable') })
 	await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: failed.client, deployments: snapshotFixture().deployments, wallet: undefined })).rejects.toThrow('Read provider unavailable')
 })
 
 test('discovery samples recovery REP redemption alongside the live collateral quote', async () => {
-	const fake = refundBackfillClient(0n, false, { recoveryAttoRep: 250n })
+	const fake = refundBackfillClient(false, { recoveryAttoRep: 250n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.pools[0]?.projectedSettlementRecoveryAttoRep).toBe('250')
 })
@@ -1605,7 +1583,7 @@ test('#1506: purchase discovery uses additional capacity without subtracting exi
 	const pool = pools[0]
 	if (pool === undefined) throw new Error('Missing purchase fixture')
 	Object.assign(pool, { additionalMintCapacityAttoEth: 100n.toString(), settlementCollateralAttoEth: 50n.toString() })
-	const context = { anchorBlockNumber: 10n, client: refundBackfillClient(0n, false, { purchaseShares: 50n }).client, deployments, wallet: wallet.address }
+	const context = { anchorBlockNumber: 10n, client: refundBackfillClient(false, { purchaseShares: 50n }).client, deployments, wallet: wallet.address }
 	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 101n }, pool, 10n)).toBeUndefined()
 	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 100n }, pool, 10n)).toMatchObject({ mintAttoEth: 100n.toString() })
 	pool.settlementCollateralAttoEth = '101'
@@ -1615,7 +1593,7 @@ test('#1506: purchase discovery uses additional capacity without subtracting exi
 })
 
 test('#1701 fully filled bids do not schedule a zero-value standalone refund', async () => {
-	const fixture = refundBackfillClient(0n, false, { auctionFinalized: true, auctionRefundAttoEth: 0n })
+	const fixture = refundBackfillClient(false, { auctionFinalized: true, auctionRefundAttoEth: 0n })
 	const snapshot = await discoverEcosystemSnapshot({
 		anchorBlockNumber: 10n,
 		client: fixture.client,

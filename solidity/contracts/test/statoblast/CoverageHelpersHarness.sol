@@ -68,6 +68,11 @@ contract EscalationGameFactoryCoverageQuestionLedger {
 		return address(0);
 	}
 
+	/// @dev An unbound ledger reports no security pool custody.
+	function securityPoolCustody() external pure returns (address) {
+		return address(0);
+	}
+
 	function deployStartedGame(EscalationGameFactory factory, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep) external returns (EscalationGame) {
 		return factory.deployEscalationGame(startBondAttoRep, nonDecisionThresholdAttoRep);
 	}
@@ -107,12 +112,12 @@ contract CoverageHelpersHarness {
 		return TokenId.getTokenId(universeId, outcome);
 	}
 
-	function getTokenIds(uint248 universeId, BinaryOutcomes.BinaryOutcome[] calldata outcomes) external pure returns (uint256[] memory) {
-		return TokenId.getTokenIds(universeId, outcomes);
+	function getTokenUniverseId(uint256 tokenId) external pure returns (uint248) {
+		return TokenId.getUniverseId(tokenId);
 	}
 
-	function unpackTokenId(uint256 tokenId) external pure returns (uint248 universe, BinaryOutcomes.BinaryOutcome outcome) {
-		return TokenId.unpackTokenId(tokenId);
+	function getChildTokenId(uint256 tokenId, uint248 childUniverseId) external pure returns (uint256) {
+		return TokenId.getChildId(tokenId, childUniverseId);
 	}
 
 	function hashLeaf(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId) external pure returns (bytes32) {
@@ -126,14 +131,6 @@ contract CoverageHelpersHarness {
 
 	function bagPeaks(bytes32[] memory peaks, uint256 peakCount) external pure returns (bytes32) {
 		return MerkleMountainRange.bagPeaks(peaks, peakCount);
-	}
-
-	function computeEmptyNullifierRoot() external view returns (bytes32) {
-		return proofVerifier.computeEmptyNullifierRoot();
-	}
-
-	function getCurrentCarryPeakForLeaf(uint256 leafCount, uint256 leafIndex) external view returns (uint256 peakHeight, uint256 peakStartIndex) {
-		return proofVerifier.getCurrentCarryPeakForLeaf(leafCount, leafIndex);
 	}
 
 	function bagCarryPeaks(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] memory peakHashes, uint256 leafCount) external view returns (bytes32) {
@@ -150,10 +147,6 @@ contract CoverageHelpersHarness {
 	function computeMerkleMountainRangeRootFromProof(bytes32 leafHash, uint256 leafCount, uint256 leafIndex, uint256 peakHeight, bytes32[] calldata siblings) external view returns (bytes32) {
 		return
 			proofVerifier.computeMerkleMountainRangeRootFromProof(leafHash, leafCount, leafIndex, peakHeight, siblings);
-	}
-
-	function computeNullifierRoot(uint256 parentDepositIndex, bytes32[] calldata siblings, bytes32 leafValue) external view returns (bytes32) {
-		return proofVerifier.computeNullifierRoot(parentDepositIndex, siblings, leafValue);
 	}
 
 	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) external pure returns (string memory) {

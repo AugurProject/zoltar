@@ -19,9 +19,8 @@ export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: s
 	const lpCursor = request.searchParams.get('lpCursor')
 	const forkCursor = request.searchParams.get('forkCursor')
 	const reportCursor = request.searchParams.get('reportCursor')
-	const refundCursor = request.searchParams.get('refundCursor')
 	const positionCursor = request.searchParams.get('positionCursor')
-	const continuationRequested = [lpCursor, forkCursor, reportCursor, refundCursor, positionCursor].some(cursor => cursor !== null)
+	const continuationRequested = [lpCursor, forkCursor, reportCursor, positionCursor].some(cursor => cursor !== null)
 	if (continuationRequested && context.pageUrl.searchParams.get('securityPoolAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
 	if (continuationRequested && context.pageUrl.searchParams.get('securityPoolAppendError') === '1' && !counters.securityPoolAppendErrorConsumed) {
 		counters.securityPoolAppendErrorConsumed = true
@@ -72,7 +71,6 @@ export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: s
 				truncated: false,
 				basis: 'Canonical indexed transfers',
 			},
-			pending_refunds: [{ auction_address: refundCursor === null ? demoAddress('8') : demoAddress('b8'), pending_atto_eth: refundCursor === null ? '100001' : '200002', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } }],
 			...(claimsTruncated
 				? {
 						escalation_claims_truncated: true,
@@ -101,7 +99,6 @@ export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: s
 			fork_participation: forkParticipation,
 			report_participation: reportParticipation,
 			securityPoolPagination: {
-				refunds: { total: more ? 2 : 1, limit: 100, offset: refundCursor === null ? 0 : 1, hasMore: more && refundCursor === null, ...(more && refundCursor === null ? { nextCursor: 'demo-refund-older' } : {}) },
 				positions: { total: more ? 2 : 1, limit: 100, offset: positionCursor === null ? 0 : 1, hasMore: more && positionCursor === null, ...(more && positionCursor === null ? { nextCursor: 'demo-position-older' } : {}) },
 				lp: {
 					total: more ? 2 : 1,

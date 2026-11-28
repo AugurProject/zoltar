@@ -156,7 +156,7 @@ const universeFees = async (ledger: Address, state: LedgerState, read: StateRead
 		const book = address(rawBook, 'settlement.ledger')
 		const bookId = quantity(rawBookId, 'bookIds')
 		// A universe without a registered book has id 0, which the book contract rejects.
-		const bookState = bookId === 0n ? undefined : tuple(await call(book, 'securityPoolSettlementBook', 'books', [bookId]), 16, 'books')
+		const bookState = bookId === 0n ? undefined : tuple(await call(book, 'securityPoolSettlementBook', 'books', [bookId]), 15, 'books')
 		return {
 			fees: {
 				annualFeeBps: quantity(annualFeeBps, 'annualFeeBps').toString(),
@@ -177,7 +177,7 @@ const universeFees = async (ledger: Address, state: LedgerState, read: StateRead
 					: {
 							bookCashAttoEth: quantity(bookState[0], 'books.cashAttoEth').toString(),
 							bookFeeCashAttoEth: quantity(bookState[2], 'books.feeCashAttoEth').toString(),
-							bookFeesEnabled: flag(bookState[11], 'books.feesEnabled'),
+							bookFeesEnabled: flag(bookState[10], 'books.feesEnabled'),
 						}),
 			},
 		}
@@ -245,15 +245,17 @@ type UnclaimedRepairAuctionLots = {
 
 /**
  * The owner's winning repair-auction lots that no claim has moved into its account yet, or undefined when there are none.
- * Lots exist only once the auction installed its cohort, so the bidder's bids are listed through the cohort's auction
- * and read in one batched `repairAuctionPositions` call. Claimed bids and bids that won nothing carry no lots.
+ * Lots exist only once the auction installed its cohort, so the bidder's bids are listed through the bidding engine of
+ * the cohort's auction and read in one batched `repairAuctionPositions` call. Claimed bids and bids that won nothing
+ * carry no lots.
  */
 const unclaimedRepairAuctionLots = async (ledger: Address, adapter: Address, owner: Address, read: StateRead): Promise<UnclaimedRepairAuctionLots | undefined> => {
 	const call = caller(read)
-	const count = quantity(await call(adapter, 'securityPoolRepairAuction', 'bidderBidCount', [owner]), 'bidderBidCount')
+	const engine = address(await call(adapter, 'securityPoolRepairAuction', 'engine'), 'engine')
+	const count = quantity(await call(engine, 'securityPoolUniformPriceRepairAuction', 'bidderBidCount', [owner]), 'bidderBidCount')
 	if (count === 0n) return undefined
 	const indexes = Array.from({ length: Number(count) }, (_, index) => BigInt(index))
-	const bidIds = await Promise.all(indexes.map(async index => quantity(await call(adapter, 'securityPoolRepairAuction', 'bidderBidId', [owner, index]), 'bidderBidId')))
+	const bidIds = await Promise.all(indexes.map(async index => quantity(await call(engine, 'securityPoolUniformPriceRepairAuction', 'bidderBidId', [owner, index]), 'bidderBidId')))
 	const positions = await call(ledger, 'securityPoolCapitalLedger', 'repairAuctionPositions', [bidIds])
 	if (!Array.isArray(positions) || positions.length !== bidIds.length) throw new Error('repairAuctionPositions returned an invalid list')
 	let principal = 0n
@@ -267,7 +269,7 @@ const unclaimedRepairAuctionLots = async (ledger: Address, adapter: Address, own
 		if (address(bid['bidder'], 'repairAuctionPositions.bidder') !== owner) throw new Error('Auction bid bidder does not match capital owner')
 		const lots = quantity(bid['principal'], 'repairAuctionPositions.principal')
 		// A claimed bid's lots and earnings are already in the owner's account; a bid that won nothing has none.
-		if (flag(bid['claimed'], 'repairAuctionPositions.claimed') || flag(bid['materialized'], 'repairAuctionPositions.materialized') || lots === 0n) continue
+		if (flag(bid['claimed'], 'repairAuctionPositions.claimed') || lots === 0n) continue
 		unclaimedIds.push(bidId.toString())
 		principal += lots
 		commitment += quantity(bid['commitment'], 'repairAuctionPositions.commitment')

@@ -48,18 +48,8 @@ export const contractSafetyPolicy = {
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
-			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerAccountingModule.sol', contractName: 'QuestionLedgerAccountingModule' },
-			reason: 'Native fee accounting and security pool credits mutate QuestionLedger storage through this fixed delegate.',
-		},
-		{
-			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
-			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerSettlementDelegate.sol', contractName: 'QuestionLedgerSettlementDelegate' },
-			reason: 'Settlement operations mutate QuestionLedger storage through delegatecall.',
-		},
-		{
-			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
-			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerOperationsDelegate.sol', contractName: 'QuestionLedgerOperationsDelegate' },
-			reason: 'Native trading operations mutate QuestionLedger storage through delegatecall.',
+			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerDelegate.sol', contractName: 'QuestionLedgerDelegate' },
+			reason: 'Native fee accounting, security pool credits, settlement and trading operations mutate QuestionLedger storage through this fixed delegate.',
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPoolSettlementBook.sol', contractName: 'SecurityPoolSettlementBook' },
@@ -70,11 +60,11 @@ export const contractSafetyPolicy = {
 	anchoredLayouts: [
 		{
 			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
-			consumer: { sourcePath: 'contracts/statoblast/QuestionLedgerAccountingModule.sol', contractName: 'QuestionLedgerAccountingModule' },
+			consumer: { sourcePath: 'contracts/statoblast/QuestionLedgerDelegate.sol', contractName: 'QuestionLedgerDelegate' },
 			reason: 'Pool accounting events and fee accrual read these exact QuestionLedger slots through the shared storage base.',
 			anchors: [
 				{ label: 'settlementCollateralAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },
-				{ label: 'lastSettlementSecurityPoolTime', slot: '4', offset: 0, typeLabel: 'uint256' },
+				{ label: 'lastSettlementSecurityPoolTime', slot: '3', offset: 0, typeLabel: 'uint256' },
 			],
 		},
 	] satisfies readonly AnchoredLayout[],

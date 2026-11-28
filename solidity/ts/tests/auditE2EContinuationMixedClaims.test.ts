@@ -3,7 +3,6 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import type { WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -104,7 +103,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		// Losers: an inherited losing proof is rejected; a sweep is blocked while losing local principal is unsettled.
 		const losingLeaf = inherited[NO][0]
 		if (losingLeaf === undefined) throw new Error('Missing inherited No leaf')
-		await expect(e2e.simulateInheritedClaim(owner, childA.pool, NO, inherited[NO], losingLeaf, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
+		await expect(e2e.simulateInheritedClaim(owner, childA.pool, NO, inherited[NO], losingLeaf)).rejects.toThrow('Not winning outcome')
 
 		type Claim = { kind: 'inherited' | 'local'; leaf: CarryLeaf }
 		const inheritedClaims: Claim[] = inherited[YES].map(leaf => ({ kind: 'inherited', leaf }))
@@ -115,13 +114,12 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		else for (let index = 0; index < 3; index++) for (const claim of [localClaims[2 - index], inheritedClaims[1 - index]]) if (claim !== undefined) sequence.push(claim)
 		expect(sequence.length).toBe(5)
 		const supplyBefore = await e2e.supply(A)
-		const tree = new SparseNullifierTree()
 		let paid = 0n
 		let burn = 0n
 		const rows: Record<string, unknown>[] = []
 		for (const [step, { kind, leaf }] of sequence.entries()) {
 			const expected = expectedWinningClaim(leaf.amount, leaf.cumulative, binding, balances[YES])
-			const received = kind === 'inherited' ? await e2e.claimInherited(r6, childA.pool, YES, inherited[YES], [leaf], tree) : await e2e.claimLocal(r6, childA.pool, YES, [leaf.localIndex], leaf.depositor)
+			const received = kind === 'inherited' ? await e2e.claimInherited(r6, childA.pool, YES, inherited[YES], [leaf]) : await e2e.claimLocal(r6, childA.pool, YES, [leaf.localIndex], leaf.depositor)
 			expect(received).toBe(expected.payout)
 			paid += received
 			burn += expected.burn
@@ -142,12 +140,12 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		expect(40n * K - burn).toBeLessThanOrEqual(5n)
 		// No claim can be repeated in either form.
 		for (const { kind, leaf } of sequence) {
-			if (kind === 'inherited') await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, inherited[YES], leaf, tree)).rejects.toThrow()
+			if (kind === 'inherited') await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, inherited[YES], leaf)).rejects.toThrow()
 			else await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [leaf.localIndex]] })).rejects.toThrow('Deposit settled')
 		}
 		// A local leaf cannot be replayed as an inherited proof, and an inherited leaf has no local index.
 		const localLeaf = local[YES][0]
-		if (localLeaf !== undefined) await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, [...inherited[YES], ...local[YES]], localLeaf, new SparseNullifierTree())).rejects.toThrow()
+		if (localLeaf !== undefined) await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, [...inherited[YES], ...local[YES]], localLeaf)).rejects.toThrow()
 		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [3n]] })).rejects.toThrow('Bad deposit index')
 		// The last losing local deposit must settle before the terminal sweep.
 		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Principal remains')
@@ -186,7 +184,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		const originOnly = { [YES]: await e2e.lineageLeaves([game0], YES) }
 		const originYes = originOnly[YES][0]
 		if (originYes === undefined) throw new Error('Missing origin leaf')
-		await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, originOnly[YES], originYes, new SparseNullifierTree())).rejects.toThrow('Question not final')
+		await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, originOnly[YES], originYes)).rejects.toThrow('Question not final')
 		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [0n]] })).rejects.toThrow('Deposits carry to child games')
 		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Question not final')
 		await expect(r2.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 10n * K] })).rejects.toThrow()
@@ -220,7 +218,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		const supplyAA = await e2e.supply(AA)
 		const bindingAA = median(balancesA)
 		// A stale proof against the origin snapshot alone no longer verifies: the snapshot now spans both generations.
-		await expect(e2e.simulateInheritedClaim(owner, childAA.pool, YES, originOnly[YES], originYes, new SparseNullifierTree())).rejects.toThrow('Bad carry peak')
+		await expect(e2e.simulateInheritedClaim(owner, childAA.pool, YES, originOnly[YES], originYes)).rejects.toThrow('Bad carry peak')
 		const settledAA = await e2e.claimEveryWinner(r6, childAA.pool, YES, snapshot[YES], bindingAA, balancesA[YES])
 		// r2 claimed a generation-zero and a generation-one deposit in one transaction.
 		const r2Claims = snapshot[YES].filter(leaf => leaf.depositor === r2.account.address)
@@ -233,7 +231,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		expect(await e2e.gameBalance(childAA.game)).toBe(backing - settledAA.paid - settledAA.burn)
 		for (const outcome of OUTCOMES) {
 			const loser = snapshot[outcome][0]
-			if (outcome !== YES && loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, childAA.pool, outcome, snapshot[outcome], loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
+			if (outcome !== YES && loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, childAA.pool, outcome, snapshot[outcome], loser)).rejects.toThrow('Not winning outcome')
 		}
 		const residualAA = await e2e.gameBalance(childAA.game)
 		const escrowAA = await owner.readContract({ ...e2e.game(childAA.game), functionName: 'totalDisputeStakedAttoRep' })

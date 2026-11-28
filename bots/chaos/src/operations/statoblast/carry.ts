@@ -49,7 +49,6 @@ function carriedProofArgument(candidate: NonNullable<EcosystemSnapshot['forkedCa
 		leafIndex: amount(candidate.proof.leafIndex),
 		merkleMountainRangePeakIndex: amount(candidate.proof.merkleMountainRangePeakIndex),
 		merkleMountainRangeSiblings: candidate.proof.merkleMountainRangeSiblings,
-		nullifierSiblings: candidate.proof.nullifierSiblings,
 		parentDepositIndex: amount(candidate.proof.parentDepositIndex),
 		sourceNodeId: amount(candidate.proof.sourceNodeId),
 	}
@@ -90,7 +89,6 @@ function carriedDepositEvidence(candidate: NonNullable<EcosystemSnapshot['forked
 		carryField('reason', 0),
 		carryField('outcome', candidate.outcome),
 		carryField('amountAttoRep', candidate.amountAttoRep),
-		carryField('resultingNullifierRoot', candidate.resultingNullifierRoot),
 		carryField('resultingCarryRoot', candidate.resultingCarryRoot),
 		claimField('transferredRep', true),
 		claimField('originalDepositAmountAttoRep', candidate.amountAttoRep),
@@ -181,7 +179,7 @@ export const withdrawForkedCarry: OperationDefinition = {
 	classification: 'lifecycle-obligation',
 	contract: 'QuestionLedger',
 	description: 'Withdraws one canonically replayed, anchor-verified inherited escalation deposit per private next-block transaction.',
-	discoveryInputs: ['anchored contract storage', 'snapshot MMR proof', 'sparse nullifier proof', 'anchored source/child graph and direct-claim state'],
+	discoveryInputs: ['anchored contract storage', 'snapshot MMR proof', 'consumed parent-deposit indexes', 'anchored source/child graph and direct-claim state'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot) {
 		const verified = snapshot.forkedCarryWithdrawals ?? []

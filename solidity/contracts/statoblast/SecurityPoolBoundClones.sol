@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { CreationCodeStorage } from './CreationCodeStorage.sol';
+
 /// @dev EIP-1167 runtime followed by immutable, contract-specific bindings.
 library SecurityPoolBoundClones {
 	uint256 internal constant FORWARDER_LENGTH = 45;
@@ -33,11 +35,7 @@ library SecurityPoolBoundClones {
 		return abi.encodePacked(hex'3d61', uint16(runtime.length), hex'80600b3d3981f3', runtime);
 	}
 
-	function create(address implementation, bytes memory bindings) internal returns (address clone) {
-		bytes memory code = initCode(implementation, bindings);
-		assembly ('memory-safe') {
-			clone := create(0, add(code, 32), mload(code))
-		}
-		require(clone != address(0), 'Clone deployment failed');
+	function create(address implementation, bytes memory bindings) internal returns (address) {
+		return CreationCodeStorage.deploy(initCode(implementation, bindings));
 	}
 }

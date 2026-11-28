@@ -20,7 +20,7 @@ contract SecurityPoolPurchaseReceiver is IERC1155Receiver {
 		return IERC1155Receiver.onERC1155Received.selector;
 	}
 	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
-		(, observedPremium) = services.questionPremium(universeId, questionId);
+		(, observedPremium) = services.premiumLedger().question(universeId, questionId);
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {

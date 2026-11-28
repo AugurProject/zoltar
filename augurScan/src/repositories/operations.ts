@@ -190,10 +190,7 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 				AND event.event_name = 'BidSubmitted')::integer AS bid_count,
 			(SELECT count(DISTINCT event.event_data->>'bidder') FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
-				AND event.event_name = 'BidSubmitted')::integer AS bidder_count,
-			(SELECT count(*) FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
-				AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
-				AND event.event_name = 'BidSettled')::integer AS settlement_count
+				AND event.event_name = 'BidSubmitted')::integer AS bidder_count
 		FROM auctions auction
 		JOIN LATERAL (SELECT * FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
@@ -217,8 +214,6 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 				finalized: row['final_data'] !== null,
 				...auctionStartedWindow(jsonRecord(row['start_data'])),
 				indexedTimestamp: String(asOf['blockTimestamp'] ?? ''),
-				bidCount: Number(row['bid_count'] ?? 0),
-				settlementCount: Number(row['settlement_count'] ?? 0),
 			}),
 		}
 	})

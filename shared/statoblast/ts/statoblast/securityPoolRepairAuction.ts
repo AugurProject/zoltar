@@ -3,14 +3,7 @@ import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { SecurityPoolAuctionSnapshot } from './securityPoolAuctionRead.js'
 export { loadSecurityPoolAuctionSnapshot, loadSecurityPoolAuctionClaimableBidIds, type SecurityPoolAuctionSnapshot, type SecurityPoolAuctionBid } from './securityPoolAuctionRead.js'
 
-const abi = parseAbi([
-	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)',
-	'function settleRefund(uint256 bidId)',
-	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)',
-	'function withdrawRefunds(address recipient)',
-	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256 amountAttoEth)',
-])
+const abi = parseAbi(['function open()', 'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256 bidId)', 'function refundBid(uint256 bidId,address recipient) returns (uint256 amountAttoEth)', 'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[] positionIds)'])
 const ATTO_UNITS = 10n ** 18n
 const BPS = 10_000n
 const secondsPerDay = 86_400n
@@ -142,40 +135,26 @@ export function buildSecurityPoolAuctionClaimAllRequest(snapshot: SecurityPoolAu
 	const batch = securityPoolAuctionClaimBatch(claimableBidIds).bidIds
 	return { account: snapshot.bidder, to: snapshot.capitalLedger, value: 0n, data: encodeFunctionData({ abi, functionName: 'materializeRepairAuctionBids', args: [batch.map(id => uint(id, 'Bid ID'))] }) }
 }
-export function buildSecurityPoolAuctionRefundCreditRequest(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint) {
-	const auction = requireAuction(snapshot)
-	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
-	if (bid === undefined || bid.refundSettled) throw new Error('Choose an unsettled bid from this auction page.')
-	if (!auction.finalized && bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
-	if (auction.finalized && (bid.fill?.refundAttoEth ?? 0n) === 0n) throw new Error('This bid has no unused collateral to refund.')
-	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'settleRefund', args: [bidId] }) }
-}
-export function buildSecurityPoolAuctionRefundWithdrawRequest(snapshot: SecurityPoolAuctionSnapshot, recipient: Address) {
-	const auction = requireAuction(snapshot)
-	if (auction.refundAttoEth === 0n) throw new Error('This bidder has no credited auction refunds.')
-	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawRefunds', args: [address(recipient, 'Refund recipient')] }) }
-}
 /**
- * One bidder transaction: credit the chosen bid unless someone already did, then withdraw the bidder's whole credit.
- * The withdrawal always includes refunds already credited for the bidder's other bids in this auction.
+ * The unused collateral one bid returns to its bidder now: the whole bid once better bids exclude it before closing,
+ * or its unfilled lots after closing. Each bid pays its refund once.
  */
-export function quoteSecurityPoolAuctionRefundClaim(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint) {
+export function quoteSecurityPoolAuctionRefund(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint) {
 	const auction = requireAuction(snapshot)
 	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
 	if (bid === undefined) throw new Error('Choose a bid from this auction page.')
-	let bidRefundAttoEth = 0n
-	if (!bid.refundSettled) {
-		if (auction.finalized) bidRefundAttoEth = bid.fill?.refundAttoEth ?? 0n
-		else if (bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
-		else bidRefundAttoEth = bid.earlyRefundAttoEth
+	if (bid.refundSettled) throw new Error('This bid’s unused collateral was already refunded.')
+	if (!auction.finalized) {
+		if (bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
+		return bid.earlyRefundAttoEth
 	}
-	const creditedAttoEth = auction.refundAttoEth
-	const totalAttoEth = creditedAttoEth + bidRefundAttoEth
-	if (totalAttoEth === 0n) throw new Error('No refund credit remains to withdraw.')
-	return { bidId: bid.id, settles: !bid.refundSettled, bidRefundAttoEth, creditedAttoEth, totalAttoEth }
+	const refund = bid.fill?.refundAttoEth ?? 0n
+	if (refund === 0n) throw new Error('This bid has no unused collateral to refund.')
+	return refund
 }
-export function buildSecurityPoolAuctionRefundClaimRequest(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint, recipient: Address) {
+/** The bidder takes back one bid's unused collateral, paid to `recipient`. */
+export function buildSecurityPoolAuctionRefundRequest(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint, recipient: Address) {
 	const auction = requireAuction(snapshot)
-	const quote = quoteSecurityPoolAuctionRefundClaim(snapshot, bidId)
-	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'settleAndWithdrawRefund', args: [quote.bidId, address(recipient, 'Refund recipient')] }) }
+	quoteSecurityPoolAuctionRefund(snapshot, bidId)
+	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'refundBid', args: [bidId, address(recipient, 'Refund recipient')] }) }
 }

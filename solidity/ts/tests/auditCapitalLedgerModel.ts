@@ -351,8 +351,8 @@ const retireOne = (m: Model, id: bigint): Retirement => {
 	}
 	return result
 }
+// Owner paths serve only the owner's own position; the public entry point alone rejects the auction cohort.
 export const serve = (m: Model, id: bigint) => {
-	requireModel(id === 0n || id !== m.cohortId, 'Materialize an individual repair auction bidder')
 	const pending = findPosition(m, id)
 	if (id === 0n || pending === undefined || !inTree(pending) || pending.batch === 0n || !priceValid(m) || m.frozen || m.forkTime !== 0n) return
 	const result = retireOne(m, id)
@@ -773,6 +773,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 		case 'serve':
 			requireOpen(m)
 			checkpoint(m)
+			requireModel(op.id === 0n || op.id !== m.cohortId, 'Materialize an individual repair auction bidder')
 			serve(m, op.id)
 			return undefined
 		case 'claim':

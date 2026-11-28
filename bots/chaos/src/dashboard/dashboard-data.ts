@@ -31,7 +31,7 @@ export type OperationEvaluation = {
 export type Topology = {
 	anchorBlock?: string | number | undefined
 	anchorTimestamp?: string | number | undefined
-	auctions: Array<{ address?: string | undefined; bidCount?: number | undefined; endTime?: string | number | undefined; finalized?: boolean | undefined; securityPool?: string | undefined; universeId?: string | undefined; startTime?: string | number | undefined }>
+	auctions: Array<{ address?: string | undefined; bidCount?: number | undefined; endTime?: string | number | undefined; finalized?: boolean | undefined; securityPool?: string | undefined; universeId?: string | undefined }>
 	complete?: boolean | undefined
 	pairs: Array<{ address?: string | undefined; feeBps?: string | number | undefined; pool?: string | undefined; status?: string | number | undefined; universeId?: string | undefined }>
 	pools: Array<{ address?: string | undefined; awaitingForkContinuation?: boolean | undefined; coordinator?: string | undefined; questionId?: string | undefined; systemState?: string | number | undefined; universeId?: string | undefined; securityPool?: string | undefined }>
@@ -259,7 +259,6 @@ function parseTopology(value: unknown): Topology {
 			finalized: booleanValue(entry['finalized']),
 			securityPool: stringValue(entry['securityPool']),
 			universeId: stringValue(entry['universeId']),
-			startTime: scalarValue(entry['startTime']),
 		})),
 		complete: booleanValue(source['complete']),
 		pairs: list(source['pairs'], entry => ({

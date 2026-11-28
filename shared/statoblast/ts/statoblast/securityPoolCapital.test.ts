@@ -22,7 +22,7 @@ const repToken: Address = '0x0000000000000000000000000000000000000005'
 const hash: Hex = `0x${'11'.repeat(32)}`
 const base = { owner, capitalLedger }
 const abi = parseAbi([
-	'function depositFor(address owner,uint256 amount)',
+	'function deposit(uint256 amount)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setCommitment(uint256 commitment)',
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
@@ -94,7 +94,7 @@ describe('personal security pool capital SDK', () => {
 	test('deposits and withdrawals operate exact REP and preserve recipient and owner identities', () => {
 		const deposit = buildSecurityPoolCapitalDepositRequest({ ...base, amountAttoRep: 123n })
 		expect(deposit).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
-		expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 123n] })
+		expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'deposit', args: [123n] })
 		const withdrawal = buildSecurityPoolCapitalWithdrawPrincipalRequest({ ...base, amountAttoRep: 77n, recipient: securityPool })
 		expect(decodeFunctionData({ abi, data: withdrawal.data })).toEqual({ functionName: 'withdrawPrincipal', args: [77n, securityPool] })
 	})

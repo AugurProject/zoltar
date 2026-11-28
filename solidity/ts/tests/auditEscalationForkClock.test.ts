@@ -8,7 +8,7 @@ import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } f
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { useEscalationGameFixture } from './escalationGame/fixture'
 
-import { zeroHash, zeroPeakArray } from './escalationGame/carryHelpers'
+import { zeroPeakArray } from './escalationGame/carryHelpers'
 
 const DAY = 24n * 60n * 60n
 
@@ -19,7 +19,7 @@ describe('Audit regression: escalation fork clock', () => {
 		const { client, mockWindow, reportBond, nonDecisionThresholdAttoRep } = fixture
 		const { escalationGameAddress, testQuestionLedgerAddress } = await fixture.deployEscalationGameWithProofPool()
 		await fixture.startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, inheritedElapsed)
-		await fixture.initializeSnapshotViaTestQuestionLedger(testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await fixture.initializeSnapshotViaTestQuestionLedger(testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n])
 		const expectedCost = inheritedElapsed === 0n ? 0n : await readIterativeAttritionCost(client, escalationGameAddress, inheritedElapsed)
 		const readCost = () => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'totalCostAttoRep' })
 

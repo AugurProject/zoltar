@@ -100,12 +100,22 @@ test('an open bid shows the lower-ask reason only when the verified limit proves
 test('a finalized auction with no fills explains the remaining shortfall and makes bid collateral refundable', async () => {
 	const fixture = await auctionFixture()
 	fixture.values['finalized'] = true
-	fixture.values['clearing'] = [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false]
+	fixture.values['clearing'] = [0n, 0n, 0n, 0n, false]
 	fixture.values['previewBid'] = [owner, 0n, 0n, 0n, 2n * unit]
 	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
 	await waitFor(() => expect(view.container.textContent).toContain('Bid collateral is refundable. The branch activates with its collateral shortfall.'))
-	expect(button(view.container, 'Credit and withdraw refunds').disabled).toBe(false)
+	expect(button(view.container, 'Withdraw this bid’s refund').disabled).toBe(false)
 	expect(view.container.textContent).toContain('No winning lots')
+})
+
+test('a fully filled bid in a finalized auction offers no refund, because the engine never settles it', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['finalized'] = true
+	fixture.values['previewBid'] = [owner, 2n, 2n * unit, 200n * unit, 0n]
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(button(view.container, 'Claim bid').disabled).toBe(false))
+	expect([...view.container.querySelectorAll('button')].some(candidate => candidate.textContent === 'Withdraw this bid’s refund')).toBe(false)
 })
 
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
@@ -124,7 +134,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const original = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Open repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Claim all bids', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
+	for (const name of ['Open repair auction', 'Submit funded bid', 'Withdraw this bid’s refund', 'Claim all bids', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
@@ -145,7 +155,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	expect(view.container.textContent).not.toContain('REP top-up')
 	expect(view.container.textContent).not.toContain('Execution reserve')
 	expect(metric(view.container, 'You lock until the auction closes')).toContain('2.00')
-	expect(view.container.textContent).not.toContain('Credited REP refund')
+	expect(view.container.textContent).not.toContain('Credited collateral refund')
 	const pending = createDeferred<bigint>()
 	fixture.values['repGrid'] = pending.promise
 	await act(() => button(view.container, 'Refresh auction').click())
@@ -177,7 +187,7 @@ test('funded winners show live fees until their bid is claimed, then the claim s
 	expect(claim.disabled).toBe(false)
 	expect(button(view.container, 'Claim all bids').disabled).toBe(false)
 	fixture.values['bids'] = [owner, false, true, 2n, 60n * unit]
-	fixture.values['repairAuctionPositions'] = [[owner, 8n, 100n * unit, unit, 0n, true, true, 0n, 0n]]
+	fixture.values['repairAuctionPositions'] = [[owner, 100n * unit, unit, 0n, true, 0n, 0n]]
 	fixture.values['unclaimedRepairAuctionBids'] = 0n
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(view.container.textContent).toContain('This bid is claimed.'))
@@ -200,7 +210,7 @@ test('every closed bid, winning or not, gets its own claim and one claim-all act
 	const lost = await auctionFixture()
 	lost.values['finalized'] = true
 	lost.values['previewBid'] = [owner, 0n, 0n, 0n, 2n * unit]
-	lost.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, 0n, false, false, 0n, 0n]]
+	lost.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, false, 0n, 0n]]
 	const losing = await renderIntoDocument(<SecurityPoolRepairAuction fork={lost.fork} bidder={owner} actions={actions} />)
 	// The open auction's saved page shows first; wait for the finalized read.
 	await waitFor(() => expect(claimButtons(losing.container).map(node => node.disabled)).toEqual([false]))
@@ -210,8 +220,8 @@ test('every closed bid, winning or not, gets its own claim and one claim-all act
 	won.values['bidderBidCount'] = 2n
 	won.values['unclaimedRepairAuctionBids'] = 2n
 	won.values['repairAuctionPositions'] = [
-		[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit],
-		[owner, 0n, 100n * unit, unit, 0n, false, false, 7n * unit, 9n * unit],
+		[owner, 100n * unit, unit, 0n, false, 7n * unit, 9n * unit],
+		[owner, 100n * unit, unit, 0n, false, 7n * unit, 9n * unit],
 	]
 	const winning = await renderIntoDocument(<SecurityPoolRepairAuction fork={won.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(winning)
@@ -241,51 +251,27 @@ test('a bidder with many bids can still submit another bid', async () => {
 	expect(view.container.textContent).not.toContain('at most 8 bids')
 })
 
-test('early refund status enables only crediting then a separate unrestricted withdrawal', async () => {
+test('an early refund becomes available once better bids exclude the bid and closes after it is paid', async () => {
 	const fixture = await auctionFixture()
 	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
-	const credit = button(view.container, 'Credit this bid’s refunds')
-	const claim = button(view.container, 'Credit and withdraw refunds')
-	const withdraw = button(view.container, 'Withdraw credited refunds')
-	expect(credit.disabled).toBe(true)
-	expect(claim.disabled).toBe(true)
-	// Both refund buttons rest on the same cause, stated once for the pair and referenced by each button.
-	expect(view.container.textContent?.split('This bid may still win')).toHaveLength(2)
-	expect(credit.getAttribute('aria-describedby')).toBeTruthy()
-	expect(credit.getAttribute('aria-describedby')).toBe(claim.getAttribute('aria-describedby'))
+	const refund = button(view.container, 'Withdraw this bid’s refund')
+	expect(refund.disabled).toBe(true)
+	expect(view.container.textContent).toContain('This bid may still win')
 	fixture.values['earlyRefundAttoEth'] = 2n * unit
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(credit.disabled).toBe(false))
-	expect(claim.disabled).toBe(false)
+	await waitFor(() => expect(refund.disabled).toBe(false))
 	expect(view.container.textContent).toContain('Better asks or earlier bids at the same ask take the available lots')
 	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).toContain('2.00')
-	expect(withdraw.disabled).toBe(true)
 	fixture.values['earlyRefundAttoEth'] = 0n
 	fixture.values['bids'] = [owner, true, false, 2n, 60n * unit]
-	fixture.values['refundCreditAttoEth'] = 2n * unit
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(withdraw.disabled).toBe(false))
-	expect(credit.disabled).toBe(true)
-	// The credited bid can still use the combined path, which only withdraws.
-	expect(claim.disabled).toBe(false)
-	expect(view.container.textContent).toContain('This bid’s refund was settled')
-	expect(view.container.textContent).not.toContain('credited and withdrawn')
-	expect(button(view.container, 'Credit this bid’s refunds')).toBe(credit)
-	expect(button(view.container, 'Credit and withdraw refunds')).toBe(claim)
-	expect(button(view.container, 'Withdraw credited refunds')).toBe(withdraw)
-	fixture.values['refundCreditAttoEth'] = 0n
-	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(view.container.textContent).toContain('No refund credit remains to withdraw.'))
-	expect(view.container.textContent).toContain('This bid’s refund was settled')
-	expect(withdraw.disabled).toBe(true)
-	expect(claim.disabled).toBe(true)
-	fixture.values['refundCreditAttoEth'] = unit
-	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(withdraw.disabled).toBe(false))
-	expect(view.container.textContent).toContain('This bid’s refund was settled')
-	expect(view.container.textContent).not.toContain('Its collateral refund has been credited for withdrawal')
+	await waitFor(() => expect(view.container.textContent).toContain('This bid’s unused collateral was refunded.'))
+	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).toContain('0')
+	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).not.toContain('2.00')
+	expect([...view.container.querySelectorAll('button')].some(candidate => candidate.textContent === 'Withdraw this bid’s refund')).toBe(false)
+	expect(view.container.textContent).not.toContain('Credited collateral refund')
 })
 
 test.each([

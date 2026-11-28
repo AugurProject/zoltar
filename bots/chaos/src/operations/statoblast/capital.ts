@@ -38,13 +38,13 @@ function approval(snapshot: EcosystemSnapshot, token: `0x${string}`, ledger: `0x
 function depositStep(snapshot: EcosystemSnapshot, token: `0x${string}`, ledger: `0x${string}`, spend: bigint) {
 	return encodeStep({
 		abi: securityPoolCapitalLedgerAbi,
-		args: [snapshot.wallet.address, spend],
-		functionName: 'depositFor',
+		args: [spend],
+		functionName: 'deposit',
 		id: 'deposit-capital',
 		label: 'Deposit REP into security pool capital',
 		to: ledger,
 		walletAssetDebits: [erc20WalletDebit(token, spend, 'rep')],
-		preflightCalls: [encodePreflightCall({ abi: securityPoolCapitalLedgerAbi, args: [snapshot.wallet.address, spend], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositFor', label: 'Revalidate REP deposit into the security pool', to: ledger })],
+		preflightCalls: [encodePreflightCall({ abi: securityPoolCapitalLedgerAbi, args: [spend], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'deposit', label: 'Revalidate REP deposit into the security pool', to: ledger })],
 	})
 }
 
@@ -83,7 +83,7 @@ function cleanup(snapshot: EcosystemSnapshot, context: OperationContinuationCont
 export const depositCapital: OperationDefinition = {
 	id: 'statoblast.capital.deposit',
 	label: 'Deposit REP into the security pool',
-	method: 'depositFor',
+	method: 'deposit',
 	contract: 'SecurityPoolCapitalLedger',
 	classification: 'selectable',
 	ecosystem: 'statoblast',

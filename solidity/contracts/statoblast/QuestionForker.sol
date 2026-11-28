@@ -137,10 +137,9 @@ contract QuestionForker {
 		securityPool = ISecurityPoolNative(authority);
 		securityPool.prepareQuestionUniverse(targetUniverse);
 		child = factory.getQuestionLedger(origin, targetUniverse);
-		// An already operational child returns before its parent is checked, so prove its factory first.
-		if (address(child) != address(0))
-			require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
 		if (address(child) != address(0)) {
+			// An already operational child returns before its parent is checked, so prove its factory first.
+			require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
 			if (child.systemState() == SystemState.Operational) return (child, securityPool, address(0), source);
 			// The forker deployed this child from a proven canonical parent, so any caller
 			// completes the prepared ledger whatever ancestor source it names.
@@ -157,7 +156,7 @@ contract QuestionForker {
 		if (address(child) != address(0)) return (child, securityPool, sourceGame, source);
 		factory.prepareSecurityPoolPriceFeed(source, targetUniverse);
 		child = factory.deployChildQuestionLedger(source, source.shareToken(), targetUniverse, source.questionId(), source.statoblastSecurityMultiplierBps());
-		_requireChildProvenance(factory, source, child, targetUniverse);
+		_requireChildProvenance(source, child, targetUniverse);
 		source.authorizeChildQuestionLedger(child);
 		securityPool.registerChildQuestionLedger(child);
 		if (zoltar.getForkTime(targetUniverse) != 0) child.setSystemState(SystemState.PoolForked);
@@ -174,11 +173,9 @@ contract QuestionForker {
 		revert('Target universe does not descend from source');
 	}
 
-	/// @dev `source` and everything derived from it are caller-supplied. A pool's factory is
-	/// immutable, so a child that names `factory` proves the factory, and therefore the
-	/// canonical source lookup, before this forker uses its privileges on the child.
-	function _requireChildProvenance(ISecurityPoolFactory factory, IQuestionLedger source, IQuestionLedger child, uint248 targetUniverse) private view {
-		require(address(child.securityPoolFactory()) == address(factory), 'Child pool is not from the source factory');
+	/// @dev `source` and everything derived from it are caller-supplied. `factory` just deployed
+	/// `child`, so the child must continue exactly the source before this forker uses its privileges on it.
+	function _requireChildProvenance(IQuestionLedger source, IQuestionLedger child, uint248 targetUniverse) private view {
 		require(address(child.parent()) == address(source) && child.universeId() == targetUniverse && address(child.shareToken()) == address(source.shareToken()), 'Child pool does not continue the source');
 	}
 
@@ -202,20 +199,15 @@ contract QuestionForker {
 	function _continueReporterGame(ISecurityPoolNative securityPool, IQuestionLedger source, IQuestionLedger child, EscalationGame game) private returns (bool complete) {
 		require(game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Final reporter game cannot export live carry');
 		if (address(child.escalationGame()) == address(0)) _initializeReporterGame(securityPool, source, child, game);
-		(
-			bytes32[64][3] memory peaks,
-			uint256[3] memory leafCounts,
-			uint256[3] memory carryTotals,
-			bytes32[3] memory nullifierRoots
-		) = game.getForkCarrySnapshot();
+		(bytes32[64][3] memory peaks, uint256[3] memory leafCounts, uint256[3] memory carryTotals) = game.getForkCarrySnapshot();
 		uint256[3] memory balances = game.getOutcomeBalancesAttoRep();
 		bytes32[3] memory carryRoots = game.getForkCarryRoots();
-		bytes32 snapshotId = keccak256(abi.encode(address(game), carryRoots, nullifierRoots, leafCounts, carryTotals, balances));
+		bytes32 snapshotId = keccak256(abi.encode(address(game), carryRoots, leafCounts, carryTotals, balances));
 		// At most one fixed 64-peak outcome is installed per transaction. Keep the
 		// reporter source and native pool inactive until all three are complete.
 		uint8 outcomeIndex = child.escalationGame().forkCarrySnapshotOutcomesInitialized();
 		if (outcomeIndex < 3)
-			child.initializeForkCarryOutcome(address(game), snapshotId, peaks[outcomeIndex], leafCounts[outcomeIndex], carryTotals[outcomeIndex], balances[outcomeIndex], nullifierRoots[outcomeIndex]);
+			child.initializeForkCarryOutcome(address(game), snapshotId, peaks[outcomeIndex], leafCounts[outcomeIndex], carryTotals[outcomeIndex], balances[outcomeIndex]);
 		return child.escalationGame().forkCarrySnapshotInitialized();
 	}
 

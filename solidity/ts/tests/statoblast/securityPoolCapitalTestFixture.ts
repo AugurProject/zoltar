@@ -37,7 +37,7 @@ export function useCapitalTestFixture() {
 	const price = async (value: bigint) => writeContractAndWait(client(), async () => client().writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setPrice', args: [value, Number((await client().getBlock()).timestamp + 10_000_000n)] }))
 	const owner = (offset: number) => client().readContract({ abi: capital.abi, address: ledger, functionName: 'ownerAccount', args: [client(offset).account.address] })
 	const position = (id: bigint) => client().readContract({ abi: commitments.abi, address: index, functionName: 'accountOf', args: [id] })
-	const deposit = (offset: number, amount: bigint) => writeContractAndWait(client(offset), () => client(offset).writeContract({ abi: capital.abi, address: ledger, functionName: 'depositFor', args: [client(offset).account.address, amount] }))
+	const deposit = (offset: number, amount: bigint) => writeContractAndWait(client(offset), () => client(offset).writeContract({ abi: capital.abi, address: ledger, functionName: 'deposit', args: [amount] }))
 	const authorize = async (offset: number, amount: bigint) => {
 		await writeContractAndWait(client(offset), () => client(offset).writeContract({ abi: capital.abi, address: ledger, functionName: 'setCommitment', args: [amount] }))
 		return (await owner(offset)).positionId

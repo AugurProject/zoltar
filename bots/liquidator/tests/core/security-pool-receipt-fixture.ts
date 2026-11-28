@@ -2,7 +2,7 @@ import type { PendingTransactionIntent } from '#state/operator-state'
 import { securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, keccak256, privateKeyToAccount, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 
-export async function securityPoolReceiptIntent(action: 'claimEarnings' | 'takeOverWithBounds' = 'claimEarnings') {
+export async function securityPoolReceiptIntent(action: 'claimEarnings' | 'takeOverWithBounds' | 'takeOverRepairAuctionBid' = 'claimEarnings') {
 	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
 	if (account.signTransaction === undefined) throw new Error('Test signer unavailable')
 	const to = getAddress('0x0000000000000000000000000000000000000010')

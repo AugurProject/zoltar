@@ -112,15 +112,6 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 	})
 
-	test('unpackTokenId names every outcome and rejects an outcome byte that names none', async () => {
-		const shareTokenAddress = await deployShareToken()
-		const unpack = (tokenId: bigint) => client.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: shareTokenAddress, functionName: 'unpackTokenId', args: [tokenId] })
-		const universeId = 5n
-		for (const outcome of [0n, 1n, 2n, 3n]) assert.deepStrictEqual([...(await unpack((universeId << 8n) | outcome))], [universeId, outcome], `outcome ${outcome.toString()} unpacks`)
-		// A larger byte is no BinaryOutcome. Returning it as one panics while encoding the enum.
-		for (const outcomeByte of [4n, 255n]) await assert.rejects(unpack((universeId << 8n) | outcomeByte), /Unknown outcome in token id/)
-	})
-
 	test('balance queries and operator approval expose every public ERC1155 guard reason', async () => {
 		const shareTokenAddress = await deployShareToken()
 		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
@@ -197,7 +188,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 	})
 
 	for (const withData of [false, true]) {
-		const emptyBatch = (from: Address, to: Address) => encodeFunctionData({ abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'safeBatchTransferFrom', args: withData ? [from, to, [], [], '0x1234'] : [from, to, [], []] })
+		const emptyBatch = (from: Address, to: Address) => encodeFunctionData({ abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'safeBatchTransferFrom', args: [from, to, [], [], withData ? '0x1234' : '0x'] })
 
 		test(`empty batch transfers reject zero recipients (withData=${withData})`, async () => {
 			const token = await deployShareToken()
@@ -241,7 +232,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: shareTokenAbi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
-					args: [client.account.address, zeroAddress, yesTokenId, 1n],
+					args: [client.account.address, zeroAddress, yesTokenId, 1n, '0x'],
 				}),
 			),
 			/ERC1155: transfer target address must be non-zero/,
@@ -252,7 +243,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: shareTokenAbi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
-					args: [client.account.address, operatorClient.account.address, yesTokenId, 1n],
+					args: [client.account.address, operatorClient.account.address, yesTokenId, 1n, '0x'],
 				}),
 			),
 			/ERC1155: caller needs operator approval for third-party transfers/,
@@ -263,7 +254,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: shareTokenAbi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
-					args: [client.account.address, operatorClient.account.address, [yesTokenId], []],
+					args: [client.account.address, operatorClient.account.address, [yesTokenId], [], '0x'],
 				}),
 			),
 			/ERC1155: batch transfer IDs and values arrays must have the same length/,
@@ -274,7 +265,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: shareTokenAbi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
-					args: [client.account.address, zeroAddress, [yesTokenId], [1n]],
+					args: [client.account.address, zeroAddress, [yesTokenId], [1n], '0x'],
 				}),
 			),
 			/ERC1155: batch transfer target address must be non-zero/,
@@ -285,7 +276,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: shareTokenAbi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
-					args: [client.account.address, operatorClient.account.address, [yesTokenId], [1n]],
+					args: [client.account.address, operatorClient.account.address, [yesTokenId], [1n], '0x'],
 				}),
 			),
 			/ERC1155: caller needs operator approval for third-party batch transfers/,
@@ -697,7 +688,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeBatchTransferFrom',
-					args: [client.account.address, nonReceiverAddress, [invalidTokenId, yesTokenId], [1n, 1n]],
+					args: [client.account.address, nonReceiverAddress, [invalidTokenId, yesTokenId], [1n, 1n], '0x'],
 				}),
 			),
 			/ERC1155: transfer target does not implement ERC1155Receiver for batch transfers/,
@@ -757,7 +748,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 						abi: shareTokenAbi,
 						address: shareTokenAddress,
 						functionName: 'safeTransferFrom',
-						args: [client.account.address, receiverAddress, yesTokenId, 1n],
+						args: [client.account.address, receiverAddress, yesTokenId, 1n, '0x'],
 					}),
 				),
 				singleReason,
@@ -769,7 +760,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 						abi: shareTokenAbi,
 						address: shareTokenAddress,
 						functionName: 'safeBatchTransferFrom',
-						args: [client.account.address, receiverAddress, [invalidTokenId, yesTokenId], [1n, 1n]],
+						args: [client.account.address, receiverAddress, [invalidTokenId, yesTokenId], [1n, 1n], '0x'],
 					}),
 				),
 				batchReason,
@@ -828,11 +819,11 @@ describe('ERC1155 Compliance Test Suite', () => {
 		// PUSH4 selector, PUSH0, MSTORE, PUSH1 4, PUSH1 28, REVERT.
 		await getAnvilWindowEthereum().request({ method: 'anvil_setCode', params: [receiver, '0x63deadbeef5f526004601cfd'] })
 		await assert.rejects(
-			writeContractAndWait(client, () => client.writeContract({ ...token, functionName: 'safeTransferFrom', args: [sender, receiver, yes, 1n] })),
+			writeContractAndWait(client, () => client.writeContract({ ...token, functionName: 'safeTransferFrom', args: [sender, receiver, yes, 1n, '0x'] })),
 			/ERC1155: receiver rejected tokens during single-transfer acceptance check/,
 		)
 		await assert.rejects(
-			writeContractAndWait(client, () => client.writeContract({ ...token, functionName: 'safeBatchTransferFrom', args: [sender, receiver, ids, [1n, 1n]] })),
+			writeContractAndWait(client, () => client.writeContract({ ...token, functionName: 'safeBatchTransferFrom', args: [sender, receiver, ids, [1n, 1n], '0x'] })),
 			/ERC1155: receiver rejected tokens during batch-transfer acceptance check/,
 		)
 		for (const id of ids) {
@@ -929,7 +920,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
-					args: [client.account.address, receiverAddress, yesTokenId, 1n],
+					args: [client.account.address, receiverAddress, yesTokenId, 1n, '0x'],
 				}),
 		)
 
@@ -1078,7 +1069,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 					abi: statoblast_tokens_ShareToken_ShareToken.abi,
 					address: shareTokenAddress,
 					functionName: 'safeTransferFrom',
-					args: [client.account.address, operatorClient.account.address, tokenIds[1], 2n],
+					args: [client.account.address, operatorClient.account.address, tokenIds[1], 2n, '0x'],
 				}),
 		)
 		modeledBalances[1][0] -= 2n
@@ -1177,22 +1168,6 @@ describe('ERC1155 Compliance Test Suite', () => {
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				functionName: 'isApprovedForAll',
 				args: [client.account.address, operatorClient.account.address],
-			}),
-		)
-		await transactWithShareToken(
-			shareTokenAddress,
-			encodeFunctionData({
-				abi: statoblast_tokens_ShareToken_ShareToken.abi,
-				functionName: 'getTokenIds',
-				args: [0n, [0, 1, 2]],
-			}),
-		)
-		await transactWithShareToken(
-			shareTokenAddress,
-			encodeFunctionData({
-				abi: statoblast_tokens_ShareToken_ShareToken.abi,
-				functionName: 'unpackTokenId',
-				args: [yesTokenId],
 			}),
 		)
 		await transactWithShareToken(

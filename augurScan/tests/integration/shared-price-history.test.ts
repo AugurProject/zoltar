@@ -38,7 +38,7 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 			}
 			for (const [index, emitter, name, args, canonical] of [
 				[4, feed, 'PriceReported', { reportId: '1', price: '100' }, true],
-				[5, feed, 'ExposureCheckpoint', { questionLedger: poolA, aggregateExposureAttoEth: 200n.toString() }, true],
+				[5, feed, 'ReportFundingAssigned', { reportId: '1', sponsor: poolA }, true],
 				[6, standaloneFeed, 'PriceReported', { reportId: '2', price: '200' }, true],
 				[7, feed, 'PriceCandidateAccepted', { reportId: '1', candidatePrice: '100', canonicalPrice: '100', observationTimestamp: '100', canonicalUpdated: true }, true],
 				[8, feed, 'PriceCandidateAccepted', { reportId: '3', candidatePrice: '250', canonicalPrice: '100', observationTimestamp: '100', canonicalUpdated: false }, true],
@@ -70,7 +70,7 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				expect(history.repEthPrices).toHaveLength(1)
 				expect(history.repEthPrices[0]).toMatchObject({ coordinator_address: feed, rep_per_eth_1e18: '100' })
 				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'PriceReported')).toHaveLength(1)
-				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'ExposureCheckpoint')).toHaveLength(1)
+				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'ReportFundingAssigned')).toHaveLength(1)
 				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'PriceCandidateAccepted')).toEqual([
 					expect.objectContaining({ arguments: expect.objectContaining({ candidatePrice: '250', canonicalPrice: '100', canonicalUpdated: false }) }),
 					expect.objectContaining({ arguments: expect.objectContaining({ candidatePrice: '100', canonicalPrice: '100', canonicalUpdated: true }) }),

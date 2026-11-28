@@ -1,5 +1,5 @@
 import { allocatedWinningPayout, claimPayoutDestination, ordinaryWinningPayout } from './claim-payout.ts'
-import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
+import { buildCarryMerkleMountainRangeProof, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { runtimeConfig } from './config.ts'
@@ -8,7 +8,6 @@ import { type AbiValue, type Address, type Hex, getAddress, zeroAddress } from '
 import type { StateRead } from './snapshots.ts'
 import type { SystemContractKind } from './system-interfaces.ts'
 
-const ZERO: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const object = (value: unknown): Record<string, unknown> => {
 	if (!isObjectRecord(value)) throw new Error('Invalid claim state object')
 	return value
@@ -36,7 +35,7 @@ const flag = (value: unknown): boolean => {
 }
 
 type Leaf = CarryLeaf & { index: bigint; localIndex: bigint; active: boolean; leafHash: Hex }
-type Game = { pool: Address; parentPool: Address; source: Address; forker: Address; continuation: boolean; appendOnly: boolean }
+type Game = { pool: Address; parentPool: Address; source: Address; forker: Address; continuation: boolean }
 
 // All calls inherit the sampler's one canonical block tag. The budget fails
 // closed instead of returning a valid-looking proof from a truncated tree.
@@ -60,11 +59,10 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		if (cached !== undefined) return cached
 		const pool = address(await call(game, 'escalationGame', 'questionLedger'))
 		const continuation = flag(await call(game, 'escalationGame', 'forkContinuation'))
-		const appendOnly = flag(await call(game, 'escalationGame', 'appendOnlyCarry'))
 		const parentPool = continuation ? address(await call(pool, 'questionLedger', 'parent')) : zeroAddress
 		const source = parentPool === zeroAddress ? zeroAddress : address(await call(parentPool, 'questionLedger', 'escalationGame'))
 		const forker = address(await call(pool, 'questionLedger', 'questionForker'))
-		const result = { pool, parentPool, source, forker, continuation, appendOnly }
+		const result = { pool, parentPool, source, forker, continuation }
 		contexts.set(game, result)
 		return result
 	}
@@ -89,15 +87,15 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			const node = array(await call(game, 'escalationGame', 'nodes', [nodeId]))
 			if (uint(node[2]) !== BigInt(outcome)) throw new Error('Carry node outcome mismatch')
 			const leaf = { depositor: address(node[1]), amountAttoRep: uint(node[3]), parentDepositIndex: uint(node[4]), cumulativeAmountAttoRep: uint(node[5]), sourceNodeId: nodeId, index: uint(node[6]) }
-			const isActive = active.has(nodeId.toString())
-			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: (await context(game)).appendOnly || isActive ? hashCarryLeaf(leaf, outcome) : ZERO })
+			// Carry is append-only: consumed leaves keep their hash and only drop out of the active page.
+			leaves.push({ ...leaf, localIndex: 0n, active: active.has(nodeId.toString()), leafHash: hashCarryLeaf(leaf, outcome) })
 			nodeId = uint(node[0])
 		}
 		leaves.sort((a, b) => compareBigint(a.index, b.index))
 		return leaves.map((leaf, index) => ({ ...leaf, localIndex: BigInt(index) }))
 	}
-	const histories = new Map<string, Promise<{ leaves: Leaf[]; consumed: bigint[] }>>()
-	const history = (game: Address, outcome: number, ancestors: readonly Address[] = []): Promise<{ leaves: Leaf[]; consumed: bigint[] }> => {
+	const histories = new Map<string, Promise<Leaf[]>>()
+	const history = (game: Address, outcome: number, ancestors: readonly Address[] = []): Promise<Leaf[]> => {
 		if (ancestors.includes(game) || ancestors.length >= limits.maxGenerations) throw new Error(`Carry ancestry cycle or ${limits.maxGenerations}-generation limit exceeded`)
 		const key = `${game}:${outcome}`
 		const cached = histories.get(key)
@@ -107,21 +105,24 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			const view = await outcomeState(game, outcome)
 			const count = uint(view['snapshotLeafCount'])
 			if (count > BigInt(limits.maxLeaves)) throw new Error(`Carry snapshot exceeds the ${limits.maxLeaves}-leaf limit`)
-			const parent = ctx.source === zeroAddress ? { leaves: [], consumed: [] } : await history(ctx.source, outcome, [...ancestors, game])
-			const inherited = parent.leaves.slice(0, Number(count))
+			const parent = ctx.source === zeroAddress ? [] : await history(ctx.source, outcome, [...ancestors, game])
+			const inherited = parent.slice(0, Number(count))
 			if (BigInt(inherited.length) !== count) throw new Error('Inherited carry snapshot is incomplete')
 			const local = await localLeaves(game, outcome, view)
 			if (local.some((leaf, index) => leaf.index !== count + BigInt(index))) throw new Error('Carry append order is incomplete')
-			const consumed = ctx.appendOnly ? [] : [...parent.consumed]
-			for (let offset = 0n; ; offset += 100n) {
-				const page = array(await call(game, 'escalationGame', 'getProofConsumedCarriedDepositIndexesByOutcome', [outcome, offset, 100n])).map(uint)
-				consumed.push(...page)
-				if (page.length < 100) break
-			}
-			return { leaves: [...inherited, ...local], consumed }
+			return [...inherited, ...local]
 		})()
 		histories.set(key, pending)
 		return pending
+	}
+	// Inherited proof consumption is tracked only by the claiming game's consumed parent deposit indexes.
+	const proofConsumed = async (game: Address, outcome: number) => {
+		const consumed: bigint[] = []
+		for (let offset = 0n; ; offset += 100n) {
+			const page = array(await call(game, 'escalationGame', 'getProofConsumedCarriedDepositIndexesByOutcome', [outcome, offset, 100n])).map(uint)
+			consumed.push(...page)
+			if (page.length < 100) return consumed
+		}
 	}
 	const ctx = await context(gameAddress)
 	const resolution = uint(state['finalQuestionResolution'])
@@ -140,23 +141,16 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 	for (let outcome = 0; outcome < 3; outcome++) {
 		const view = await outcomeState(gameAddress, outcome)
 		const count = uint(view['snapshotLeafCount'])
-		const { leaves, consumed } = await history(gameAddress, outcome)
+		const leaves = await history(gameAddress, outcome)
+		const consumed = await proofConsumed(gameAddress, outcome)
 		const inherited = leaves.slice(0, Number(count))
-		const nullifiers = createSparseNullifier(
-			(ctx.appendOnly ? [] : consumed).map(parentIndex => {
-				const leaf = leaves.find(entry => entry.parentDepositIndex === parentIndex)
-				if (leaf === undefined) throw new Error('Consumed carry deposit is absent from history')
-				return leaf.index
-			}),
-		)
-		if (nullifiers.getRoot() !== hash(view['currentNullifierRoot'])) throw new Error('Claim nullifier commitment mismatch')
 		const snapshotRoot = hash(view['snapshotCarryRoot'])
 		const inheritedHashes = inherited.map(leaf => leaf.leafHash)
 		if (inherited.length > 0 && buildCarryMerkleMountainRangeProof(inheritedHashes, 0).root !== snapshotRoot) throw new Error('Claim membership commitment mismatch')
 		for (const leaf of leaves) {
 			const isInherited = leaf.index < count
 			if (!isInherited && !leaf.active) continue
-			if (isInherited && (leaf.leafHash === ZERO || consumed.includes(leaf.parentDepositIndex))) continue
+			if (isInherited && consumed.includes(leaf.parentDepositIndex)) continue
 			if (positions.length >= 250) {
 				truncated = true
 				continue
@@ -177,7 +171,6 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 							leafIndex: membership.leafIndex.toString(),
 							merkleMountainRangePeakIndex: membership.merkleMountainRangePeakIndex.toString(),
 							merkleMountainRangeSiblings: membership.merkleMountainRangeSiblings,
-							nullifierSiblings: ctx.appendOnly ? [] : nullifiers.getProof(leaf.index),
 						}
 			const sourcePrincipal = leaf.amountAttoRep
 			const principal = leaf.amountAttoRep
@@ -203,9 +196,8 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				burn_atto_rep: result?.burn.toString(),
 				proof,
 				membership_root: membership?.root,
-				nullifier_root: isInherited ? nullifiers.getRoot() : undefined,
 			})
 		}
 	}
-	return { status: 'available', positions, truncated, reads, basis: `Authenticated leaf allocations and verified carry/nullifier commitments. Each proof is independent at this block; refresh after any claim. ${claimPayoutDestination}` }
+	return { status: 'available', positions, truncated, reads, basis: `Authenticated leaf allocations and verified carry commitments. Each proof is independent at this block; refresh after any claim. ${claimPayoutDestination}` }
 }

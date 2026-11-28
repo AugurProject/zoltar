@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
-import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, YES } from './auditE2EHarness'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
@@ -50,7 +49,7 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 			let ordinaryBurned = 0n
 			for (const end of ends) {
 				const amount = end - start
-				const [payout, burn] = await owner.readContract({ ...verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [amount, amount, end, binding, winning, forkThreshold, nonDecision] })
+				const [payout, burn] = await owner.readContract({ ...verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [amount, end, binding, winning, forkThreshold, nonDecision] })
 				expect({ payout, burn }).toEqual(scaledClaim(amount, end, binding, winning, forkThreshold, nonDecision))
 				if (forkThreshold >= nonDecision) expect(payout).toBeGreaterThanOrEqual(amount)
 				const [ordinaryPayout, ordinaryBurn] = await owner.readContract({ ...verifier, functionName: 'computeOrdinaryWinningWithdrawal', args: [amount, end, binding, winning, forkThreshold, nonDecision] })
@@ -60,7 +59,7 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 				ordinaryBurned += ordinaryBurn
 				start = end
 			}
-			const [wholePayout, wholeBurn] = await owner.readContract({ ...verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [winning, winning, winning, binding, winning, forkThreshold, nonDecision] })
+			const [wholePayout, wholeBurn] = await owner.readContract({ ...verifier, functionName: 'computeAllocatedWinningWithdrawal', args: [winning, winning, binding, winning, forkThreshold, nonDecision] })
 			const context = `round ${round}: winning ${winning}, binding ${binding}, fork ${forkThreshold}, non-decision ${nonDecision}, parts ${ends.length}`
 			// Ordinary claims telescope to the reserve exactly.
 			expect(ordinaryPaid, context).toBe(wholePayout)
@@ -133,12 +132,11 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 		const frozen = await threshold()
 		expect(frozen).toBeGreaterThanOrEqual(nonDecision)
 		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(frozen)
-		const tree = new SparseNullifierTree()
 		const firstExpected = scaledClaim(first.amount, first.cumulative, binding, balances[INVALID], await threshold(), nonDecision)
 		expect(firstExpected.payout).toBe(40n * K + 16n * K)
 		// #1541: inherited depletion cannot consume a reporter's child-local deposit.
 		expect((await owner.readContract({ ...g, functionName: 'getOutcomeState', args: [INVALID] })).inheritedUnresolvedTotalAttoRep).toBe(first.amount)
-		expect(await e2e.claimInherited(r6, child.pool, INVALID, inherited, [first], tree)).toBe(firstExpected.payout)
+		expect(await e2e.claimInherited(r6, child.pool, INVALID, inherited, [first])).toBe(firstExpected.payout)
 		expect((await owner.readContract({ ...g, functionName: 'getOutcomeState', args: [INVALID] })).inheritedUnresolvedTotalAttoRep).toBe(0n)
 		expect(await owner.readContract({ ...g, functionName: 'disputeStakedRepByVaultAttoRep', args: [second.depositor] })).toBe(second.amount)
 		paid += firstExpected.payout

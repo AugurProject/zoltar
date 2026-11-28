@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '8301ec3a120867d885afecc9b55a38dbab9cf678ff248f9263ad0f7794fe86a6',
+		compiledAbiFingerprint: '0e9308e62719763d4350416f44c7cafa22bcd1a40b4aae6884679a7a61df057e',
 		name: 'SharedPoolPriceFeed',
 		purpose: 'Canonical REP/collateral reporting and price source for every question in one security pool and universe.',
-		readAbiFingerprint: 'bc1d44d6d200cd829c7b91de21f3412e030748acfc485b1219dbcc270da1bf8d',
+		readAbiFingerprint: '5255b68aad8590d7f46ebfcab0eb064056af40fcf2251eea1cb45320d2d1a271',
 		readSurface:
-			'Accepted price and freshness: `lastPrice`, `lastSettlementTimestamp`, `priceValidUntil` and `isPriceValid`. Pending reports do not extend freshness. Reports retain isolated sponsor-owned escrows. Configuration, exposure and candidate getters: `reportCandidates`, `reportOutcome`, `universeId`, `reputationToken`, `aggregateExposureAttoEth`, `validateExposure`, `conservativePrice`, `liquidationPrice`, `minimumToken1ReportAttoEth`, `minimumToken2ReportAttoRep`, `minimumToken1ReportAttoEthForPrice`, `getSettlementCallbackGasLimit`, `getRequestPriceCostAttoEth`, `reportAuthorization`, `priceValidityWindowSeconds`, `timeType`, `trackDisputes`, `OPEN_INTEREST_DIVIDER`, `REPORT_OPERATION_GAS_OVERHEAD`, `MAXIMUM_REPORT_OPERATION_DATA_BYTES`, `FEED_SETTLEMENT_GAS_OVERHEAD`, `securityPoolFactory`, `securityPool`, `openOracle`, `collateralToken`, `minimumReportCollateral`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `pendingReportId`, `pendingReportSponsor`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `pendingExposureLimitAttoEth`, `acceptedExposureLimitAttoEth`, `acceptedRepExposureLimitAttoRep`, `acceptedEpoch`, `sponsorOperationReport`.',
+			'Accepted price and freshness: `lastPrice`, `lastSettlementTimestamp`, `priceValidUntil` and `isPriceValid`. Pending reports do not extend freshness. Reports retain isolated sponsor-owned escrows. Configuration, exposure and candidate getters: `reportCandidates`, `reportOutcome`, `universeId`, `reputationToken`, `aggregateExposureAttoEth`, `validateExposure`, `conservativePrice`, `liquidationPrice`, `minimumToken1ReportAttoEth`, `minimumToken2ReportAttoRep`, `minimumToken1ReportAttoEthForPrice`, `getSettlementCallbackGasLimit`, `getRequestPriceCostAttoEth`, `reportAuthorization`, `priceValidityWindowSeconds`, `timeType`, `trackDisputes`, `OPEN_INTEREST_DIVIDER`, `REPORT_OPERATION_GAS_OVERHEAD`, `MAXIMUM_REPORT_OPERATION_DATA_BYTES`, `FEED_SETTLEMENT_GAS_OVERHEAD`, `securityPoolFactory`, `securityPool`, `openOracle`, `collateralToken`, `minimumReportCollateral`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `pendingReportId`, `pendingReportSponsor`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `acceptedExposureLimitAttoEth`, `acceptedRepExposureLimitAttoRep`, `acceptedEpoch`, `sponsorOperationReport`.',
 		sourcePath: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 		securityBoundary:
 			'Report liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06).',
@@ -55,7 +55,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'pendingReportId' },
 			{ name: 'pendingReportSponsor' },
 			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' },
-			{ name: 'pendingExposureLimitAttoEth' },
 			{ name: 'acceptedExposureLimitAttoEth' },
 			{ name: 'acceptedRepExposureLimitAttoRep' },
 			{ name: 'acceptedEpoch' },
@@ -79,14 +78,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				preconditions: 'Same funding checks; unexpired batch, price bounds and sufficient bounded callback gas.',
 				signals: '`PriceRequested`, `ReportFundingAssigned`, `ReportOperationAttempted`',
 				declarations: [{ name: 'requestSecurityPoolPriceWithOperations' }],
-			},
-			{
-				call: '`syncExposure()`',
-				caller: 'Canonical question ledgers only',
-				effect: 'Emits changed live aggregate exposure. The factory mapping, ledger factory, universe, REP and feed must agree.',
-				preconditions: 'Caller belongs to this security pool and universe; this is the factory-registered feed.',
-				signals: '`ExposureCheckpoint`',
-				declarations: [{ name: 'syncExposure' }],
 			},
 			{
 				call: '`createReportEscrow(payer, sponsor, wethAmount, repAmount, haltAmount, bounty, callbackGasLimit)`',
@@ -123,12 +114,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '913e1936a15d157fde1f5629cc95450bc0aded99ec851df3ae3f4956da551de2',
+		compiledAbiFingerprint: '86a6bb12743771825b87d9434972986a3d8e447ec45914304efb9f60ea1a3d82',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: 'f7f1edb395b7c497cfef048cc63fd7cad93b456e7e7e99fa7e079a665b9a881f',
+		readAbiFingerprint: '63bee446e706bd2649894030c62fb557ff7f1dee8c047636aec23271bcab51bb',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isSourceBalanceLocked`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible. `isSourceBalanceLocked(id, holder)` reads the actual transfer lock, including locks from migration or spending source-backed recovery rights; spending only received credits does not set it. See the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights) for eligibility and complete-set recovery. Received rights are included independently of the holder\u2019s source-token balances.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, and `recoveredCompleteSetShares`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `isSourceBalanceLocked`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible. `isSourceBalanceLocked(id, holder)` reads the actual transfer lock, including locks from migration or spending source-backed recovery rights; spending only received credits does not set it. See the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights) for eligibility and complete-set recovery. Received rights are included independently of the holder\u2019s source-token balances.',
 		readDeclarations: [
 			{
 				name: 'supportsInterface',
@@ -178,12 +169,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				name: 'getTokenId',
 			},
-			{
-				name: 'getTokenIds',
-			},
-			{
-				name: 'unpackTokenId',
-			},
 		],
 		readStorageDeclarations: [
 			{
@@ -200,18 +185,6 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'recoveredCompleteSetShares',
-			},
-			{
-				name: '_balances',
-				sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
-			},
-			{
-				name: '_supplies',
-				sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
-			},
-			{
-				name: '_operatorApprovals',
-				sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol',
 			},
 		],
 		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',

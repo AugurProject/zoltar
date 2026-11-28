@@ -87,9 +87,9 @@ function createAdvancingChain() {
 			if (feeResponse !== undefined) return feeResponse
 			const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
 			chain.transactionSimulations.push(decoded.functionName)
-			if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
+			if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 2n, chain.longSharesOut, 1n, 5_000n, 5_001n]])
 			if (decoded.functionName === 'addLiquidityWithEth' || decoded.functionName === 'initializeWithEth' || decoded.functionName === 'createPairAndInitializeWithEth')
-				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n]])
 			throw new Error(`Unexpected simulation ${decoded.functionName}`)
 		},
 	}

@@ -66,7 +66,7 @@ for (const viewport of qaViewports) {
 				// The page is scoped to one ledger, so its rows do not repeat the universe.
 				expect(events).not.toContain('universe 0')
 				expect(events).toContain('position 7 · 12,650 REP backing 100 USDC · target health 120%')
-				expect(events).toContain('12,650 REP from 0x000000…579bde')
+				expect(events).toContain('Principal deposit')
 				// The report operation was sponsored by another owner and is not part of this history.
 				expect(events).not.toContain('Report operation')
 				expect(await evaluate(noOverflow)).toBe(true)
