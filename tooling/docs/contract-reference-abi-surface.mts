@@ -157,7 +157,7 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 		'oracleRepExposure',
 		'isPriceReportingOpen',
 	],
-	'solidity/contracts/statoblast/QuestionLedger.sol': ['accountingModule', 'factory', 'operationsDelegate', 'questionAdmissionPolicy', 'originUniverseId'],
+	'solidity/contracts/statoblast/QuestionLedger.sol': ['factory', 'questionAdmissionPolicy', 'originUniverseId'],
 }
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)

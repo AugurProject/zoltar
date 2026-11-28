@@ -66,9 +66,9 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 	return undefined
 }
 
-/** A claimed bid's lots joined its bidder's own position; an unclaimed bid's lots are still in the auction cohort. */
+/** A claimed bid's lots joined its bidder's own position; an unclaimed bid's lots are still in the auction cohort. A bid that won no lots joined no position. */
 async function claimedBidPositionId(client: ReadClient, atReceipt: { address: `0x${string}`; abi: typeof securityPoolCapitalLedgerAbi; blockNumber: bigint }, bidId: bigint) {
 	const [bid] = await client.readContract({ ...atReceipt, functionName: 'repairAuctionPositions', args: [[bidId]] })
-	if (bid === undefined || !bid.claimed) return 0n
+	if (bid === undefined || !bid.claimed || bid.principal === 0n) return 0n
 	return (await client.readContract({ ...atReceipt, functionName: 'ownerAccount', args: [bid.bidder] })).positionId
 }

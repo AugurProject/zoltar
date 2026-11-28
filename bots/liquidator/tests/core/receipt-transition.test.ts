@@ -58,6 +58,23 @@ test('an owner rescuing its position in place one transaction ahead explains the
 	expect(await explainTakeoverReceiptExpiry(intent, receipt, [{ client: neverLiquidating.client, endpoint: 'https://read.example' }], 1)).toBeUndefined()
 })
 
+test('a claimed repair auction bid that won no lots reports no position change for a reverted takeover', async () => {
+	const { intent, receipt } = await securityPoolReceiptIntent('takeOverRepairAuctionBid')
+	receipt.status = 'reverted'
+	receipt.blockNumber = 123n
+	const bidder = getAddress('0x0000000000000000000000000000000000000077')
+	const claimedBid = (principal: bigint) => [{ bidder, principal, commitment: principal, liquidationStarted: 0, claimed: true, earnedAttoEth: 0n, earnedAttoRep: 0n }]
+	// The bidder's own position closed, so reading it would wrongly report the target as no longer live.
+	const closedOwnPosition = { ownerAccount: { positionId: 7n }, accountOf: { owner: bidder, batch: 0n, rep: 0n, commitment: 0n, maxHealthyPrice: 0n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n } }
+	const explain = async (principal: bigint) => {
+		const fixture = securityPoolClient({ acceptedPriceEpoch: 2n, repairAuctionPositions: claimedBid(principal), ...closedOwnPosition })
+		receipt.blockHash = fixture.observation.snapshot.blockHash
+		return explainTakeoverReceiptExpiry(intent, receipt, [{ client: fixture.client, endpoint: 'https://read.example' }], 1)
+	}
+	expect(await explain(0n)).toBeUndefined()
+	expect(await explain(5n)).toBe('Target position is no longer live')
+})
+
 test('a finalized takeover whose terms expired is recorded as failed and retires its intent (#1372)', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'expired-takeover-'))
 	try {

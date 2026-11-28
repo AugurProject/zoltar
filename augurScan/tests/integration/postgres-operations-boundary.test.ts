@@ -171,7 +171,7 @@ postgresTest(
 			})
 			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: null, balance_read_status: null })])
 			// Block 1 is stamped well before RepairAuctionStarted.closesAt.
-			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0, status: 'Open' })])
+			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, status: 'Open' })])
 			const auctionDetailResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
 			expect(auctionDetailResponse?.status).toBe(200)
 			const auctionDetail = (await auctionDetailResponse?.json()) as { data: { demandCurve: unknown; demandCurveTruncated: boolean; finalization: { event_data: unknown } } }

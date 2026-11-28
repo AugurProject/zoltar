@@ -24,6 +24,7 @@ export function auctionFixture(): AuctionSnapshot {
 		refundableBidIds: ['1'],
 		capital: address(603),
 		claimableBidIds: [],
+		unclaimedBidIds: [],
 	}
 }
 

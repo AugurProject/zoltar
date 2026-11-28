@@ -754,7 +754,7 @@ describe('anchored ecosystem discovery', () => {
 			wallet: address(1),
 			indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', lots: '1', minimumAttoRepPerLot: 100n.toString(), settled: false }] },
 		})
-		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'], capital: address(91), claimableBidIds: ['1'] })
+		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'], capital: address(91), claimableBidIds: ['1'], unclaimedBidIds: ['1'] })
 		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidId: '1' }) })])
 		// A finalized bid must be claimed, winning or not, before the wallet can choose a branch in a later fork.
 		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.claim-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidIds: '1' }) })])

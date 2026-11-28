@@ -999,7 +999,23 @@ test('#1702 funded live auction bids block completion through settlement', () =>
 	const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state: initialDurableState(snapshot.chainId), v3: [] }
 	expect(assessRetirement(parameters).status).toBe('waiting')
 	auction.finalized = true
+	auction.unclaimedBidIds = ['1']
 	expect(assessRetirement(parameters).status).toBe('waiting')
-	for (const bid of auction.bids) bid.settled = true
+	auction.unclaimedBidIds = []
 	expect(assessRetirement(parameters).status).toBe('drained')
+})
+test('a fully filled winning bid stays unsettled on chain and blocks retirement only until it is claimed', () => {
+	const snapshot = drainedWalletSnapshotFixture()
+	const auction = auctionFixture()
+	auction.finalized = true
+	auction.refundableBidIds = []
+	auction.unclaimedBidIds = ['1']
+	snapshot.auctions = [auction]
+	const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state: initialDurableState(snapshot.chainId), v3: [] }
+	expect(assessRetirement(parameters).status).toBe('waiting')
+	auction.unclaimedBidIds = []
+	expect(auction.bids.every(bid => !bid.settled)).toBe(true)
+	expect(assessRetirement(parameters).status).toBe('drained')
+	auction.refundableBidIds = ['1']
+	expect(assessRetirement(parameters).status).toBe('waiting')
 })

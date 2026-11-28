@@ -1,5 +1,4 @@
 import type { SQL } from 'bun'
-import { latestAuctionCollateral } from './auction-collateral.ts'
 
 // Migration mints emit TransferSingle. Counting Migrate as another credit would
 // double count the child balance; the source remains held but becomes locked. Spending security pool recovery rights
@@ -96,32 +95,6 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 		basis: 'Canonical indexed ERC-1155 transfers; incomplete deployment history can yield partial balances. Migrated source shares, and source shares whose security pool recovery rights were spent, are locked; complete-set inventory is not a redemption quote.',
 	}
 }
-
-// BidSettled credits a bidder's refund; RefundWithdrawn pays out the bidder's whole outstanding credit.
-// Refunds are amounts of the auction's immutable collateral token, so the latest tagged auction read that sampled it names their units.
-export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string, limit = 251, offset = 0) =>
-	await sql`
-		WITH bidder_events AS (
-			SELECT auction_address, event_name, event_data, block_number, log_index
-			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
-				AND event_name IN ('BidSettled', 'RefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
-		), latest_withdrawal AS (
-			SELECT DISTINCT ON (auction_address) auction_address, block_number, log_index
-			FROM bidder_events WHERE event_name = 'RefundWithdrawn'
-			ORDER BY auction_address, block_number DESC, log_index DESC
-		), refunds AS (
-			SELECT count(*) OVER ()::integer AS total, credit.auction_address, sum((credit.event_data->>'refundAttoEth')::numeric)::text AS pending_atto_eth
-			FROM bidder_events credit LEFT JOIN latest_withdrawal withdrawal USING (auction_address)
-			WHERE credit.event_name = 'BidSettled' AND (
-				withdrawal.block_number IS NULL OR (credit.block_number, credit.log_index) > (withdrawal.block_number, withdrawal.log_index)
-			)
-			GROUP BY credit.auction_address HAVING sum((credit.event_data->>'refundAttoEth')::numeric) > 0
-			ORDER BY credit.auction_address LIMIT ${limit} OFFSET ${offset}
-		)
-		SELECT refunds.total, refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
-		FROM refunds
-		ORDER BY refunds.auction_address
-	`
 
 export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlock: string, address: string, limit = 251, offset = 0) =>
 	await sql`

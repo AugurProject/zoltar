@@ -40,9 +40,9 @@ test('handles thrown strings, empty messages, and cyclic causes', () => {
 })
 
 test('preserves diagnostics around sensitive fields and nested RPC request data', () => {
-	const failure = new Error('Simulation failed', { cause: new Error('execution reverted: Question ledger deployment failed\nURL: https://rpc.example/key\nRequest: {"privateKey":"secret","calldata":"0x1234"}\nFile: /workspace/operator/config.json') })
+	const failure = new Error('Simulation failed', { cause: new Error('execution reverted: Contract deployment failed\nURL: https://rpc.example/key\nRequest: {"privateKey":"secret","calldata":"0x1234"}\nFile: /workspace/operator/config.json') })
 	const result = preflightFailureActivity(failure)
-	expect(result.details).toContain('execution reverted: Question ledger deployment failed')
+	expect(result.details).toContain('execution reverted: Contract deployment failed')
 	expect(result.details).toContain('[redacted endpoint]')
 	expect(result.details).toContain('[redacted]')
 	expect(result.details).not.toContain('secret')
@@ -59,8 +59,8 @@ test('redaction remains stable when persisted errors are published again', () =>
 })
 
 test('keeps the deepest revert reason visible ahead of verbose RPC wrappers', () => {
-	const error = new Error('Pool simulation failed', { cause: new Error('RPC request failed: ' + 'a'.repeat(1500), { cause: new Error('execution reverted: Question ledger deployment failed') }) })
-	expect(preflightFailureActivity(error).details).toStartWith('execution reverted: Question ledger deployment failed')
+	const error = new Error('Pool simulation failed', { cause: new Error('RPC request failed: ' + 'a'.repeat(1500), { cause: new Error('execution reverted: Contract deployment failed') }) })
+	expect(preflightFailureActivity(error).details).toStartWith('execution reverted: Contract deployment failed')
 })
 
 test('redacts the complete Basic authorization value while retaining the RPC failure', () => {

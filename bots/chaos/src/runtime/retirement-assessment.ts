@@ -115,7 +115,9 @@ export function assessRetirement(parameters: {
 		if (BigInt(capital.pledgedAttoRep) > 0n || capital.retirementPending) blockers.push({ category: 'temporarily-locked', details: 'Owned capital is pledged or awaiting retirement release', id: `capital:${capital.capitalLedger}` })
 	}
 	for (const auction of parameters.snapshot.auctions) {
-		if (auction.bids.some(bid => !bid.settled && BigInt(bid.lots) > 0n)) blockers.push({ category: 'temporarily-locked', details: 'Owned auction bid awaits canonical settlement and recovery', id: `auction:${auction.address}` })
+		// A fully filled winning bid has no refund, so the engine never marks it settled; only a live bid, an unwithdrawn refund, or an unclaimed bid still holds value.
+		const liveBid = !auction.finalized && auction.bids.some(bid => !bid.settled && BigInt(bid.lots) > 0n)
+		if (liveBid || auction.refundableBidIds.length > 0 || auction.unclaimedBidIds.length > 0) blockers.push({ category: 'temporarily-locked', details: 'Owned auction bid awaits refund or claim', id: `auction:${auction.address}` })
 	}
 	for (const workflow of unresolvedWorkflows.filter(candidate => candidate.classification === 'selectable' && candidate.status === 'failed')) {
 		const failure = workflow.steps.find(step => step.status === 'failed')

@@ -266,7 +266,6 @@ export const addressSecurityPoolRows = async (
 			WITH participation AS (SELECT universe_identity, event_name, event_data, block_number, block_hash, tx_hash, log_index
 				FROM fork_migration_events event WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (
 					lower(event.event_data->>'migrator') = ${address} OR lower(event.event_data->>'owner') = ${address}
-					OR lower(event.event_data->>'recipient') = ${address}
 					OR (event.event_name = 'UniverseForked' AND lower(event.event_data->>'forker') = ${address}))), totals AS (SELECT count(*)::integer AS total FROM participation)
 			SELECT page.universe_identity, page.event_name, page.event_data, page.block_number::text,
 				page.block_hash, page.tx_hash, page.log_index, totals.total FROM totals LEFT JOIN LATERAL (

@@ -470,8 +470,9 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 					const credit = readUnsigned(data, 32, 32)
 					if (credit > 0n) {
 						const prior = auctionRefunds[key]
-						// Without cumulative credit events, a partial prefix cannot establish a zero balance.
-						// Quorum-verified storage seeds the missing episode at the scan anchor.
+						// The engine pays each refund in the same call that settles the bid, so RefundWithdrawn follows
+						// at once and clears this credit. Nothing reads the credit; the persisted index schema keeps it.
+						// After a missing prefix, skip it; the matching withdrawal is skipped too.
 						if (partialHistory && prior === undefined) continue
 						auctionRefunds[key] = { generation: prior?.generation ?? refundEpisodeGeneration(log), pendingAttoEth: ((prior === undefined ? 0n : BigInt(prior.pendingAttoEth)) + credit).toString() }
 					}
@@ -565,7 +566,6 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {
 	return {
 		indexedAuctionBids: index.auctionBids,
-		indexedAuctionRefunds: index.auctionRefunds,
 		indexedEscalationDeposits: index.escalationDeposits,
 		indexedMigrationRepSplits: index.migrationRepSplits,
 		indexedReports: index.reports,

@@ -20,6 +20,10 @@ import { getInfraContractAddresses } from '../testSupport/simulator/utils/contra
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
+import { formatStorageSlot } from '../testSupport/storage'
+
+// EscalationGame storage slot of `forkCarryInitialBackingAttoRep`, pinned by escalationGameInterfaceRegression.test.ts.
+const FORK_CARRY_INITIAL_BACKING_SLOT = 235n
 
 // Two questions carried through two generations of forks with lazily created pools.
 // Q1: contested in the origin, becomes final in the never-materialized child A before A forks.
@@ -134,6 +138,12 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		for (let step = 0; step < 3; step++) await writeContractAndWait(trader, () => trader.writeContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [source1, A] }))
 		const pool1A = await owner.readContract({ ...p, functionName: 'getQuestionLedger', args: [q1, A] })
 		expect(Number(await owner.readContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'systemState' }))).toBe(0)
+		// The factory binds the reporter escrow the child inherits as its fork-carry backing, so live inherited carry is never unbacked.
+		const game1A = await owner.readContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'escalationGame' })
+		const rawBacking = await base.mockWindow.request({ method: 'eth_getStorageAt', params: [game1A, formatStorageSlot(FORK_CARRY_INITIAL_BACKING_SLOT), 'latest'] })
+		if (typeof rawBacking !== 'string') throw new Error('eth_getStorageAt returned a non-string value')
+		const backing = BigInt(rawBacking)
+		expect(backing).toBe(170n * unit)
 		await expect(trader.simulateContract({ ...shares1, functionName: 'migrate', args: [A * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 		before = await cash(trader.account.address)
 		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: pool1A, functionName: 'redeemShares', args: [] }))
@@ -154,6 +164,41 @@ describe('audit: multi-question security pool across two universe forks', () => 
 		expect(coordinatorCash).toBeLessThanOrEqual(8n)
 		expect(q2FromA1 + q2FromU0 + q2FromA + q1FromA + q1FromU0).toBeGreaterThanOrEqual(sealed0[0] - 16n)
 		expect(servicesCash).toBeGreaterThanOrEqual(premiumTotal)
+	})
+
+	test('a reporter game that became final before its universe forked exports no carry to the child', async () => {
+		const { base } = fixture
+		const owner = fixture.owner()
+		const trader = fixture.other()
+		const p = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
+		const q1 = base.questionId
+		const U0 = base.genesisUniverse
+		await fixture.prepare()
+		await fixture.mint(10n * unit, q1)
+		const coordinator = { abi: coordinatorArtifact.abi, address: await owner.readContract({ ...p, functionName: 'forkController' }) }
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
+		const source1 = fixture.poolFor(q1).questionLedger
+		await base.mockWindow.setTime(base.questionData.endTime + 1n)
+		await approveToken(owner, getRepTokenAddress(U0), source1)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: source1, functionName: 'depositWalletRepToEscalationGame', args: [1, 100n * unit] }))
+		const game0 = await owner.readContract({ abi: poolArtifact.abi, address: source1, functionName: 'escalationGame' })
+		const end0 = await owner.readContract({ abi: gameArtifact.abi, address: game0, functionName: 'getEscalationGameEndDate' })
+		await base.mockWindow.setTime(end0 + 1n)
+		expect(await owner.readContract({ abi: gameArtifact.abi, address: game0, functionName: 'getFinalQuestionResolution' })).toBe(1n)
+		await approveToken(owner, getRepTokenAddress(U0), getZoltarAddress())
+		await forkUniverse(owner, U0, await unrelatedQuestion('Experiment fork'))
+		await addRepToMigrationBalance(owner, U0, 1_000_000n * unit)
+		await splitMigrationRep(owner, U0, 1_000_000n * unit, [1n])
+		const fork1 = (await getUniverseData(owner, U0)).forkTime
+		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'choose', args: [U0, 1n] }))
+		const A = getChildUniverseId(U0, 1)
+		await base.mockWindow.setTime(fork1 + 63n * DAY)
+		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'startBranch', args: [U0, 1n], gas: 16_777_216n }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...coordinator, functionName: 'finalizeBranch', args: [A] }))
+		// The child still names the final origin game as its reporter source, so the forker must refuse to export its carry.
+		expect((await owner.readContract({ ...p, functionName: 'sourceGame', args: [A, q1] })).toLowerCase()).toBe(game0.toLowerCase())
+		await expect(trader.simulateContract({ ...forker, functionName: 'materializeSecurityPoolQuestion', args: [source1, A] })).rejects.toThrow('Question finalized in source universe')
+		await expect(trader.simulateContract({ ...forker, functionName: 'prepareSecurityPoolQuestion', args: [source1, A] })).rejects.toThrow('Question finalized in source universe')
 	})
 
 	test('shares migrate through a pool that was prepared but not materialized before its universe forked', async () => {

@@ -108,6 +108,16 @@ test('a finalized auction with no fills explains the remaining shortfall and mak
 	expect(view.container.textContent).toContain('No winning lots')
 })
 
+test('a fully filled bid in a finalized auction offers no refund, because the engine never settles it', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['finalized'] = true
+	fixture.values['previewBid'] = [owner, 2n, 2n * unit, 200n * unit, 0n]
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(button(view.container, 'Claim bid').disabled).toBe(false))
+	expect([...view.container.querySelectorAll('button')].some(candidate => candidate.textContent === 'Withdraw this bid’s refund')).toBe(false)
+})
+
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
 	const fixture = await auctionFixture()
 	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 3n * unit

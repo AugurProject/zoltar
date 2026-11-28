@@ -262,6 +262,8 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 	if (bid.fill !== undefined) refund = bid.fill.refundAttoEth
 	// A paid refund leaves nothing owed; the status note records the payment.
 	if (bid.refundSettled) refund = 0n
+	// A fully filled bid has nothing to refund, so the engine never settles it and its refund never opens.
+	const refundPossible = !bid.refundSettled && !(auction.finalized && bid.fill?.refundAttoEth === 0n)
 	const money = (value: bigint | undefined) => <CurrencyValue value={value} suffix={collateral.symbol} units={collateral.decimals} />
 	return (
 		<tbody>
@@ -284,7 +286,7 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 			</tr>
 			<tr>
 				<td className='statoblast-auction-bid-actions' colSpan={5}>
-					{!bid.refundSettled && (
+					{refundPossible && (
 						<div className='actions'>
 							<SecurityPoolButton model={parameters.actions} action={`refundSecurityPoolAuction${bid.id}`} label={copy.refund} pendingLabel={copy.refunding} reason={model.refundReason(bid)} onClick={() => model.refund(bid)} />
 						</div>

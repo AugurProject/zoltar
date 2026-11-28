@@ -143,7 +143,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		'Escalation deposit positions',
 		(item.escalation_positions ?? []).map(position => {
 			let state = 'Unconsumed losing principal'
-			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement', 'export', 'direct parent claim'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
+			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
 			else if (position['retired_block'] != null) state = `Losing principal retired by settlement at block ${position['retired_block']}`
 			else if (position['final_resolution'] == null || position['final_resolution'] === '3') state = 'Pending resolution'
 			else if (position['final_resolution'] === position['outcome']) state = 'Unconsumed winning principal; see tagged payout evidence'
@@ -168,16 +168,6 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		{
 			label: `Tagged REP payouts to the depositor’s wallet. Refresh proofs after any settlement. Chain sampling: ${String(payouts['unavailable_games'] ?? '0')} games unavailable; ${String(payouts['truncated_games'] ?? '0')} games truncated.${payouts['truncated'] === true ? ' First 250 address positions shown.' : ''}`,
 		},
-	)
-	const refundPanel = operationsPanel(
-		'Pending auction refunds',
-		(item.pending_refunds ?? []).map(refund => {
-			// Refunds are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
-			const collateral = collateralUnit(refund)
-			return operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), collateral.decimals, collateral.symbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))
-		}),
-		'No indexed refund credits remain.',
-		{ label: 'Balances cover indexed history.' },
 	)
 	const shares = item.share_positions ?? {}
 	const sharePanel = operationsPanel(
@@ -279,7 +269,6 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		}
 	}
 	appendSecurityPoolPagination('positions', escalationPositions)
-	appendSecurityPoolPagination('refunds', refundPanel)
 	appendSecurityPoolPagination('lp', lpPositions)
 	appendSecurityPoolPagination('forks', forkParticipation)
 	appendSecurityPoolPagination('reports', reportParticipation)
@@ -347,7 +336,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	interactionPanel.append(interactionList)
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
-	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, refundPanel, tradingPnl, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
+	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, tradingPnl, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
 	if (viewState !== undefined && securityPoolFocusKind === undefined) restoreViewState(content, viewState)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')

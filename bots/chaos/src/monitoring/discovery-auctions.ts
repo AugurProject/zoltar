@@ -74,11 +74,12 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		}
 		// Every bid must be claimed, winning or not, before its bidder can choose a branch in a later fork. A bid can be
 		// claimed once the auction is finalized, or earlier once it was excluded and refunded.
-		const claimableBidIds: string[] = []
+		const unclaimedBidIds: string[] = []
 		for (const bid of bids) {
 			if (!finalized && !bid.settled) continue
-			if (!(await client.readContract({ abi: abis.securityPoolCapitalLedgerAbi, address: capital, functionName: 'repairAuctionBidClaimed', args: [BigInt(bid.bidId)], blockNumber }))) claimableBidIds.push(bid.bidId)
+			if (!(await client.readContract({ abi: abis.securityPoolCapitalLedgerAbi, address: capital, functionName: 'repairAuctionBidClaimed', args: [BigInt(bid.bidId)], blockNumber }))) unclaimedBidIds.push(bid.bidId)
 		}
+		const claimableBidIds = [...unclaimedBidIds]
 		if (claimableBidIds.length > 0) {
 			try {
 				// Simulate the batch the claim operation sends next.
@@ -110,6 +111,7 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			refundableBidIds,
 			capital,
 			claimableBidIds,
+			unclaimedBidIds,
 		})
 	}
 	return auctions

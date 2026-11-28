@@ -78,11 +78,10 @@ for (const viewport of qaViewports) {
 		120_000,
 	)
 	browserTest(
-		`address profile shows pending auction refunds and auction interactions in the auction collateral token at ${size}`,
+		`address profile shows auction interactions in the auction collateral token at ${size}`,
 		async () => {
 			await withBrowserPage(`${origin}/address/${bidder}?demo=1&chainId=1`, viewport, async ({ evaluate, waitFor }) => {
-				await waitFor(`${panel('Pending auction refunds')} !== undefined`)
-				expect(await evaluate(`${panel('Pending auction refunds')}.textContent`)).toContain('0.100001 USDC')
+				await waitFor(`${panel('Auction interactions')} !== undefined`)
 				expect(await evaluate(`${panel('Auction interactions')}.textContent`)).toContain('Refund: 0.100001 USDC')
 				expect(await evaluate(noOverflow)).toBe(true)
 			})

@@ -1,4 +1,4 @@
-import { escalationPayouts, escalationPositions, pendingAuctionRefunds, sharePositions } from '../repositories/share-positions.ts'
+import { escalationPayouts, escalationPositions, sharePositions } from '../repositories/share-positions.ts'
 import type { SQL } from 'bun'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { addressSecurityPoolRows, richListRows, type RichListSort } from '../repositories/security-pool.ts'
@@ -47,7 +47,7 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	})
 }
 
-type SecurityPoolCollection = 'forks' | 'lp' | 'reports' | 'refunds' | 'positions'
+type SecurityPoolCollection = 'forks' | 'lp' | 'reports' | 'positions'
 type SecurityPoolCursor = readonly [number, string, SecurityPoolCollection, string, string, string, string, string, string, number, number]
 
 const parseSecurityPoolCursor = (value: string | null, chainId: number, address: string, kind: SecurityPoolCollection): { readonly total: number; readonly offset: number; readonly cursor?: SecurityPoolCursor } => {
@@ -63,7 +63,7 @@ const parseSecurityPoolCursor = (value: string | null, chainId: number, address:
 		parts.length !== 11 ||
 		!isNonNegativeSafeInteger(parts[0]) ||
 		typeof parts[1] !== 'string' ||
-		(parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports' && parts[2] !== 'positions' && parts[2] !== 'refunds') ||
+		(parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports' && parts[2] !== 'positions') ||
 		!hasCursorSnapshot(parts, 3) ||
 		!isNonNegativeSafeInteger(parts[9]) ||
 		!isNonNegativeSafeInteger(parts[10]) ||
@@ -95,12 +95,11 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 	const lpPage = parseSecurityPoolCursor(url.searchParams.get('lpCursor'), chainId, address, 'lp')
 	const forkPage = parseSecurityPoolCursor(url.searchParams.get('forkCursor'), chainId, address, 'forks')
 	const reportPage = parseSecurityPoolCursor(url.searchParams.get('reportCursor'), chainId, address, 'reports')
-	const refundPage = parseSecurityPoolCursor(url.searchParams.get('refundCursor'), chainId, address, 'refunds')
 	const positionPage = parseSecurityPoolCursor(url.searchParams.get('positionCursor'), chainId, address, 'positions')
 	const asOf = await operationsAsOfForContinuations(
 		sql,
 		chainId,
-		[lpPage.cursor, forkPage.cursor, reportPage.cursor, refundPage.cursor, positionPage.cursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
+		[lpPage.cursor, forkPage.cursor, reportPage.cursor, positionPage.cursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
 	)
 	const snapshotBlock = String(asOf['blockNumber'])
 	const securityPoolRowsPromise = richListRows(sql, { chainId, address, snapshotBlock, limit: 1, offset: 0, sort: 'transactions' })
@@ -134,12 +133,7 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 	const lp = collection('lp', lpRows, lpPage, 'market_address')
 	const forks = collection('forks', forkRows, forkPage, 'universe_identity')
 	const reports = collection('reports', reportRows, reportPage, 'open_oracle_address')
-	const [refunds, positions, tradingPnl] = await Promise.all([
-		pendingAuctionRefunds(sql, chainId, snapshotBlock, address, 250, refundPage.offset),
-		escalationPositions(sql, chainId, snapshotBlock, address, 250, positionPage.offset),
-		accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, asOfTimestamp: String(asOf['blockTimestamp']), account: address }),
-	])
-	const refundCollection = collection('refunds', refunds, refundPage, 'auction_address', 250)
+	const [positions, tradingPnl] = await Promise.all([escalationPositions(sql, chainId, snapshotBlock, address, 250, positionPage.offset), accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, asOfTimestamp: String(asOf['blockTimestamp']), account: address })])
 	const positionCollection = collection('positions', positions, positionPage, 'game_address', 250)
 	const base = items[0]
 	// Omit unknown aggregate balances instead of turning absent historical reads into zero.
@@ -166,13 +160,11 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 			escalation_payouts: await escalationPayouts(sql, chainId, snapshotBlock, address),
 			escalation_positions_truncated: positionCollection.page.hasMore,
 			share_positions: await sharePositions(sql, chainId, snapshotBlock, { address }),
-			pending_refunds: refundCollection.items,
-			pending_refunds_truncated: refundCollection.page.hasMore,
 			lp_positions: lp.items,
 			trading_pnl: tradingPnl,
 			fork_participation: forks.items,
 			report_participation: reports.items,
-			securityPoolPagination: { lp: lp.page, forks: forks.page, reports: reports.page, refunds: refundCollection.page, positions: positionCollection.page },
+			securityPoolPagination: { lp: lp.page, forks: forks.page, reports: reports.page, positions: positionCollection.page },
 		},
 	})
 }

@@ -224,6 +224,8 @@ export interface AuctionSnapshot {
 	capital: Address
 	/** The wallet's bids the ledger has not marked claimed and can claim at the anchor block. */
 	claimableBidIds: string[]
+	/** The wallet's bids the ledger has not marked claimed, whether or not a claim succeeds at the anchor block. */
+	unclaimedBidIds: string[]
 }
 
 export interface OracleGameSnapshot {
