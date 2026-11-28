@@ -34,7 +34,7 @@ contract SecurityPoolReporterLedgerHarness {
 	function deposit(uint256 amountAttoRep) external {
 		IERC20 token = IERC20(address(zoltar.getRepToken(universeId)));
 		token.safeTransferFrom(msg.sender, address(ledger), amountAttoRep);
-		ledger.depositForGame(address(this), amountAttoRep);
+		_credit(amountAttoRep);
 	}
 
 	function depositAndSchedule(uint256 amountAttoRep, uint48 finalAfter) external {
@@ -43,7 +43,13 @@ contract SecurityPoolReporterLedgerHarness {
 	}
 
 	function creditUnfunded(uint256 amountAttoRep) external {
-		ledger.depositForGame(address(this), amountAttoRep);
+		_credit(amountAttoRep);
+	}
+
+	/// @dev Credit at the stored deadline, as the canonical game does when its finality is unchanged.
+	function _credit(uint256 amountAttoRep) private {
+		(SecurityPoolReporterLedger.Question memory state, ) = ledger.question(universeId, questionId);
+		ledger.depositAndScheduleFinality(address(this), amountAttoRep, state.finalAfter);
 	}
 
 	function withdraw(address recipient, uint256 amountAttoRep) external {

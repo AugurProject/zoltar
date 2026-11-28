@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: '4f97bfd0bab8c31d9feb92cd9e7b4a5deb8a0f101af0a5bad29a7010dbb04b96',
+	compiledAbiFingerprint: '29557625ba7d46482cc032464251e7f97fcca0699ae9d9ad9225f00b2d76ad8e',
 	name: 'QuestionLedger',
 	interactionNotes: 'See the [security pool module boundaries](./contract-inventory.html#security-pool-boundary) for capital, settlement, and reporter custody.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
@@ -304,16 +304,16 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`setAwaitingForkContinuation(shouldAwait)`',
+			call: '`markAwaitingForkContinuation()`',
 			caller: '`QuestionForker` only',
 			declarations: [
 				{
-					name: 'setAwaitingForkContinuation',
+					name: 'markAwaitingForkContinuation',
 				},
 			],
-			effect: 'Stores whether complete-set minting must wait for continuation initialization, then refreshes bound security pool fee accounting.',
+			effect: 'Marks the ledger as awaiting continuation, which blocks complete-set minting and wallet reporting until the continuation resumes, then refreshes bound security pool fee accounting.',
 			preconditions: 'No lifecycle or value-change guard.',
-			signals: '`AwaitingForkContinuationSet`, including for a repeated value; bound question ledgers then emit central checkpoints and stream replacement when applicable',
+			signals: '`AwaitingForkContinuationSet` with `true`, including when already set; bound question ledgers then emit central checkpoints and stream replacement when applicable',
 		},
 		{
 			call: '`setSystemState(newState)`',

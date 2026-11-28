@@ -36,7 +36,6 @@ abstract contract EscalationGameStorage {
 	// The inherited component of totalDisputeStakedAttoRep. Inherited expenditure
 	// retires at most this component; local principal is released on settlement.
 	uint256 internal forkCarryDisputeStakedAttoRep;
-	address internal forkCarrySourceGame;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
 	uint8 public forkCarrySnapshotOutcomesInitialized;

@@ -48,7 +48,6 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	struct Question {
 		uint256 balanceAttoRep;
 		address sourceGame;
-		uint248 scheduledUniverseId;
 		uint48 finalAfter;
 		bool winnerHaircutPaidByFork;
 	}
@@ -67,8 +66,8 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	uint64 private lastQuestionStateId;
 	mapping(uint248 => Book) public books;
 	mapping(uint64 => Question) private questions;
-	mapping(address => Game) public games;
-	mapping(uint248 => mapping(uint256 => address)) public registeredGames;
+	mapping(address => Game) private games;
+	mapping(uint248 => mapping(uint256 => address)) private registeredGames;
 
 	event GameRegistered(uint248 indexed universeId, uint256 indexed questionId, address indexed game);
 	event ReporterBalanceChanged(uint248 indexed universeId, uint256 indexed questionId, uint256 balanceAttoRep);
@@ -138,22 +137,6 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		return state.balanceAttoRep;
 	}
 
-	/// @dev The canonical game first transfers actual REP, then credits exactly that deposit.
-	function depositForGame(address game, uint256 amountAttoRep) external {
-		Game memory identity = _authorizedGame(game);
-		Book storage book = _book(identity.universeId);
-		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(identity.universeId, book, _securityPoolTime(identity.universeId));
-		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
-		require(!finalClaim, 'Reporter claim is final');
-		require(IERC20(address(zoltar.getRepToken(identity.universeId))).balanceOf(address(this)) >= book.liveAttoRep + book.finalAttoRep + amountAttoRep, 'Reporter deposit is not funded');
-		_changeFinality(book, state.finalAfter, amountAttoRep, true);
-		state.balanceAttoRep += amountAttoRep;
-		book.liveAttoRep += amountAttoRep;
-		_writeQuestion(book, identity.questionId, state);
-		emit ReporterBalanceChanged(identity.universeId, identity.questionId, state.balanceAttoRep);
-	}
-
 	/// @notice Credit funded REP and move the complete balance to its resulting deadline in one snapshot.
 	function depositAndScheduleFinality(address game, uint256 amountAttoRep, uint48 finalAfter) external {
 		Game memory identity = _authorizedGame(game);
@@ -172,7 +155,6 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		}
 		state.balanceAttoRep += amountAttoRep;
 		state.finalAfter = finalAfter;
-		state.scheduledUniverseId = identity.universeId;
 		book.liveAttoRep += amountAttoRep;
 		_writeQuestion(book, identity.questionId, state);
 		emit ReporterBalanceChanged(identity.universeId, identity.questionId, state.balanceAttoRep);
@@ -204,24 +186,20 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	/// @dev Games update this when reporting changes the unique leader or response deadline.
 	function scheduleFinality(address game, uint48 finalAfter) external {
-		require(msg.sender == securityPool || msg.sender == game, 'Only canonical reporter game');
-		Game memory identity = games[game];
-		require(identity.registered, 'Reporter game is not registered');
+		Game memory identity = _authorizedGame(game);
 		Book storage book = _book(identity.universeId);
 		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(identity.universeId, book, _securityPoolTime(identity.universeId));
+		uint48 timestamp = _securityPoolTime(identity.universeId);
+		_freezeMatured(identity.universeId, book, timestamp);
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!finalClaim, 'Reporter finality is immutable');
 		// Deadlines are expressed in the security pool clock, which pauses across forks.
-		require(finalAfter == 0 || finalAfter >= _securityPoolTime(identity.universeId), 'Reporter finality already elapsed');
+		require(finalAfter == 0 || finalAfter >= timestamp, 'Reporter finality already elapsed');
 		// Deposits already credit new REP at the stored deadline.
 		if (state.finalAfter != finalAfter) {
 			_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
 			_changeFinality(book, finalAfter, state.balanceAttoRep, true);
-		}
-		if (state.finalAfter != finalAfter || state.scheduledUniverseId != identity.universeId) {
 			state.finalAfter = finalAfter;
-			state.scheduledUniverseId = identity.universeId;
 			_writeQuestion(book, identity.questionId, state);
 		}
 		emit ReporterFinalityScheduled(game, finalAfter);
@@ -295,7 +273,6 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 			Book storage child = books[childUniverseId];
 			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, false);
 			fixedQuestion.finalAfter = child.minimumFinalAfter + Constants.FORK_RESPONSE_DELAY;
-			fixedQuestion.scheduledUniverseId = childUniverseId;
 			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, true);
 			_writeQuestion(child, forkQuestionId, fixedQuestion);
 		}

@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>The <a href="../contracts.html#table-columns">contract index</a> defines the columns. See the <a href="../contract-inventory.html#security-pool-boundary">security pool module boundaries</a> for capital, settlement, and reporter custody.</p>
 				<!-- Validated read ABI fingerprint: 39577cbecb307d806103962c9af8042e5d486d5c35ce6b04d649e8d544a90c63 -->
-				<!-- Validated complete compiled ABI fingerprint: 4f97bfd0bab8c31d9feb92cd9e7b4a5deb8a0f101af0a5bad29a7010dbb04b96 -->
+				<!-- Validated complete compiled ABI fingerprint: 29557625ba7d46482cc032464251e7f97fcca0699ae9d9ad9225f00b2d76ad8e -->
 				<table>
 					<thead>
 						<tr>
@@ -154,11 +154,11 @@
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
-							<td><code>setAwaitingForkContinuation(shouldAwait)</code></td>
+							<td><code>markAwaitingForkContinuation()</code></td>
 							<td><code>QuestionForker</code> only</td>
 							<td>No lifecycle or value-change guard.</td>
-							<td>Stores whether complete-set minting must wait for continuation initialization, then refreshes bound security pool fee accounting.</td>
-							<td><code>AwaitingForkContinuationSet</code>, including for a repeated value; bound question ledgers then emit central checkpoints and stream replacement when applicable</td>
+							<td>Marks the ledger as awaiting continuation, which blocks complete-set minting and wallet reporting until the continuation resumes, then refreshes bound security pool fee accounting.</td>
+							<td><code>AwaitingForkContinuationSet</code> with <code>true</code>, including when already set; bound question ledgers then emit central checkpoints and stream replacement when applicable</td>
 						</tr>
 						<tr>
 							<td><code>setSystemState(newState)</code></td>

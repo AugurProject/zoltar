@@ -55,11 +55,6 @@ contract QuestionLedgerDelegate is QuestionLedgerStorage {
 		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastSettlementSecurityPoolTime);
 	}
 
-	/// @notice Mirror the central book after accruing fees and reserving any matured claim for this question.
-	function synchronizeSettlement() public payable {
-		_synchronizeSettlement(false);
-	}
-
 	/// @notice Synchronize a reporting change and the question's prospective central fee stream.
 	function refreshSettlement() external payable {
 		_synchronizeSettlement(true);
@@ -76,9 +71,10 @@ contract QuestionLedgerDelegate is QuestionLedgerStorage {
 	}
 
 	/// @notice Pool delegate target; payable because delegatecall retains the outer call value.
+	/// @dev Mirrors the central book after accruing fees and reserving any matured claim for this question.
 	function accrueSettlementCollateral() external payable {
 		uint256 previousTimestamp = lastSettlementSecurityPoolTime;
-		synchronizeSettlement();
+		_synchronizeSettlement(false);
 		if (lastSettlementSecurityPoolTime != previousTimestamp) _emitAccountingCheckpoint(AccountingReason.Accrual);
 	}
 
@@ -114,23 +110,18 @@ contract QuestionLedgerDelegate is QuestionLedgerStorage {
 	function createCompleteSet(uint256 cash) external returns (uint256 completeSetsToMintAttoShares) {
 		IQuestionLedger pool = IQuestionLedger(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
-		if (securityPoolCustody != address(0)) {
-			address securityPool = pool.securityPoolFactory().securityPoolOf(pool);
-			require(msg.sender == ISecurityPoolPurchaseAuthority(securityPool).services(), 'Use security pool purchase');
-		}
+		// The factory binds custody in the same transaction that deploys a security pool ledger.
+		address securityPool = pool.securityPoolFactory().securityPoolOf(pool);
+		require(msg.sender == ISecurityPoolPurchaseAuthority(securityPool).services(), 'Use security pool purchase');
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (cash == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(block.timestamp < pool.questionData().getQuestionEndDate(pool.questionId()), 'Question ended');
-		if (securityPoolCustody != address(0)) {
-			(
-				completeSetsToMintAttoShares,
-				shareTokenSupplyAttoShares,
-				settlementCollateralAttoEth
-			) = ISecurityPoolSettlement(address(securityPoolAccounting)).mintQuestionSettlement(cash);
-			emit CompleteSetCreated(msg.sender, cash, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
-			return completeSetsToMintAttoShares;
-		}
-		revert('Security pool settlement missing');
+		(
+			completeSetsToMintAttoShares,
+			shareTokenSupplyAttoShares,
+			settlementCollateralAttoEth
+		) = ISecurityPoolSettlement(address(securityPoolAccounting)).mintQuestionSettlement(cash);
+		emit CompleteSetCreated(msg.sender, cash, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 	}
 
 	function _redeemSecurityPoolSettlement(address recipient, uint256 burnedShares) private returns (uint256 paidCashAttoEth) {
@@ -151,7 +142,7 @@ contract QuestionLedgerDelegate is QuestionLedgerStorage {
 			escalationGame = pool.escalationGameFactory().deployEscalationGame(pool.initialEscalationGameDepositAttoRep(), zoltar.getNonDecisionThresholdAttoRep(universeId));
 			emit EscalationGameSet(escalationGame);
 		}
-		require(!escalationGame.forkContinuation() || (securityPoolCustody != address(0) && escalationGame.forkResumedAt() != 0), 'Fork game');
+		require(!escalationGame.forkContinuation() || escalationGame.forkResumedAt() != 0, 'Fork game');
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = requireLead
 			? escalationGame.previewLeadingDepositOnOutcome(outcome, maximumDepositAttoRep)
 			: escalationGame.previewDepositOnOutcome(outcome, maximumDepositAttoRep);

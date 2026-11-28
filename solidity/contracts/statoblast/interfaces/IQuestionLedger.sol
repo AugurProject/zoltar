@@ -77,7 +77,7 @@ interface IQuestionLedger {
 	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external;
 	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep) external;
 	function resumeForkedEscalationGame() external;
-	function setAwaitingForkContinuation(bool shouldAwait) external;
+	function markAwaitingForkContinuation() external;
 	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
 	function authorizeChildQuestionLedger(IQuestionLedger pool) external;

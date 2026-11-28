@@ -69,9 +69,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (outcomeIndex == 0) {
 			require(snapshotId != bytes32(0), 'Snapshot id missing');
 			forkCarrySnapshotId = snapshotId;
-			forkCarrySourceGame = sourceGame;
 		} else {
-			require(forkCarrySnapshotId == snapshotId && forkCarrySourceGame == sourceGame, 'Snapshot changed');
+			// The final outcome proves the id commits to `sourceGame`.
+			require(forkCarrySnapshotId == snapshotId, 'Snapshot changed');
 		}
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		state.snapshotLeafCount = leafCount;

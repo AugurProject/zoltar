@@ -59,8 +59,13 @@ contract QuestionForker {
 		if (child.systemState() == SystemState.Operational) return child;
 		if (zoltar.getForkTime(targetUniverse) != 0)
 			require(_canActivateInForkedUniverse(securityPool, targetUniverse, source.questionId()), 'Only finalized questions can activate in a forked universe');
+		_activate(securityPool, source, child, sourceGame);
+	}
+
+	/// @dev Activates a prepared, non-operational child once any reporter carry is complete.
+	function _activate(ISecurityPoolNative securityPool, IQuestionLedger source, IQuestionLedger child, address sourceGame) private {
 		if (sourceGame != address(0) && !_continueReporterGame(securityPool, source, child, EscalationGame(sourceGame)))
-			return child;
+			return;
 		child.setSystemState(SystemState.Operational);
 		if (sourceGame != address(0)) {
 			securityPool.registerReporterGame(address(child.escalationGame()));
@@ -79,20 +84,37 @@ contract QuestionForker {
 		uint48 finalAfter = securityPool.securityPoolTimeForNative(universe, CheckedCast.toUint48(game.getEscalationGameEndDate()));
 		(SecurityPoolReporterLedger.Question memory reporter, ) = SecurityPoolReporterLedger(securityPool.reporterLedger(universe)).question(universe, child.questionId());
 		require(reporter.finalAfter != 0 && reporter.finalAfter == finalAfter, 'Reporter continuation finality mismatch');
-		SecurityPoolSettlement settlement = SecurityPoolSettlement(securityPool.settlement());
-		(SecurityPoolSettlementBook.Question memory claim, ) = settlement.ledger().question(settlement.bookIds(universe), child.questionId());
+		(SecurityPoolSettlementBook.Question memory claim, , , ) = _settlementQuestion(securityPool, universe, child.questionId());
 		if (claim.outcomeSupplyAttoShares != 0)
 			require(claim.finalAfter != 0 && claim.finalAfter == finalAfter, 'Settlement continuation finality mismatch');
 	}
 
 	function _hasProtectedQuestionCash(ISecurityPoolNative securityPool, uint248 universe, uint256 questionId) private view returns (bool) {
-		SecurityPoolSettlement engine = SecurityPoolSettlement(securityPool.settlement());
-		SecurityPoolSettlementBook ledger = engine.ledger();
-		uint64 bookId = engine.bookIds(universe);
-		(SecurityPoolSettlementBook.Question memory question, uint64 frozenBookId) = ledger.question(bookId, questionId);
+		(
+			SecurityPoolSettlementBook.Question memory question,
+			uint64 frozenBookId,
+			SecurityPoolSettlementBook ledger,
+			uint64 bookId
+		) = _settlementQuestion(securityPool, universe, questionId);
 		if (frozenBookId == 0 || question.outcomeSupplyAttoShares == 0) return false;
 		(, , uint64 sourceBookId, ) = ledger.frozenBooks(frozenBookId);
 		return sourceBookId == bookId;
+	}
+
+	function _settlementQuestion(ISecurityPoolNative securityPool, uint248 universe, uint256 questionId)
+		private
+		view
+		returns (
+			SecurityPoolSettlementBook.Question memory question,
+			uint64 frozenBookId,
+			SecurityPoolSettlementBook ledger,
+			uint64 bookId
+		)
+	{
+		SecurityPoolSettlement engine = SecurityPoolSettlement(securityPool.settlement());
+		ledger = engine.ledger();
+		bookId = engine.bookIds(universe);
+		(question, frozenBookId) = ledger.question(bookId, questionId);
 	}
 
 	/// @dev The source share namespace may be a prepared pool without its own game.
@@ -105,17 +127,21 @@ contract QuestionForker {
 		securityPool.prepareQuestionUniverse(targetUniverse);
 		address game = securityPool.sourceGame(targetUniverse, source.questionId());
 		if (game != address(0)) source = EscalationGame(game).questionLedger();
+		(
+			IQuestionLedger child,
+			ISecurityPoolNative authority,
+			address sourceGame,
+			IQuestionLedger effectiveSource
+		) = _prepareSecurityPoolQuestion(source, targetUniverse);
+		if (child.systemState() == SystemState.Operational) return;
 		// A target that forked before this question was materialized there cannot
 		// activate a live question. Its prepared, forked ledger is all that shares
 		// need in order to migrate on through that universe.
-		if (zoltar.getForkTime(targetUniverse) != 0) {
-			(IQuestionLedger child, ISecurityPoolNative authority, , ) = _prepareSecurityPoolQuestion(source, targetUniverse);
-			if (
-				child.systemState() == SystemState.Operational ||
-				!_canActivateInForkedUniverse(authority, targetUniverse, source.questionId())
-			) return;
-		}
-		materializeSecurityPoolQuestion(source, targetUniverse);
+		if (
+			zoltar.getForkTime(targetUniverse) != 0 &&
+			!_canActivateInForkedUniverse(authority, targetUniverse, effectiveSource.questionId())
+		) return;
+		_activate(authority, effectiveSource, child, sourceGame);
 	}
 
 	function _canActivateInForkedUniverse(ISecurityPoolNative securityPool, uint248 targetUniverse, uint256 questionId) private view returns (bool) {
@@ -184,46 +210,56 @@ contract QuestionForker {
 		EscalationGame game = pool.escalationGame();
 		if (address(game) != address(0)) return game.getFinalQuestionResolution();
 		ISecurityPoolNative securityPool = ISecurityPoolNative(pool.securityPoolFactory().securityPoolOf(pool));
-		(bool isFixed, uint256 fixedValue) = securityPool.inheritedFixedOutcome(pool.universeId(), pool.questionId());
-		require(!isFixed || fixedValue < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
+		(bool isFixed, BinaryOutcomes.BinaryOutcome fixedOutcome) = _inheritedFixedOutcome(securityPool, pool);
 		if (!isFixed) return BinaryOutcomes.BinaryOutcome.None;
 		uint48 finalAfter = EscalationGameRepCustody.fixedQuestionFinalAfter(address(securityPool), pool.universeId(), pool.questionId());
 		if (finalAfter == 0)
 			finalAfter = securityPool.securityPoolTimeForNative(pool.universeId(), 0) + Constants.FORK_RESPONSE_DELAY;
 		return
 			securityPool.securityPoolTime(pool.universeId()) > finalAfter
-				? BinaryOutcomes.BinaryOutcome(fixedValue)
+				? fixedOutcome
 				: BinaryOutcomes.BinaryOutcome.None;
+	}
+
+	function _inheritedFixedOutcome(ISecurityPoolNative securityPool, IQuestionLedger pool) private view returns (bool isFixed, BinaryOutcomes.BinaryOutcome outcome) {
+		uint256 value;
+		(isFixed, value) = securityPool.inheritedFixedOutcome(pool.universeId(), pool.questionId());
+		require(!isFixed || value < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
+		outcome = isFixed ? BinaryOutcomes.BinaryOutcome(value) : BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	function _continueReporterGame(ISecurityPoolNative securityPool, IQuestionLedger source, IQuestionLedger child, EscalationGame game) private returns (bool complete) {
 		require(game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Final reporter game cannot export live carry');
-		if (address(child.escalationGame()) == address(0)) _initializeReporterGame(securityPool, source, child, game);
+		EscalationGame childGame = child.escalationGame();
+		if (address(childGame) == address(0)) {
+			_initializeReporterGame(securityPool, source, child, game);
+			childGame = child.escalationGame();
+		}
 		(bytes32[64][3] memory peaks, uint256[3] memory leafCounts, uint256[3] memory carryTotals) = game.getForkCarrySnapshot();
 		uint256[3] memory balances = game.getOutcomeBalancesAttoRep();
 		bytes32[3] memory carryRoots = game.getForkCarryRoots();
 		bytes32 snapshotId = keccak256(abi.encode(address(game), carryRoots, leafCounts, carryTotals, balances));
 		// At most one fixed 64-peak outcome is installed per transaction. Keep the
 		// reporter source and native pool inactive until all three are complete.
-		uint8 outcomeIndex = child.escalationGame().forkCarrySnapshotOutcomesInitialized();
+		uint8 outcomeIndex = childGame.forkCarrySnapshotOutcomesInitialized();
 		if (outcomeIndex < 3)
 			child.initializeForkCarryOutcome(address(game), snapshotId, peaks[outcomeIndex], leafCounts[outcomeIndex], carryTotals[outcomeIndex], balances[outcomeIndex]);
-		return child.escalationGame().forkCarrySnapshotInitialized();
+		return childGame.forkCarrySnapshotInitialized();
 	}
 
 	function _initializeReporterGame(ISecurityPoolNative securityPool, IQuestionLedger source, IQuestionLedger child, EscalationGame game) private {
 		uint48 securityPoolTimeAnchor = securityPool.securityPoolTimeForNative(child.universeId(), 0);
-		uint256 sourceStart = game.forkContinuation() ? game.forkResumedAt() : game.activationTime();
+		bool sourceIsContinuation = game.forkContinuation();
+		uint256 sourceStart = sourceIsContinuation ? game.forkResumedAt() : game.activationTime();
 		require(sourceStart != 0 && sourceStart <= type(uint48).max, 'Source reporter clock is invalid');
 		uint256 securityPoolStartTime = securityPool.securityPoolTimeForNative(source.universeId(), uint48(sourceStart));
-		int256 elapsed = game.forkContinuation() ? game.forkElapsedAtStart() : int256(0);
+		int256 elapsed = sourceIsContinuation ? game.forkElapsedAtStart() : int256(0);
 		// Preserve pre-activation time too: dropping a negative offset makes the
 		// game finalize before its inherited settlement and reporter schedules.
 		elapsed += int256(uint256(securityPoolTimeAnchor)) - int256(securityPoolStartTime);
 		if (elapsed > int256(ESCALATION_TIME_LENGTH)) elapsed = int256(ESCALATION_TIME_LENGTH);
-		(bool fixedOutcome, uint256 outcome) = securityPool.inheritedFixedOutcome(child.universeId(), child.questionId());
-		require(!fixedOutcome || outcome < uint256(BinaryOutcomes.BinaryOutcome.None), 'Unsupported inherited reporter outcome');
-		child.setAwaitingForkContinuation(true);
-		child.initializeForkedEscalationGame(game.startBondAttoRep(), game.nonDecisionThresholdAttoRep(), elapsed, fixedOutcome ? BinaryOutcomes.BinaryOutcome(outcome) : BinaryOutcomes.BinaryOutcome.None);
+		(, BinaryOutcomes.BinaryOutcome fixedOutcome) = _inheritedFixedOutcome(securityPool, child);
+		child.markAwaitingForkContinuation();
+		child.initializeForkedEscalationGame(game.startBondAttoRep(), game.nonDecisionThresholdAttoRep(), elapsed, fixedOutcome);
 	}
 }

@@ -153,7 +153,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		const calls = [
 			{ name: 'activateForkMode', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateForkMode', args: [] }) },
 			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
-			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
+			{ name: 'markAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'markAwaitingForkContinuation', args: [] }) },
 			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
 			{ name: 'authorizeChildQuestionLedger', data: encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildQuestionLedger', args: [zeroAddress] }) },
 		]

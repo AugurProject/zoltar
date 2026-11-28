@@ -69,10 +69,10 @@ type Op =
 	| { k: 'child'; u: string; outcome: number; at: number }
 const show = (value: unknown) => JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? `${item}n` : item))
 
-type ModelQuestion = { balance: bigint; finalAfter: number; finalIn: string | undefined; sourceGame: string | undefined; scheduledIn: string | undefined; haircut: boolean }
+type ModelQuestion = { balance: bigint; finalAfter: number; finalIn: string | undefined; sourceGame: string | undefined; haircut: boolean }
 type ModelBook = { migrationPrepared: boolean; live: bigint; final: bigint; ts: number; isSealed: boolean; minimumFinalAfter: number; questions: Map<number, ModelQuestion>; registered: Set<number> }
 type Model = { books: Map<string, ModelBook>; forkTime: Map<string, number>; forkQuestion: Map<string, number>; now: number }
-const emptyQuestion = (): ModelQuestion => ({ balance: 0n, finalAfter: 0, finalIn: undefined, sourceGame: undefined, scheduledIn: undefined, haircut: false })
+const emptyQuestion = (): ModelQuestion => ({ balance: 0n, finalAfter: 0, finalIn: undefined, sourceGame: undefined, haircut: false })
 const cloneModel = (model: Model): Model => ({
 	now: model.now,
 	forkTime: new Map(model.forkTime),
@@ -144,6 +144,8 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 			if (problem !== undefined) return reject(problem)
 			const state = questionOf(book, op.q)
 			if (state.finalIn !== undefined) return reject('claim is final')
+			// Deposits keep the stored deadline, which must still be pending.
+			if (state.finalAfter !== 0 && state.finalAfter < time) return reject('finality elapsed')
 			state.balance += op.amount
 			book.live += op.amount
 			return { ok: true, touched: [op.u] }
@@ -180,7 +182,6 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 			if (state.finalIn !== undefined) return reject('finality immutable')
 			if (op.finalAfter !== 0 && op.finalAfter < time) return reject('finality elapsed')
 			state.finalAfter = op.finalAfter
-			state.scheduledIn = op.u
 			return { ok: true, touched: [op.u] }
 		}
 		case 'chk': {
@@ -240,7 +241,6 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 			const fixed = child.questions.get(forkQuestion)
 			if (fixed !== undefined && fixed.finalIn === undefined && fixed.balance !== 0n) {
 				fixed.finalAfter = child.minimumFinalAfter + RESPONSE
-				fixed.scheduledIn = childId
 			}
 			model.books.set(childId, child)
 			return { ok: true, touched: [op.u, childId] }
@@ -474,7 +474,6 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 			return client.readContract({ abi: erc20, address, functionName: 'balanceOf', args: [holder] })
 		}
 		const games = new Map<string, Address>()
-		const pathOfUniverse = (id: bigint) => [...universeIds].find(([, value]) => value === id)?.[0]
 
 		const send = async (op: Op, time: number): Promise<string | undefined> => {
 			try {
@@ -556,7 +555,6 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 				if (state.winnerHaircutPaidByFork !== want.haircut) return `${label}: haircut flag ${state.winnerHaircutPaidByFork} != model ${want.haircut}`
 				const wantGame = want.sourceGame === undefined ? undefined : games.get(want.sourceGame)
 				if (BigInt(state.sourceGame) !== (wantGame === undefined ? 0n : BigInt(wantGame))) return `${label}: sourceGame ${state.sourceGame} != model ${wantGame}`
-				if (want.scheduledIn !== undefined && pathOfUniverse(state.scheduledUniverseId) !== want.scheduledIn) return `${label}: scheduledUniverseId ${state.scheduledUniverseId} != model '${want.scheduledIn}'`
 				if (finalClaim) finalSum += state.balanceAttoRep
 				else liveSum += state.balanceAttoRep
 			}
