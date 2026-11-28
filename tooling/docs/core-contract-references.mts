@@ -459,8 +459,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`initializeSecurityPoolPriceFeed(universeId, priorityFee)`',
 				caller: 'A security pool this factory deployed, within its own caller-address namespace',
-				effect:
-					'Creates the caller namespace\u2019s oracle configuration from the priority fee, appends the caller to the security pool registry, and creates the namespace\u2019s feed for that universe or returns the existing one. Security pool setup calls this once, in its last stage, before any question is admitted.',
+				effect: 'Creates the caller namespace\u2019s oracle configuration from the priority fee, appends the caller to the security pool registry, and deploys the namespace\u2019s feed for that universe. Security pool setup calls this once, in its last stage, before any question is admitted.',
 				declarations: [
 					{
 						name: 'initializeSecurityPoolPriceFeed',
@@ -468,7 +467,7 @@ export const coreContractReferences: ContractReference[] = [
 				],
 				preconditions:
 					'The caller has not configured its namespace before (`Security pool already configured`). The universe has a REP token and has not forked. The priority fee is nonzero and at most the feed-factory ceiling (`Invalid report priority fee`). The feed starts without an accepted price. The caller satisfies `isSecurityPool` (`Security pool is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
-				signals: 'Returns the canonical feed address and emits `SecurityPoolRegistered`. Each new feed emits `SharedPriceFeedRegistered` with the security pool, universe and feed address.',
+				signals: 'Returns the new feed address and emits `SecurityPoolRegistered` and `SharedPriceFeedRegistered` with the security pool, universe and feed address.',
 			},
 			{
 				call: '`initializeSecurityPoolPriceFeedForUniverse(universeId)`',

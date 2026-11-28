@@ -44,8 +44,8 @@
 							<td><code>initializeSecurityPoolPriceFeed(universeId, priorityFee)</code><wbr /></td>
 							<td>A security pool this factory deployed, within its own caller-address namespace</td>
 							<td>The caller has not configured its namespace before (<code>Security pool already configured</code>). The universe has a REP token and has not forked. The priority fee is nonzero and at most the feed-factory ceiling (<code>Invalid report priority fee</code>). The feed starts without an accepted price. The caller satisfies <code>isSecurityPool</code> (<code>Security pool is not canonical</code>), so no other contract can open a namespace. This call neither registers a question nor allocates REP.</td>
-							<td>Creates the caller namespace’s oracle configuration from the priority fee, appends the caller to the security pool registry, and creates the namespace’s feed for that universe or returns the existing one. Security pool setup calls this once, in its last stage, before any question is admitted.</td>
-							<td>Returns the canonical feed address and emits <code>SecurityPoolRegistered</code>. Each new feed emits <code>SharedPriceFeedRegistered</code> with the security pool, universe and feed address.</td>
+							<td>Creates the caller namespace’s oracle configuration from the priority fee, appends the caller to the security pool registry, and deploys the namespace’s feed for that universe. Security pool setup calls this once, in its last stage, before any question is admitted.</td>
+							<td>Returns the new feed address and emits <code>SecurityPoolRegistered</code> and <code>SharedPriceFeedRegistered</code> with the security pool, universe and feed address.</td>
 						</tr>
 						<tr>
 							<td><code>initializeSecurityPoolPriceFeedForUniverse(universeId)</code></td>
