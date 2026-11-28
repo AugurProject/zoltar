@@ -32,7 +32,6 @@ contract SecurityPoolServices {
 		uint256 maximumRecoveryAttoRep;
 	}
 	Purchase private currentPurchase;
-	mapping(uint248 => bool) public premiumChildCreated;
 	mapping(uint248 => bool) public feesEnabled;
 	mapping(address => uint256) public pendingCapitalCash;
 	mapping(uint248 => uint256) public pendingBurnCash;
@@ -207,7 +206,6 @@ contract SecurityPoolServices {
 	}
 	function createPremiumChild(uint248 source, uint248 child) external onlyForkController {
 		_burn(child, premiumLedger.createChild(source, child));
-		premiumChildCreated[child] = true;
 		(, uint256 questionId, , , ) = ISecurityPoolServiceRoot(securityPool).capitalLedger(source).zoltar().universes(source);
 		premiumLedger.schedule(child, questionId, premiumLedger.minimumFinalAfter(child) + Constants.FORK_RESPONSE_DELAY);
 	}
@@ -216,7 +214,7 @@ contract SecurityPoolServices {
 	/// Checkpoint inherited accounting before capital becomes operational.
 	function checkpointPreparationPremium(uint248 child) external onlyForkController {
 		ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);
-		require(premiumChildCreated[child] && root.capitalLedger(child).importing(), 'Premium preparation unavailable');
+		require(root.capitalLedger(child).importing(), 'Premium preparation unavailable');
 		(uint256 earned, uint256 unused) = premiumLedger.checkpoint(child, root.securityPoolTime(child));
 		_burn(child, earned + unused);
 	}

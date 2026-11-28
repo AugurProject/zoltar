@@ -842,7 +842,7 @@ describe('Contract Test Suite', () => {
 		assert.ok(!(await contractExists(client, childRepToken)), 'malformed child universe rep token should not be deployed')
 
 		const migrationBalance = await getMigrationRepBalanceAttoRep(client, GENESIS_UNIVERSE, client.account.address)
-		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, migrationBalance, [malformedOutcomeIndex]), /Malformed outcome index for the fork migration question/)
+		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, migrationBalance, [malformedOutcomeIndex]), /Malformed outcome index for the universe fork question/)
 	})
 
 	test('child universe ids remain deterministic and scalar malformed answers never deploy', async () => {
@@ -931,7 +931,7 @@ describe('Contract Test Suite', () => {
 		assert.ok(!(await contractExists(client, getRepTokenAddress(aliasedChildUniverseId))), 'reserved-bit scalar alias should not deploy a child universe')
 
 		const migrationBalance = await getMigrationRepBalanceAttoRep(client, GENESIS_UNIVERSE, client.account.address)
-		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, migrationBalance, [aliasedScalarOutcomeIndex]), /Malformed outcome index for the fork migration question/)
+		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, migrationBalance, [aliasedScalarOutcomeIndex]), /Malformed outcome index for the universe fork question/)
 	})
 
 	test('getDeployedChildUniverses pages deployed child universes', async () => {
@@ -1194,7 +1194,7 @@ describe('Contract Test Suite', () => {
 
 		// Try to migrate with a malformed outcome index (5 is > 4 outcomes)
 		const malformedOutcomeIndex = 5n
-		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, balance, [malformedOutcomeIndex]), /Malformed outcome index for the fork migration question/)
+		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, balance, [malformedOutcomeIndex]), /Malformed outcome index for the universe fork question/)
 	})
 	test('fork and nondecision thresholds have exact supply steps with independent one-less witnesses', async () => {
 		const d = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'forkThresholdDivisor' })

@@ -114,7 +114,6 @@ interface ISecurityPoolFactory {
 	function getQuestionLedgerId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
 	function getQuestionLedger(bytes32 originId, uint248 universeId) external view returns (IQuestionLedger questionLedger);
 	function getQuestionLedgerOriginId(IQuestionLedger questionLedger) external view returns (bytes32 originId);
-	function getQuestionLedgerHasInheritedForkOutcome(IQuestionLedger questionLedger) external view returns (bool);
 	function questionLedgerDeploymentCount() external view returns (uint256);
 	function questionLedgerDeploymentsRange(uint256 startIndex, uint256 count) external view returns (QuestionLedgerDeployment[] memory deployments);
 }

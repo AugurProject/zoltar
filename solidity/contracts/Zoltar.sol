@@ -238,7 +238,6 @@ contract Zoltar {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
 		require(amountAttoRep > 0, 'Split amount must be greater than zero');
 		require(outcomeIndexes.length > 0, 'Select at least one outcome universe');
-		uint256 questionId = universes[universeId].forkQuestionId;
 		AddressRepMigration storage migration = migrationRepBalances[msg.sender][universeId];
 		// Fork migration intentionally duplicates the holder's migration balance across the
 		// selected child universes. For example, splitting 1 parent-universe REP into the
@@ -247,8 +246,8 @@ contract Zoltar {
 		// migration balance before child-universe REP is minted.
 		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
 			uint256 outcomeIndex = outcomeIndexes[i];
-			require(!zoltarQuestionData.isMalformedAnswerOption(questionId, outcomeIndex), 'Malformed outcome index for the fork migration question');
 			uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
+			// deployChild rejects a malformed outcome, so every deployed child has a valid one.
 			if (address(universes[childUniverseId].reputationToken) == address(0x0))
 				deployChild(universeId, outcomeIndex);
 			uint256 childMigrationRepAmountAttoRep =

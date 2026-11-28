@@ -63,7 +63,7 @@
 						</tr>
 						<tr>
 							<td><code>consumeSecurityPoolRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)</code><wbr /></td>
-							<td>The canonical source question ledger’s security pool or its configured fork coordinator</td>
+							<td>The configured fork coordinator of the canonical source question ledger’s security pool (<code>Only security pool recovery authority</code>)</td>
 							<td>Canonical source is a security pool question in a forked universe with <code>isSecurityPoolRecoveryEligible(sourceUniverse) == true</code> (<code>No live source recovery right</code>); positive amount no greater than any of the holder’s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.</td>
 							<td>Consumes equal amounts of Invalid, Yes and No recovery rights, using independently received credits before source-backed rights. Spending a source-backed right locks that source token against transfer; spending received credits alone does not. Source balances and every branch’s migration rights remain intact. Returns cumulative consumed shares.</td>
 							<td><code>SecurityPoolRecoveryRightsConsumed</code></td>

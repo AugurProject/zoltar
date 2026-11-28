@@ -100,9 +100,10 @@ contract SecurityPoolSettlement {
 		ledger = book;
 	}
 
-	function registerUniverse(uint248 universeId, uint48 timestamp) external onlySecurityPool returns (uint64 bookId) {
+	/// @dev The new book starts with fee accrual disabled.
+	function registerUniverse(uint248 universeId, uint48 timestamp) external onlySecurityPool {
 		require(universes[universeId].bookId == 0, 'Settlement universe registered');
-		bookId = ledger.createBook(timestamp);
+		uint64 bookId = ledger.createBook(timestamp);
 		ledger.setFeeAccrualEnabled(bookId, false, timestamp);
 		universes[universeId].bookId = bookId;
 	}
@@ -342,10 +343,10 @@ contract SecurityPoolSettlement {
 			}
 		}
 		snapshot.outcomeSupplyAttoShares = state.outcomeSupplyAttoShares;
-		if (state.outcomeSupplyAttoShares != 0)
+		if (state.outcomeSupplyAttoShares != 0) {
 			(snapshot.questionCashAttoEth, ) = ledger.quoteRedemption(bookId, source.questionId, state.outcomeSupplyAttoShares);
-		if (state.outcomeSupplyAttoShares != 0)
 			snapshot.questionRecoveryAttoRep = ledger.historicalRecoveryRep(bookId, source.questionId, state.outcomeSupplyAttoShares);
+		}
 		(snapshot.demandAttoEth, , , snapshot.timestamp, ) = ledger.totals(bookId);
 		snapshot.earnedFeesAttoEth = fees;
 	}
@@ -354,7 +355,7 @@ contract SecurityPoolSettlement {
 		(, , cashAttoEth, , ) = ledger.totals(bookId);
 		if (cashAttoEth == 0) return 0;
 		// Only Services can credit earned fees to capital; every other caller
-		// (root setup, fork sealing) runs after a checkpoint that collected them.
+		// (fork sealing) runs after a checkpoint that collected them.
 		require(msg.sender == services, 'Uncollected settlement fees');
 		ledger.collectFees(bookId, cashAttoEth);
 		pendingServiceFees += cashAttoEth;

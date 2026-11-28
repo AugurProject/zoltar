@@ -106,14 +106,11 @@ describe('Statoblast: central security pool and native question integration', ()
 			{ eventName: 'SharedPriceFeedRegistered', args: { securityPool: getAddress(created), universeId: fixture.base.genesisUniverse, priceFeed: getAddress(feed) } },
 		])
 		expect(await fixture.owner().readContract({ ...factory, functionName: 'isSecurityPool', args: [created] })).toBe(true)
-		// Reconfigure a real namespace: the feed reads its immutable collateral configuration.
+		// A configured namespace cannot be configured again or appear twice in the registry.
 		await fixture.base.mockWindow.impersonateAccount(created)
 		await fixture.base.mockWindow.setBalance(created, unit)
 		const sender = createWriteClient(fixture.base.mockWindow, BigInt(created))
-		const configure = () => writeContractAndWait(sender, () => sender.writeContract({ ...factory, functionName: 'initializeSecurityPoolPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))
-		const receipt = await sender.getTransactionReceipt({ hash: await configure() })
-		expect(receipt.logs.filter(log => getAddress(log.address) === getAddress(factory.address))).toEqual([])
-		await configure()
+		await expect(writeContractAndWait(sender, () => sender.writeContract({ ...factory, functionName: 'initializeSecurityPoolPriceFeed', args: [fixture.base.genesisUniverse, 10_000_000_000n] }))).rejects.toThrow('Security pool already configured')
 		expect(await count()).toBe(before + 1n)
 		expect(await range(before - 1n, 2n)).toEqual([getAddress(fixture.securityPool), getAddress(created)])
 		// An account the factory did not deploy cannot open a namespace or leave a registry entry.

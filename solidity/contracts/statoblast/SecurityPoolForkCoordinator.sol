@@ -284,8 +284,7 @@ contract SecurityPoolForkCoordinator {
 	/// @notice Reserve frozen source REP admission while owners are still choosing branches.
 	function prepareSourceMigration(uint248 source) external nonReentrant {
 		_freeze(source);
-		Fork storage fork = forks[source];
-		_prepareSourceMigration(source, fork, securityPool.capitalLedger(source), fork.backing + fork.recoveryAttoRep);
+		_prepareSourceMigration(source, forks[source]);
 	}
 	function startBranch(uint248 parent, uint256 outcome) external nonReentrant returns (uint248 child) {
 		_freeze(parent);
@@ -298,10 +297,9 @@ contract SecurityPoolForkCoordinator {
 		require(block.timestamp >= zoltar.getForkChoiceDeadline(branch.parent), 'Fork choices still open');
 		Fork storage fork = forks[branch.parent];
 		branch.started = true;
-		SecurityPoolCapitalLedger sourceCapital = securityPool.capitalLedger(branch.parent);
 		SecurityPoolCapitalLedger childCapital = securityPool.capitalLedger(child);
 		uint256 migratingPrincipalAttoRep = fork.backing + fork.recoveryAttoRep;
-		_prepareSourceMigration(branch.parent, fork, sourceCapital, migratingPrincipalAttoRep);
+		_prepareSourceMigration(branch.parent, fork);
 		if (migratingPrincipalAttoRep != 0) {
 			uint256[] memory outcomes = new uint256[](1);
 			outcomes[0] = branch.outcome;
@@ -309,8 +307,8 @@ contract SecurityPoolForkCoordinator {
 		}
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
 		if (branch.chosenBacking != 0) token.safeTransfer(address(childCapital), branch.chosenBacking);
-		(, uint256 forkQuestionId, , , ) = zoltar.universes(branch.parent);
-		securityPool.reporters().createChild(branch.parent, branch.outcome, fixedTree.get(branches[branch.parent].fixedRoot, forkQuestionId) != 0);
+		// _prepare keeps the parent root exactly when the fork question was already fixed.
+		securityPool.reporters().createChild(branch.parent, branch.outcome, branch.fixedRoot == branches[branch.parent].fixedRoot);
 		branch.recoveryAttoRep = migratingPrincipalAttoRep - branch.chosenBacking;
 		if (fork.units == 0 && branch.recoveryAttoRep != 0) {
 			zoltar.burnRep(child, branch.recoveryAttoRep);
@@ -321,10 +319,11 @@ contract SecurityPoolForkCoordinator {
 		emit BranchStarted(child, branch.parentCash, branch.recoveryAttoRep);
 	}
 
-	function _prepareSourceMigration(uint248 sourceUniverseId, Fork storage fork, SecurityPoolCapitalLedger sourceCapital, uint256 migratingPrincipalAttoRep) private {
+	function _prepareSourceMigration(uint248 sourceUniverseId, Fork storage fork) private {
 		if (!fork.migrationPrepared) {
 			fork.migrationPrepared = true;
-			sourceCapital.releaseForkBacking();
+			uint256 migratingPrincipalAttoRep = fork.backing + fork.recoveryAttoRep;
+			securityPool.capitalLedger(sourceUniverseId).releaseForkBacking();
 			uint256 releasedRecoveryAttoRep = securityPool.settlement().withdrawForkRecoveryRep(sourceUniverseId);
 			require(releasedRecoveryAttoRep == fork.recoveryAttoRep, 'Fork recovery REP mismatch');
 			if (migratingPrincipalAttoRep != 0) {
@@ -401,7 +400,8 @@ contract SecurityPoolForkCoordinator {
 		uint256 nativeForkTime = zoltar.getForkTime(child);
 		settlement.setFeeClock(child, CheckedCast.toUint48(nativeForkTime == 0 ? block.timestamp : nativeForkTime));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
-		if (fixedTree.get(branches[branch.parent].fixedRoot, forkQuestion) == 0)
+		// _prepare replaces the parent root exactly when it fixes the fork question.
+		if (branch.fixedRoot != branches[branch.parent].fixedRoot)
 			settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].securityPoolTimeAnchor + Constants.FORK_RESPONSE_DELAY);
 	}
 

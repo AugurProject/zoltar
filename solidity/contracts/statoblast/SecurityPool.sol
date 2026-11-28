@@ -100,7 +100,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	uint256 public immutable minimumPurchaseFeeAttoEth;
 	uint256 public immutable minimumCommitmentAttoEth;
 	uint256 public immutable minimumOutcomeRate;
-	uint48 public constant MAXIMUM_REWARD_VESTING_SECONDS = 3650 days;
+	uint48 private constant MAXIMUM_REWARD_VESTING_SECONDS = 3650 days;
 	uint48 public immutable rewardVestingSeconds;
 	ISecurityPoolRepairAuctionDeployer public immutable repairAuctionDeployer;
 	SecurityPoolPurchase public immutable quoteHelper;
@@ -205,7 +205,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 			settlement.initialize(deployers.books.create(address(settlement), minimumOutcomeRate));
 			settlement.authorizeServices(address(services));
 			settlement.registerUniverse(originUniverseId, CheckedCast.toUint48(block.timestamp));
-			settlement.setFeesEnabled(originUniverseId, false, CheckedCast.toUint48(block.timestamp));
 			services.registerUniverse(originUniverseId);
 		} else if (setupStage == SETUP_REPORTERS_AND_FORKS) {
 			reporters = deployers.reporters.create(address(this), zoltar);

@@ -389,12 +389,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '11398f5acfbc707b1fed5c3ea6c55883d887a99b04a5e2936eaa0c6e222b035d',
+		compiledAbiFingerprint: '9b521a068702fff0e4bce7d33f193db196e25cc0ca0b784a8068f0baaf1704cd',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every security pool from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: '0dde49d1ab3c93ffa7ff588b0344cfb09d1c75f6d8547026ce3bf6e7603e0bef',
+		readAbiFingerprint: 'a7d60ae91087dd66ac321fcf80bfbf5db502f65befac62ae82775552d0f09213',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a security pool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed security pools that have configured their namespace; a deployed security pool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getQuestionOriginId` includes the caller security pool namespace. `securityPoolOf` returns the factory-deployed security pool a ledger belongs to; `sharedPriceFeeds` is indexed by security pool and universe. `maximumReportCollateral` exposes the largest collateral report floor whose escalation halt fits the oracle amount domain. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured feed-factory ceiling used to reject over-cap security pool creation before setup. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a security pool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed security pools that have configured their namespace; a deployed security pool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger` and `getQuestionLedgerOriginId` identify their lineage. `getQuestionOriginId` includes the caller security pool namespace. `securityPoolOf` returns the factory-deployed security pool a ledger belongs to; `sharedPriceFeeds` is indexed by security pool and universe. `maximumReportCollateral` exposes the largest collateral report floor whose escalation halt fits the oracle amount domain. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured feed-factory ceiling used to reject over-cap security pool creation before setup. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{ name: 'maximumReportCollateral' },
 			{ name: 'maximumReportPriorityFeeAttoEthPerGas' },
@@ -418,9 +418,6 @@ export const coreContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'getQuestionLedgerOriginId',
-			},
-			{
-				name: 'getQuestionLedgerHasInheritedForkOutcome',
 			},
 			{
 				name: 'getQuestionOriginId',
@@ -463,20 +460,20 @@ export const coreContractReferences: ContractReference[] = [
 				call: '`initializeSecurityPoolPriceFeed(universeId, priorityFee)`',
 				caller: 'A security pool this factory deployed, within its own caller-address namespace',
 				effect:
-					'The first call creates the caller namespace\u2019s oracle configuration from the universe\u2019s REP token and the priority fee, and appends the caller to the security pool registry. Each call creates the namespace\u2019s feed for that universe or returns the existing one. Security pool setup calls this in its last stage, before any question is admitted.',
+					'Creates the caller namespace\u2019s oracle configuration from the priority fee, appends the caller to the security pool registry, and creates the namespace\u2019s feed for that universe or returns the existing one. Security pool setup calls this once, in its last stage, before any question is admitted.',
 				declarations: [
 					{
 						name: 'initializeSecurityPoolPriceFeed',
 					},
 				],
 				preconditions:
-					'The universe has a REP token and has not forked. A repeated call must match the first call\u2019s REP token and priority fee. The feed starts without an accepted price. The caller satisfies `isSecurityPool` (`Security pool is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
-				signals: 'Returns the canonical feed address. The first setup emits `SecurityPoolRegistered`. Each new feed emits `SharedPriceFeedRegistered` with the security pool, universe and feed address.',
+					'The caller has not configured its namespace before (`Security pool already configured`). The universe has a REP token and has not forked. The priority fee is nonzero and at most the feed-factory ceiling (`Invalid report priority fee`). The feed starts without an accepted price. The caller satisfies `isSecurityPool` (`Security pool is not canonical`), so no other contract can open a namespace. This call neither registers a question nor allocates REP.',
+				signals: 'Returns the canonical feed address and emits `SecurityPoolRegistered`. Each new feed emits `SharedPriceFeedRegistered` with the security pool, universe and feed address.',
 			},
 			{
 				call: '`initializeSecurityPoolPriceFeedForUniverse(universeId)`',
 				caller: 'A security pool, within its own caller-address namespace',
-				effect: 'Creates or retrieves the caller namespace\u2019s feed for an already registered child universe, using the oracle configuration from the namespace\u2019s first `initializeSecurityPoolPriceFeed` call. No question needs to be deployed first.',
+				effect: 'Creates or retrieves the caller namespace\u2019s feed for an already registered child universe, using the oracle configuration from the namespace\u2019s `initializeSecurityPoolPriceFeed` call. No question needs to be deployed first.',
 				declarations: [
 					{
 						name: 'initializeSecurityPoolPriceFeedForUniverse',

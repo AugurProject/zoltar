@@ -180,7 +180,7 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: pairArtifact.abi, address: directPair, functionName: 'factory' })).toBe(account)
 		if (process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1') {
 			await flushSolidityBytecodeCoverageForTest()
-			expect(await getSolidityBytecodeCoverageProfileHitCountForTest('contracts/ERC20.sol', 45)).toBeGreaterThan(0)
+			expect(await getSolidityBytecodeCoverageProfileHitCountForTest('contracts/ERC20.sol', 44)).toBeGreaterThan(0)
 		}
 	})
 

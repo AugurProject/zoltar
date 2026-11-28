@@ -167,7 +167,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('ShareToken', 'setApprovalForAll', 'prerequisite', 'token.shares.approve'),
 	entry('ShareToken', 'migrate', 'selectable', 'trading.shares.migrate'),
 	entry('ShareToken', 'transferSecurityPoolRecoveryRights', 'excluded-dangerous', undefined, 'Separating source cash rights requires explicit owner intent and a chosen recipient; random transfers can strand recovery claims.'),
-	entry('ShareToken', 'consumeSecurityPoolRecoveryCompleteSets', 'role-restricted', undefined, 'Only the canonical security pool or fork coordinator may consume independent complete-set cash recovery rights.'),
+	entry('ShareToken', 'consumeSecurityPoolRecoveryCompleteSets', 'role-restricted', undefined, 'Only the canonical security pool fork coordinator may consume independent complete-set cash recovery rights.'),
 	entry('ShareToken', 'authorize', 'role-restricted', undefined, 'Only the canonical factory authorizes a pool.'),
 	entry('ShareToken', 'mintCompleteSets', 'role-restricted', undefined, 'Only an authorized QuestionLedger mints complete sets.'),
 	entry('ShareToken', 'burnCompleteSets', 'role-restricted', undefined, 'Only an authorized QuestionLedger burns complete sets.'),

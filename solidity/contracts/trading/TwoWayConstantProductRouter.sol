@@ -14,6 +14,7 @@ import { ICollateralConfig } from '../statoblast/interfaces/ICollateralConfig.so
 import { IWeth9 } from '../statoblast/interfaces/IWeth9.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { TokenId } from '../statoblast/tokens/TokenId.sol';
 
 interface ITradingSecurityPoolSettlement {
 	function settlement() external view returns (address);
@@ -214,11 +215,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function onERC1155Received(address operator, address, uint256 id, uint256, bytes calldata) external view returns (bytes4) {
-		if (receiveInternalShareCallback) {
-			require(entered && msg.sender == address(callbackShareToken), 'Batch transfer required');
-			require(operator == address(factory.getPair(callbackPool)), 'Unexpected callback operator');
-			require(id == callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.Yes) || id == callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.No), 'Unexpected callback ID');
-		} else _validateShareCallback(id);
+		if (receiveInternalShareCallback) _validateReceiveInternalShare(operator, id);
+		else _validateShareCallback(id);
 		return IERC1155Receiver.onERC1155Received.selector;
 	}
 
@@ -324,21 +322,26 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(request.completeSetShares > 0, 'Complete set is zero');
 		require(request.payoutRecipient != address(0) && request.payoutRecipient != address(this), 'Invalid payout recipient');
 		require(request.refundRecipient != address(0) && request.refundRecipient != address(this), 'Invalid refund recipient');
+		uint248 universe;
 		if (address(request.pair) != address(0) || request.operation != ReceiveOperation.RedeemCompleteSet) {
+			// The pair factory authenticated this ledger and its write-once share-token canonicity at pair creation.
 			_validatePair(request.pair);
 			require(address(request.questionLedger) == address(request.pair.questionLedger()), 'Wrong question ledger');
+			universe = request.questionLedger.universeId();
+			context.shareToken = address(request.questionLedger.shareToken());
+		} else {
+			ISecurityPoolFactory poolFactory = factory.securityPoolFactory();
+			require(address(request.questionLedger.securityPoolFactory()) == address(poolFactory), 'Wrong security pool factory');
+			universe = request.questionLedger.universeId();
+			require(address(poolFactory.getQuestionLedger(poolFactory.getQuestionLedgerOriginId(request.questionLedger), universe)) == address(request.questionLedger), 'Noncanonical question ledger');
+			// Derive metadata only after the configured factory authenticates this ledger.
+			ITradingShareToken shares = ITradingShareToken(address(request.questionLedger.shareToken()));
+			require(address(shares.canonicalQuestionLedgerByUniverse(universe)) == address(request.questionLedger), 'Noncanonical share pool');
+			context.shareToken = address(shares);
 		}
-		ISecurityPoolFactory poolFactory = factory.securityPoolFactory();
-		require(address(request.questionLedger.securityPoolFactory()) == address(poolFactory), 'Wrong security pool factory');
-		uint248 universe = request.questionLedger.universeId();
-		require(address(poolFactory.getQuestionLedger(poolFactory.getQuestionLedgerOriginId(request.questionLedger), universe)) == address(request.questionLedger), 'Noncanonical question ledger');
-		// Derive metadata only after the configured factory authenticates this ledger.
-		ITradingShareToken shares = ITradingShareToken(address(request.questionLedger.shareToken()));
-		require(address(shares.canonicalQuestionLedgerByUniverse(universe)) == address(request.questionLedger), 'Noncanonical share pool');
-		context.shareToken = address(shares);
-		context.invalidTokenId = shares.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
-		context.yesTokenId = shares.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
-		context.noTokenId = shares.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
+		context.invalidTokenId = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
+		context.yesTokenId = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
+		context.noTokenId = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
 		context.operation = request.operation;
 		context.questionLedger = request.questionLedger;
 		context.pair = request.pair;
@@ -353,11 +356,16 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function _validateReceiveInternalCallback(address operator, uint256[] calldata ids, uint256[] calldata values) private view {
-		require(receiveInternalShareCallback && msg.sender == address(callbackShareToken), 'Unexpected share callback');
-		require(operator == address(factory.getPair(callbackPool)), 'Unexpected callback operator');
 		require(ids.length == values.length && ids.length > 0, 'Invalid callback batch');
-		for (uint256 index = 0; index < ids.length; index++)
-			require(ids[index] == callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.Yes) || ids[index] == callbackShareToken.getTokenId(callbackPool.universeId(), BinaryOutcomes.BinaryOutcome.No), 'Unexpected callback ID');
+		for (uint256 index = 0; index < ids.length; index++) _validateReceiveInternalShare(operator, ids[index]);
+	}
+
+	/// @dev While enabled, only the bound pair's exit swap may send this ledger's YES or NO to the router.
+	function _validateReceiveInternalShare(address operator, uint256 id) private view {
+		require(msg.sender == address(callbackShareToken), 'Unexpected share callback');
+		require(operator == address(factory.getPair(callbackPool)), 'Unexpected callback operator');
+		uint248 universe = callbackPool.universeId();
+		require(id == TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes) || id == TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No), 'Unexpected callback ID');
 	}
 
 	function _priorReceiveBalances(ReceiveContext memory request, uint256[] calldata ids, uint256[] calldata values) private view returns (uint256[3] memory prior) {
@@ -469,9 +477,9 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	function _balances() private view returns (uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) {
 		uint248 universe = callbackPool.universeId();
-		invalidBalance = callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid));
-		yesBalance = callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes));
-		noBalance = callbackShareToken.balanceOf(address(this), callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No));
+		invalidBalance = callbackShareToken.balanceOf(address(this), TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid));
+		yesBalance = callbackShareToken.balanceOf(address(this), TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes));
+		noBalance = callbackShareToken.balanceOf(address(this), TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No));
 	}
 
 	function _approvePair(ITwoWayConstantProductPair pair) private {
@@ -484,8 +492,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint248 universe = pool.universeId();
 		uint256[] memory ids = new uint256[](2);
 		uint256[] memory values = new uint256[](2);
-		ids[0] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
-		ids[1] = token.getTokenId(universe, longYes ? BinaryOutcomes.BinaryOutcome.Yes : BinaryOutcomes.BinaryOutcome.No);
+		ids[0] = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
+		ids[1] = TokenId.getTokenId(universe, longYes ? BinaryOutcomes.BinaryOutcome.Yes : BinaryOutcomes.BinaryOutcome.No);
 		values[0] = invalidAmount;
 		values[1] = longAmount;
 		token.safeBatchTransferFrom(address(this), recipient, ids, values, '');
@@ -496,9 +504,9 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint248 universe = pool.universeId();
 		uint256[] memory ids = new uint256[](3);
 		uint256[] memory values = new uint256[](3);
-		ids[0] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
-		ids[1] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
-		ids[2] = token.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
+		ids[0] = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
+		ids[1] = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
+		ids[2] = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
 		values[0] = invalidAmount;
 		values[1] = yesAmount;
 		values[2] = noAmount;
@@ -508,9 +516,9 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	function _validateShareCallback(uint256 id) private view {
 		require(callbackActive && msg.sender == address(callbackShareToken), 'Unexpected share callback');
 		uint248 universe = callbackPool.universeId();
-		uint256 invalidId = callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
-		uint256 yesId = callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
-		uint256 noId = callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
+		uint256 invalidId = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
+		uint256 yesId = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
+		uint256 noId = TokenId.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
 		require(id == invalidId || id == yesId || id == noId, 'Unexpected share ID');
 	}
 

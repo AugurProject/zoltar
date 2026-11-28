@@ -259,10 +259,9 @@ contract ShareToken is ERC1155, IShareToken {
 	}
 
 	function _requireSecurityPoolRecoverySource(uint248 sourceUniverse) private view returns (IQuestionLedger source) {
-		source = canonicalQuestionLedgerByUniverse[sourceUniverse];
-		require(address(source) != address(0) && source.securityPoolCustody() != address(0), 'Recovery source is not a security pool question');
-		require(zoltar.getForkTime(sourceUniverse) != 0, 'Recovery source has not forked');
+		// Eligibility also requires a forked, security-pool-backed canonical source.
 		require(isSecurityPoolRecoveryEligible(sourceUniverse), 'No live source recovery right');
+		source = canonicalQuestionLedgerByUniverse[sourceUniverse];
 	}
 
 	function _spendSecurityPoolRecoveryRights(uint256 id, address holder, uint256 amount, string memory insufficientReason) private {
@@ -283,7 +282,7 @@ contract ShareToken is ERC1155, IShareToken {
 	function consumeSecurityPoolRecoveryCompleteSets(uint248 sourceUniverse, address holder, uint256 amountAttoShares) external returns (uint256 cumulativeClaimedAttoShares) {
 		IQuestionLedger source = _requireSecurityPoolRecoverySource(sourceUniverse);
 		address securityPool = source.securityPoolFactory().securityPoolOf(source);
-		require(msg.sender == securityPool || (securityPool.code.length != 0 && msg.sender == IShareTokenSecurityPoolForkAuthority(securityPool).forkController()), 'Only security pool recovery authority');
+		require(msg.sender == IShareTokenSecurityPoolForkAuthority(securityPool).forkController(), 'Only security pool recovery authority');
 		require(amountAttoShares != 0, 'Recovery amount is zero');
 		for (uint8 outcome; outcome < Constants.NUM_OUTCOMES; outcome++) {
 			uint256 id = TokenId.getTokenId(sourceUniverse, BinaryOutcomes.BinaryOutcome(outcome));
